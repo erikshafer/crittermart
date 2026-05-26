@@ -230,6 +230,14 @@ This section is the routing layer's payload — the actual orientation a fresh s
 | ADRs | [`docs/decisions/`](docs/decisions/) | Significant architectural decisions |
 | Research | `docs/research/` *(forthcoming)* | Spikes and exploratory work |
 
+### External-skill path overrides
+
+Some installed skills assume artifact paths that don't match CritterMart's layout. Current divergence:
+
+- **ADRs.** The mattpocock skill family (`improve-codebase-architecture`, `grill-with-docs`, `diagnose`, `tdd`, etc.) assumes `docs/adr/`. CritterMart uses [`docs/decisions/`](docs/decisions/) — treat these as equivalent when invoking those skills. CritterMart has no per-context ADR folders in round one, so any `src/<context>/docs/adr/` reference in those skills is also a no-op.
+
+This is the only path override in round one. Other Critter Stack reference architectures the author maintains use the same `docs/decisions/` convention; do not propose a rename without an explicit ADR.
+
 ### Tech stack
 
 | Layer | Choice |
