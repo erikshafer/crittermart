@@ -1,14 +1,10 @@
 # CritterMart — AI Development Guidelines
 
-CritterMart is a work in progress.
+CritterMart is a single-seller ecommerce storefront built as a teaching reference architecture for event sourcing with the Critter Stack. It exists to anchor an Event Sourcing with Marten talk and to exercise a disciplined Spec-Driven Development pipeline. See [`docs/vision.md`](docs/vision.md) for the canonical source of truth on what the project is and why.
 
-The rest of this document is effectively a "pipeline export template" lifted from another Critter Stack oriented reference architecture. It describes the design-and-build pipeline that produces the code and artifacts in this repo. The pipeline is designed to be AI-friendly, with durable, version-controlled records of design intent, implementation intent, and retrospective insight.
+This `CLAUDE.md` is the **routing layer** for AI sessions working on the codebase. Its job is to orient a fresh session-runner — point at the right artifacts and name the architectural non-negotiables. It does not hold the detail. Detail lives in the per-layer artifacts: workshops, narratives, OpenSpec proposals, ADRs, and skills.
 
-This CLAUDE.md file needs to be updated to reflect this specific project, CritterMart. Again, this is primarily just an exported pipeline that was meant to be a template.
-
-Okay, now everything below is a "copy and paste".
-
-A portable summary of the design-and-build pipeline used in a sister project (a Critter Stack reference architecture). Drop this file into a new repository as a starting point — rename to `CLAUDE.md`, prune what doesn't fit, and expand the parts that do.
+The remainder of this document describes the design-and-build pipeline that produces CritterMart's code and artifacts. The pipeline is AI-friendly: durable, version-controlled records of design intent, implementation intent, and retrospective insight.
 
 The goal of the pipeline: ship code that traces back, step by step, to a modeled scenario — without producing more design ceremony than the project earns. Each layer below has a distinct job; none is decorative.
 
@@ -42,6 +38,7 @@ Surface the language boundaries between contexts before populating an event mode
 - **Artifact:** `docs/workshops/` (story-shaped captures).
 - **Why:** Event Modeling is unforgiving of language ambiguity. Walking the story first makes the ambiguity explicit before it gets frozen into event names.
 - **Optional** if the domain language is already clear; mandatory when it isn't.
+- **Round-one status (CritterMart):** explicitly skipped. The single-seller storefront has unambiguous shared language across all four bounded contexts — customer, product, cart, order, stock all mean one thing to one actor. This step remains available if a future bounded context introduces actors that speak divergent vocabularies (e.g., adding a vendor portal, returns workflow with separate fulfillment actors, or marketplace listings).
 
 ### 3. Event Modeling Workshop
 
@@ -55,9 +52,20 @@ Adam Dymitruk-style. Produces a timeline of **events**, **commands**, **views/re
 
 ## Per-Slice Implementation Loop
 
-### 4. Narrative
+### 4. OpenSpec proposal and Narrative
 
-A journey-scoped spec, written from one actor's perspective, threading multiple workshop slices into one coherent experience. NDD-informed (Narrative-Driven Development, Sam Hatoum / Xolvio — principles, not the commercial tool).
+Per slice, two sibling artifacts are produced from the event model before any code is written. They share a source (the workshop slice) and a scope (one vertical slice), but address two audiences: machines and humans. Both are reference points for the implementation prompt; both must agree.
+
+#### 4a. OpenSpec proposal
+
+A precise, machine-friendly spec. Capabilities and requirements are expressed as SHALL statements. The GWT scenarios authored in the event-modeling workshop become spec scenarios here. The proposal is the authoritative spec the implementation prompt references and the implementation must satisfy.
+
+- **Artifact:** `docs/specs/{slice}/proposal.md` (or follow the standard OpenSpec layout if a tool convention is adopted).
+- **Why:** narratives are persuasive but imprecise; an event-model slice is precise but fragmented. The OpenSpec proposal is the unambiguous, testable contract that bridges them. It is what the code is checked against.
+
+#### 4b. Narrative
+
+A journey-scoped spec, written from one actor's perspective, threading multiple workshop slices into one coherent experience. NDD-informed (Narrative-Driven Development, Sam Hatoum / Xolvio — principles, not the commercial tool). The narrative is the human-readable companion to the OpenSpec proposal.
 
 - **Artifact:** `docs/narratives/NNN-{actor}-{journey}.md`.
 - **Format:** frontmatter (status, version, slices covered) + a sequence of *Moments*, each with context / interaction / system response.
@@ -91,7 +99,7 @@ Per-technology or per-component implementation patterns and conventions. Example
 - **Artifact:** `docs/skills/{topic}/SKILL.md`.
 - **Why:** narratives capture *what* a slice should do; skills capture *how* the code structurally expresses it. Without skills, every session re-derives conventions from scratch.
 - **Authoring template:** keep one at `docs/skills/_template/SKILL.md` and clone it.
-- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate.
+- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate. **CritterMart round one** defers to the upstream JasperFx Critter Stack ai-skills library. Local skill files under `docs/skills/` are authored only when a CritterMart-specific convention diverges from the upstream skill. An empty `docs/skills/` during round one is intentional, not debt.
 
 ### Rules — AI-optimized structural constraints
 
@@ -173,9 +181,10 @@ Design decisions, domain behavior, and user journeys go into version-controlled 
 
 ```
 docs/
-  vision/           ← project overview, goals, principles
+  vision.md         ← project overview, goals, principles
   context-map/      ← cross-BC relationships in DDD vocab
   workshops/        ← Event Modeling / Domain Storytelling output
+  specs/            ← OpenSpec proposals, per slice
   narratives/       ← NDD-informed journey specs
   skills/           ← component-scoped patterns
     _template/      ← skill authoring template
@@ -197,18 +206,61 @@ Subdirectories appear as their first artifact lands; don't pre-create empty ones
 
 ---
 
-## Routing Layer (`CLAUDE.md`)
+## Routing Layer
 
-The root `CLAUDE.md` is a **routing layer**, not a manual. Its job is to point a fresh session-runner at the right artifacts:
+This section is the routing layer's payload — the actual orientation a fresh session-runner needs.
 
-1. The vision doc (single source of truth for what the project is).
-2. The artifact layer map (workshops / narratives / skills / rules / prompts / retros / ADRs / research — what each is for).
-3. The session workflow (the two-phase shape above).
-4. Architectural non-negotiables (cross-reference to `rules/`).
-5. Technology stack table.
-6. A short "Do Not" list.
+### Vision
 
-Keep it short enough that a session-runner reads it on every entry. Push detail down into the per-layer READMEs.
+[`docs/vision.md`](docs/vision.md) — canonical source of truth for what CritterMart is, why it exists, and what it deliberately is not. Read this first.
+
+### Artifact layer map
+
+| Layer | Path | What it holds |
+| --- | --- | --- |
+| Vision | [`docs/vision.md`](docs/vision.md) | Project purpose and non-goals |
+| Context map | `docs/context-map/` *(forthcoming)* | Cross-BC relationships in DDD strategic-design vocab |
+| Workshops | `docs/workshops/` *(forthcoming)* | Event Modeling output (Domain Storytelling skipped for round one) |
+| OpenSpec proposals | `docs/specs/` *(forthcoming)* | Per-slice machine-readable SHALL specs |
+| Narratives | `docs/narratives/` *(forthcoming)* | NDD-informed journey specs, one per actor journey |
+| Prompts | `docs/prompts/` *(forthcoming)* | Per-session intent records, frozen at session start |
+| Retrospectives | `docs/retrospectives/` *(forthcoming)* | Per-session outcome records, spec-delta closure |
+| Skills | `docs/skills/` *(forthcoming; may stay empty in round one)* | Component-scoped patterns local to CritterMart |
+| Rules | `docs/rules/` *(forthcoming)* | AI-optimized structural constraints |
+| ADRs | `docs/decisions/` *(forthcoming)* | Significant architectural decisions |
+| Research | `docs/research/` *(forthcoming)* | Spikes and exploratory work |
+
+### Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| Runtime | .NET 10, C# 14 |
+| Messaging | Wolverine, RabbitMQ transport |
+| Persistence | Marten on PostgreSQL (shared database, schema-per-service) |
+| HTTP | Wolverine.Http |
+| Testing | Alba (integration), xUnit + Shouldly (unit) |
+| Orchestration | .NET Aspire |
+| Observability | OpenTelemetry |
+| Frontend | TBD |
+
+### Architectural non-negotiables
+
+- Three separate services (Catalog, Inventory, Orders); Identity is hardcoded for round one
+- Cross-service communication via Wolverine over RabbitMQ; no synchronous service-to-service HTTP
+- Shared PostgreSQL with schema-per-service
+- Process Manager via Handlers pattern for the Order aggregate
+- Inline snapshot projections; no async daemon for round one (one async projection as a teaser is acceptable)
+
+### Do Not — round one
+
+- No live coding in the demo
+- No Polecat for identity
+- No async projection daemon (one async-projection-as-teaser is the exception)
+- No separate BFF project
+- No real payment integration; payment is stubbed
+- No collapse back to monolith without an explicit ADR
+- No opportunistic edits outside the named deliverable
+- No new bounded contexts without a context map update and workshop pass
 
 ---
 
@@ -219,6 +271,7 @@ Keep it short enough that a session-runner reads it on every entry. Push detail 
 | Context map | Cross-BC contracts drift; services accidentally couple to each other's internals |
 | Domain storytelling | Event names freeze language ambiguity into the model |
 | Event Modeling workshop | Implementation has no traceable spec; "what is this slice for?" has no answer |
+| OpenSpec proposals | Implementation has no machine-readable contract; "is this code correct?" devolves into prose interpretation |
 | Narratives | Slices are correct but fragmented; journey-level coherence is lost |
 | Prompts | Session intent evaporates; the next contributor re-derives scope from scratch |
 | Skills | Conventions re-emerge inconsistently every session |
@@ -232,14 +285,12 @@ Keep it short enough that a session-runner reads it on every entry. Push detail 
 
 ---
 
-## How to Use This Template
+## How This Pipeline Operates
 
-1. Drop it in the new repo (as `CLAUDE.md` or under `docs/`).
-2. Prune what doesn't fit — if the project doesn't have multiple bounded contexts yet, the context-map step is premature; defer it.
-3. Author the **vision doc** first. Don't proceed without it.
-4. Run the design phase against the first bounded context: context map → (optional) domain storytelling → event modeling workshop.
-5. Pick the first slice. Author the narrative, then the implementation prompt, then execute, then retro.
-6. After 2–3 implementation PRs, do a design-return PR (next BC workshop, additional narrative, or a tidy session).
-7. The disciplines (one-prompt-one-PR, spec-delta closure, no opportunistic edits, `tidy:` convention) earn their keep on the second or third session — keep them from day one even when they feel like overhead.
+1. The **vision doc** is authored first and is the single source of truth for what the project is. Update it deliberately, not opportunistically.
+2. Run the design phase against the first bounded context: context map → (Domain Storytelling skipped for CritterMart round one) → event modeling workshop.
+3. Pick the first slice. Author the OpenSpec proposal and the narrative as siblings, then the implementation prompt, then execute, then retro.
+4. After 2–3 implementation PRs, do a design-return PR (next BC workshop, additional narrative, or a tidy session).
+5. The disciplines (one-prompt-one-PR, spec-delta closure, no opportunistic edits, `tidy:` convention) earn their keep on the second or third session — keep them from day one even when they feel like overhead.
 
-The pipeline scales **down** as well as up: a tiny project can run the full loop with one-paragraph narratives and three-line prompts. The discipline is in the structure, not the volume.
+The pipeline scales **down** as well as up: a tiny project can run the full loop with one-paragraph narratives, three-line OpenSpec proposals, and three-line prompts. The discipline is in the structure, not the volume.

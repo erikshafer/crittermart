@@ -4,7 +4,7 @@ A single-seller storefront, built as a teaching reference architecture for event
 
 ## What this is
 
-CritterMart is an ecommerce reference application designed to demonstrate event sourcing patterns through a recognizable, approachable domain. It runs as a modular monolith on .NET 10, persists everything in PostgreSQL via Marten, and uses Wolverine for messaging, validation, and HTTP endpoints. A Vite SPA sits in front of it as the customer-facing storefront, and .NET Aspire orchestrates the whole thing locally with OpenTelemetry tracing visible in the Aspire dashboard.
+CritterMart is an ecommerce reference application designed to demonstrate event sourcing patterns through a recognizable, approachable domain. It runs as three separate .NET 10 services — Catalog, Inventory, and Orders — that communicate via Wolverine over RabbitMQ; there is no synchronous service-to-service HTTP. Persistence is a shared PostgreSQL instance with schema-per-service, accessed through Marten. Wolverine.Http exposes each service's HTTP surface. A frontend client sits in front of the services as the customer-facing storefront; the specific frontend stack is TBD for round one. .NET Aspire orchestrates the services, the broker, and the database locally, with OpenTelemetry tracing visible in the Aspire dashboard.
 
 The aim is not to be a complete ecommerce platform. The aim is to teach. Each piece exists because it earns its place in a story about event sourcing, the Decider and Process Manager patterns, projections, and how the Critter Stack supports them in practice.
 
@@ -26,21 +26,20 @@ CritterMart is a single-seller storefront. That choice rules out several things 
 - No backoffice or admin UI
 - No real payment integration; payment is stubbed
 - No returns, no promotions, no shipping rate calculations, no real-time storefront updates
-- No microservices deployment for round one; modular monolith is the chosen shape
 - No Polecat for round one; identity is intentionally minimal
 
 Many of these cuts will make excellent follow-up blog posts and future enhancements. Cutting them is what keeps the demo, the talk, and the six-day timeline honest.
 
 ## Bounded contexts
 
-Four, inside one ASP.NET Core host:
+Three bounded contexts, each deployed as its own service, with a fourth (Identity) intentionally stubbed for round one:
 
 - **Catalog**: products, prices, descriptions. Marten document store. The "when CRUD is fine" example.
-- **Identity**: customers only. Marten document store. Minimal.
 - **Inventory**: stock per SKU. Event sourced. Inline snapshot. The textbook case.
 - **Orders**: Cart and Order, both event sourced. Order serves as the process manager for fulfilling a purchase, using the Process Manager via Handlers pattern.
+- **Identity** *(stubbed)*: not a running service in round one. A customer identifier is hardcoded into the frontend; there is no auth flow, no customer record store, and no Identity service deployed. Promoting Identity into a real service backed by Polecat is queued in the Long Road section.
 
-Three event-sourced aggregates total (Cart, Order, Stock). Two document types (Product, Customer). The split is intentional. The project itself is the answer to "when should I reach for event sourcing and when shouldn't I?"
+Three event-sourced aggregates total (Cart, Order, Stock). One document type (Product). The split is intentional. The project itself is the answer to "when should I reach for event sourcing and when shouldn't I?"
 
 ## Success criteria for round one
 
@@ -51,7 +50,7 @@ By the first talk delivery, CritterMart should support:
 - Checking out and starting an order
 - Order placement that coordinates stock reservation and a stubbed payment authorization across bounded contexts
 - Order completion when both gates close, or order cancellation if payment times out
-- A working OpenTelemetry trace of the above flow visible in the Aspire dashboard
+- A working OpenTelemetry trace of the above flow spanning multiple services, visible in the Aspire dashboard
 - Design artifacts for each slice: an OpenSpec proposal and a narrative, traceable to the resulting code
 - One async projection somewhere in the codebase as a teaser for the "and you can also rebuild asynchronously" beat of the talk
 
@@ -59,6 +58,6 @@ The code does not need to be polished, comprehensive, or production-grade. It ne
 
 ## Long road
 
-After round one ships, the candidate enhancements are open: Polecat for identity, broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, an extracted Inventory service, multi-tenant scaffolding, richer frontend interactions. None of those are in scope this week. All of them could be.
+After round one ships, the candidate enhancements are open: promoting the stubbed Identity context into a real service backed by Polecat, broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, multi-tenant scaffolding, richer frontend interactions. None of those are in scope this week. All of them could be.
 
 CritterMart is a vehicle. The talk is the destination this week.
