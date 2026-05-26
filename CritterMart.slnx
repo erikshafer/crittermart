@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/.SolutionItems/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+  </Folder>
+</Solution>

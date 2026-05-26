@@ -1,0 +1,24 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.2" />
+        <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.2.2" />
+    </ItemGroup>
+    <!-- Wolverine -->
+    <ItemGroup>
+        <PackageVersion Include="WolverineFx" Version="5.39.3" />
+        <PackageVersion Include="WolverineFx.Http" Version="5.39.3" />
+        <PackageVersion Include="WolverineFx.Marten" Version="5.39.3" />
+    </ItemGroup>
+    <!-- Test packages -->
+    <ItemGroup>
+        <PackageVersion Include="Alba" Version="8.5.2" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
+        <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
+        <PackageVersion Include="xunit" Version="2.9.3" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+        <PackageVersion Include="Shouldly" Version="4.3.0" />
+    </ItemGroup>
+</Project>
