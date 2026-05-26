@@ -41,6 +41,7 @@ New prompts should mirror this shape unless a session has a deliberate reason to
 - **One prompt = one session = one PR.** A prompt corresponds to one working session; that session produces one PR; the PR contains exactly the prompt's named deliverables plus the retrospective.
 - **Frozen at session start.** The prompt is not edited after the session begins. Corrections become the next prompt.
 - **Spec-delta closure.** Every prompt names its spec delta in 2–4 lines. The paired retrospective confirms whether the delta landed.
+- **Branch-per-prompt naming.** Each prompt-driven session runs on its own branch named `{type}/{slug}`, where `{type}` matches the conventional-commit prefix of the session's commit subject (`tidy`, `feat`, `docs`, `fix`, etc.) and `{slug}` is a short kebab-case identifier mirroring the commit's scope. PR #1's branch (`tidy/docs-folder-readmes`) paired with commit subject `tidy: docs — add folder READMEs for routing-layer narrowing` is the in-repo precedent. The convention operationalizes the one-prompt-one-session-one-PR rule and makes the branch ↔ commit ↔ prompt triple one-glance-obvious in `git log` and PR listings.
 
 ## Cross-references
 

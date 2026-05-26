@@ -99,7 +99,7 @@ Per-technology or per-component implementation patterns and conventions. Example
 - **Artifact:** `docs/skills/{topic}/SKILL.md`.
 - **Why:** narratives capture *what* a slice should do; skills capture *how* the code structurally expresses it. Without skills, every session re-derives conventions from scratch.
 - **Authoring template:** keep one at `docs/skills/_template/SKILL.md` and clone it.
-- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate. **CritterMart round one** defers to the upstream JasperFx Critter Stack ai-skills library. Local skill files under `docs/skills/` are authored only when a CritterMart-specific convention diverges from the upstream skill. An empty `docs/skills/` during round one is intentional, not debt.
+- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate. **CritterMart round one** defers to the upstream JasperFx Critter Stack ai-skills library. Local skill files under `docs/skills/` are authored only when a CritterMart-specific convention diverges from the upstream skill or when a project-specific methodology needs its own home (e.g., the in-repo `event-modeling` skill). A minimally populated `docs/skills/` during round one is intentional, not debt.
 
 ### Rules — AI-optimized structural constraints
 
@@ -219,15 +219,15 @@ This section is the routing layer's payload — the actual orientation a fresh s
 | Layer | Path | What it holds |
 | --- | --- | --- |
 | Vision | [`docs/vision.md`](docs/vision.md) | Project purpose and non-goals |
-| Context map | `docs/context-map/` *(forthcoming)* | Cross-BC relationships in DDD strategic-design vocab |
-| Workshops | `docs/workshops/` *(forthcoming)* | Event Modeling output (Domain Storytelling skipped for round one) |
+| Context map | [`docs/context-map/README.md`](docs/context-map/README.md) | Cross-BC relationships in DDD strategic-design vocab |
+| Workshops | [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output (Domain Storytelling skipped for round one) |
 | OpenSpec proposals | `docs/specs/` *(forthcoming)* | Per-slice machine-readable SHALL specs |
-| Narratives | `docs/narratives/` *(forthcoming)* | NDD-informed journey specs, one per actor journey |
-| Prompts | `docs/prompts/` *(forthcoming)* | Per-session intent records, frozen at session start |
-| Retrospectives | `docs/retrospectives/` *(forthcoming)* | Per-session outcome records, spec-delta closure |
-| Skills | `docs/skills/` *(forthcoming; may stay empty in round one)* | Component-scoped patterns local to CritterMart |
-| Rules | `docs/rules/` *(forthcoming)* | AI-optimized structural constraints |
-| ADRs | `docs/decisions/` *(forthcoming)* | Significant architectural decisions |
+| Narratives | [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs, one per actor journey |
+| Prompts | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records, frozen at session start |
+| Retrospectives | [`docs/retrospectives/`](docs/retrospectives/README.md) | Per-session outcome records, spec-delta closure |
+| Skills | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns local to CritterMart (one current skill: event-modeling) |
+| Rules | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized structural constraints |
+| ADRs | [`docs/decisions/`](docs/decisions/) | Significant architectural decisions |
 | Research | `docs/research/` *(forthcoming)* | Spikes and exploratory work |
 
 ### Tech stack
