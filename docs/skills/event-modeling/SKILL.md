@@ -258,7 +258,7 @@ Personas may agree, disagree, and build on each other. The goal is productive te
 | Document | When to load |
 |---|---|
 | [`docs/vision.md`](../../vision.md) | Always — verify BC ownership, technology choices, design principles. |
-| [`docs/rules/structural-constraints.md`](../../rules/structural-constraints.md) *(forthcoming)* | When present — service-boundary rules, transport selection. |
+| [`docs/rules/structural-constraints.md`](../../rules/structural-constraints.md) | Service-boundary rules, transport selection. |
 | [`docs/narratives/`](../../narratives/) *(forthcoming)* | Journey workshops — load relevant narratives if the journey extends an existing one. |
 | [`docs/decisions/`](../../decisions/) | When the workshop touches a topic an ADR governs (transport, contracts, identity). |
 
