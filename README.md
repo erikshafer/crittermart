@@ -103,6 +103,18 @@ The pipeline itself doubles as the talk's section on what AI-assisted .NET devel
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or an equivalent OCI runtime) — Aspire orchestrates PostgreSQL and RabbitMQ as containers
 - An IDE with C# tooling (JetBrains Rider, Visual Studio, or VS Code with the C# Dev Kit)
 
+### AI session tooling
+
+CritterMart's design pipeline assumes an AI session-runner (Claude Code, in author practice). A fresh machine needs the following before a session can pick up where the last one left off:
+
+- **[Claude Code](https://www.claude.com/product/claude-code)** (or another agent capable of reading `CLAUDE.md`, the local skills directories, and the `docs/` artifacts). The repo commits a shared **`.claude/settings.json`** with a permissions allow-list for the project's Docker, dotnet, and `gh` tooling so a fresh clone starts with a sensible baseline; personal preferences (model, output style, effort level) belong in `.claude/settings.local.json` (per-machine, gitignored) or `~/.claude/settings.json` (user-global).
+- **[GitHub CLI (`gh`)](https://cli.github.com/)** — the session pipeline opens PRs via `gh pr create` and reads PR state via `gh api`. Authenticate once per machine with `gh auth login`.
+- **[`ctx7`](https://context7.com/)** — `npx ctx7@latest` fetches current docs for any library the session calls into; preferred over web search for API and configuration questions, and used by Erik's global Claude Code rules.
+- **JasperFx Critter Stack ai-skills library**, installed per the upstream instructions at [ai-skills.jasperfx.net/install](https://ai-skills.jasperfx.net/install). These are the *knowledge* skills (Marten projections, Wolverine handlers, Polecat setup, EF Core integration, testing patterns) that `CLAUDE.md`'s routing layer defers to for component-scoped patterns.
+- **Matt Pocock workflow skills**, installed via `npx skills@latest add mattpocock/skills` (source: [github.com/mattpocock/skills](https://github.com/mattpocock/skills)). These are the *workflow* skills (`grill-me`, `diagnose`, `handoff`, `tdd`, `prototype`, `improve-codebase-architecture`, etc.) that complement the JasperFx knowledge skills.
+
+Both skill collections install globally (to `~/.claude/skills/` and a universal mirror) and are discovered by Claude Code at session start with no per-project registration. Each machine installs them independently — they are not vendored into this repo. The two installers have independent upgrade cycles; do not try to consolidate them.
+
 ### Run locally (intended workflow)
 
 Once the AppHost project lands, .NET Aspire will boot PostgreSQL, RabbitMQ, and the three services together:
