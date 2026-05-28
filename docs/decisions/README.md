@@ -1,0 +1,55 @@
+# docs/decisions/
+
+Architecture Decision Records (ADRs) — the durable log of significant architectural decisions. See [CLAUDE.md § ADRs](../../CLAUDE.md) for the routing-layer treatment of where decisions sit in the pipeline.
+
+An ADR records a decision when it is made, so the reasoning survives the moment. Unlike the per-session prompt/retro pair (which captures *session* intent and outcome), an ADR captures a *cross-cutting* decision that outlives any one session and that later contributors would otherwise re-derive.
+
+## When to capture an ADR
+
+Per CLAUDE.md, capture an ADR when **any** of these holds:
+
+- (a) reversing the decision would require touching multiple bounded contexts,
+- (b) the tradeoff is non-obvious, or
+- (c) the next contributor would otherwise have to re-derive the reasoning.
+
+Below that bar, the decision lives in the prompt/retro pair that made it — not here. Resist minting an ADR for a choice that only affects one slice's internals.
+
+## File naming
+
+`NNN-{slug}.md` where `NNN` is the ADR's number (zero-padded, monotonic) and `{slug}` is a short kebab-case identifier (e.g., `007-process-manager-via-handlers-for-order.md`).
+
+## Format
+
+The house format is terse and prose-shaped:
+
+- Top-line title `# ADR NNN: {Title}`.
+- `**Status**: {Accepted | Proposed | Superseded}` immediately under the title.
+- `## Context` — the situation and the question.
+- `## Decision` — what was chosen.
+- `## Consequences` — what follows, including costs, risks, and rejected alternatives folded into prose.
+
+ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old one's status `Superseded` and cross-reference), but the original is not deleted or rewritten — the log is the history.
+
+## Index
+
+| ADR | Title | Status |
+| --- | --- | --- |
+| [001](001-separate-services-topology.md) | Separate Services Topology | Accepted |
+| [002](002-shared-postgres-schema-per-service.md) | Shared PostgreSQL with Schema-per-Service | Accepted |
+| [003](003-wolverine-rabbitmq-transport.md) | Wolverine Messaging with RabbitMQ Transport | Accepted |
+| [004](004-dotnet-aspire-orchestrator.md) | .NET Aspire as Orchestrator | Accepted |
+| [005](005-opentelemetry-tracing-enabled.md) | OpenTelemetry Tracing Enabled | Accepted |
+| [006](006-wolverine-http-per-service-no-bff.md) | Wolverine.Http API Surface per Service, No Separate BFF for Round One | Accepted |
+| [007](007-process-manager-via-handlers-for-order.md) | Process Manager via Handlers for the Order Aggregate | Accepted |
+| [008](008-inline-projections-async-teaser-no-daemon.md) | Inline Snapshot Projections, One Async Teaser, No Daemon for Round One | Accepted |
+| [009](009-polecat-deferred-for-round-one.md) | Polecat Deferred for Round One | Accepted |
+| [010](010-openspec-narrative-sibling-pipeline.md) | OpenSpec + Sibling Narrative for the SDD Pipeline | Accepted |
+| [011](011-openspec-cli-grain-aware-layered-integration.md) | openspec CLI as Proposal Tooling, Grain-Aware Layered Integration | Accepted |
+
+Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
+
+## Cross-references
+
+- [CLAUDE.md § ADRs](../../CLAUDE.md) — ADR routing-layer treatment and capture threshold.
+- [CLAUDE.md § External-skill path overrides](../../CLAUDE.md) — the mattpocock skill family assumes `docs/adr/`; CritterMart uses `docs/decisions/`. Treat the two as equivalent when invoking those skills.
+- [`../prompts/`](../prompts/) and [`../retrospectives/`](../retrospectives/) — where below-threshold decisions live instead.
