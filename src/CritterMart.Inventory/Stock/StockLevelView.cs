@@ -17,4 +17,10 @@ public class StockLevelView
 public partial class StockLevelViewProjection : SingleStreamProjection<StockLevelView, string>
 {
     public void Apply(StockReceived e, StockLevelView view) => view.Available += e.Quantity;
+
+    public void Apply(StockReserved e, StockLevelView view)
+    {
+        view.Available -= e.Quantity;
+        view.Reserved += e.Quantity;
+    }
 }
