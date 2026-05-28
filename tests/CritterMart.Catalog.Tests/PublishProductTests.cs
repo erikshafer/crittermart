@@ -9,6 +9,7 @@ using Xunit;
 namespace CritterMart.Catalog.Tests;
 
 [Collection("catalog")]
+[Trait("Category", "Integration")]
 public class PublishProductTests
 {
     private readonly CatalogAppFixture _fixture;

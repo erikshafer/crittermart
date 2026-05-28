@@ -9,6 +9,7 @@ using Xunit;
 namespace CritterMart.Inventory.Tests;
 
 [Collection("inventory")]
+[Trait("Category", "Integration")]
 public class ReceiveStockTests
 {
     private readonly InventoryAppFixture _fixture;
