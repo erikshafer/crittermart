@@ -6,8 +6,26 @@ name: .NET
 on:
   push:
     branches: ["main"]
+    # Skip the whole pipeline when only docs/specs/repo-meta change (no buildable code).
+    # A denylist fails safe: forget a type and CI just runs unnecessarily.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "openspec/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "openspec/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
   workflow_dispatch:
 
 # Cancel superseded runs on the same ref (e.g., new pushes to a PR branch).
