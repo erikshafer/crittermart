@@ -6,6 +6,9 @@ using Wolverine.Marten;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Aspire ServiceDefaults: OpenTelemetry, health checks, service discovery (ADR 004/005).
+builder.AddServiceDefaults();
+
 var connectionString = builder.Configuration.GetConnectionString("crittermart")
     ?? "Host=localhost;Port=5432;Database=crittermart;Username=postgres;Password=postgres";
 
