@@ -58,4 +58,4 @@ The format observed in [`rules/001-round-one-structural-constraints.md`](rules/0
 
 ## Current population
 
-Kinds populated for round one: `rules/` (one retro), `workshops/` (one retro), `docs/` (multiple retros — folder-READMEs, README overhaul, housekeeping sweep), `research/` (one retro — frontend stack landscape), `narratives/` (one retro — Seller's catalog-management journey for slice 1.1). Additional kinds (`skills/`, `decisions/`, `implementations/`) appear as their first session of that kind lands.
+Kinds populated for round one: `rules/` (one retro), `workshops/` (one retro), `docs/` (multiple retros — folder-READMEs, README overhaul, housekeeping sweep), `research/` (one retro — frontend stack landscape), `narratives/` (one retro — Seller's catalog-management journey for slice 1.1), `implementations/` (one retro — slice 1.1 PublishProduct: Catalog skeleton + first slice). Additional kinds (`skills/`, `decisions/`) appear as their first session of that kind lands.
