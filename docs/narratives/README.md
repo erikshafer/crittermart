@@ -43,9 +43,9 @@ For each workshop slice the narrative threads, a sibling **OpenSpec proposal** a
 
 ## Current population
 
-**Two narratives.**
+**Four narratives.**
 
-- [`001-seller-manage-catalog.md`](001-seller-manage-catalog.md) — the Seller's catalog-management journey, covering Workshop 001 slice 1.1 (Publish a product). Scoped wider than slice 1.1; slice 1.3 (Change a product's price) is forward-looked and will extend the narrative when its OpenSpec proposal is authored.
-- [`002-customer-browse-catalog.md`](002-customer-browse-catalog.md) — the Customer's catalog-browsing journey, covering Workshop 001 slice 1.2 (Browse and view products), a read-only query slice. Scoped to discovery; the Customer's cart/order steps (slices 3.1, 4.1) live in the Orders BC and are noted as forthcoming. First Customer-actor narrative.
-
-This first narrative was authored before its sibling OpenSpec proposal at `docs/specs/1.1/proposal.md` (forthcoming). The narrative-first ordering for this triangle is a per-session choice, not yet a pipeline convention; see the paired retrospective at `docs/retrospectives/narratives/001-seller-manage-catalog.md` (forthcoming) for the rationale and whether the choice earns its keep across subsequent triangles.
+- [`001-seller-manage-catalog.md`](001-seller-manage-catalog.md) — the Seller's catalog-management journey (v1.1, Catalog BC), covering slices 1.1 (Publish a product) and 1.3 (Change a product's price).
+- [`002-customer-browse-catalog.md`](002-customer-browse-catalog.md) — the Customer's catalog-browsing journey (Catalog BC), covering slice 1.2 (Browse and view products), a read-only query slice. First Customer-actor narrative.
+- [`003-operator-manage-stock.md`](003-operator-manage-stock.md) — the Operator's stock-management journey (v1.1, Inventory BC), covering slices 2.1 (Receive stock) and 2.2 (Reserve stock). First event-sourced-BC narrative.
+- [`004-customer-purchase.md`](004-customer-purchase.md) — the Customer's purchasing journey (Orders BC), covering slice 3.1 (Add item to cart); cart edits (3.2/3.3), place-order (4.1), fulfillment (4.2–4.7), and abandonment (3.4) are forward-looked.
