@@ -9,7 +9,7 @@ tags: [event-modeling, design, workshops, methodology, slices, ddd]
 
 Event Modeling is a collaborative workshop technique created by Adam Dymitruk (Adaptech Group) for designing information systems. It produces a visual, timeline-based blueprint showing how data flows through a system — from user intent through state changes to read-side projections. It works for any information system, not just event-sourced ones, but maps naturally onto CQRS and event sourcing patterns.
 
-The project's pipeline authors an Event Modeling workshop pass before any per-slice code is written. Workshop output flows into per-slice OpenSpec proposals (`docs/specs/`) and sibling narratives (`docs/narratives/`); both flow into prompts (`docs/prompts/`); prompts drive implementation. This skill covers the workshop technique itself.
+The project's pipeline authors an Event Modeling workshop pass before any per-slice code is written. Workshop output flows into per-slice OpenSpec proposals (`openspec/changes/`) and sibling narratives (`docs/narratives/`); both flow into prompts (`docs/prompts/`); prompts drive implementation. This skill covers the workshop technique itself.
 
 ## When to apply this skill
 
@@ -244,7 +244,7 @@ Personas may agree, disagree, and build on each other. The goal is productive te
 | Workshop Output | Pipeline Artifact | Location |
 |---|---|---|
 | **Workshop session record** | Markdown capture of the session | [`docs/workshops/`](../../workshops/) |
-| **Slices** | OpenSpec proposals (per-slice) and narrative drafts (journey-scoped); prompts (task-scoped) | [`docs/specs/`](../../specs/), [`docs/narratives/`](../../narratives/), [`docs/prompts/`](../../prompts/) |
+| **Slices** | OpenSpec proposals (per-slice) and narrative drafts (journey-scoped); prompts (task-scoped) | [`openspec/changes/`](../../../openspec/changes/), [`docs/narratives/`](../../narratives/), [`docs/prompts/`](../../prompts/) |
 | **Scenarios (Given/When/Then)** | Test specifications | `tests/` per service |
 | **BC boundary changes** | Update or verify | [`docs/vision.md`](../../vision.md) § Bounded contexts |
 | **Event vocabulary changes** | Update or verify | [`docs/vision.md`](../../vision.md) (or future event-vocabulary doc) |

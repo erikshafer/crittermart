@@ -58,4 +58,4 @@ The format observed in [`rules/001-round-one-structural-constraints.md`](rules/0
 
 ## Current population
 
-Kinds populated for round one: `rules/` (one retro), `workshops/` (one retro), `docs/` (multiple retros — folder-READMEs, README overhaul, housekeeping sweep), `research/` (one retro — frontend stack landscape), `narratives/` (one retro — Seller's catalog-management journey for slice 1.1), `implementations/` (one retro — slice 1.1 PublishProduct: Catalog skeleton + first slice). Additional kinds (`skills/`, `decisions/`) appear as their first session of that kind lands.
+Kinds populated for round one: `rules/` (1), `workshops/` (1), `research/` (1 — frontend stack landscape; the ecommerce-lessons research prompt has no paired retro), `docs/` (3 — folder-READMEs, README overhaul, housekeeping sweep), `narratives/` (3 — Seller catalog-management, Customer browse, Customer purchase), `specs/` (2 — slice 1.1 + 1.2 OpenSpec proposals), `chore/` (2 — Critter Stack 2026 upgrade, infra bundle), `implementations/` (5 — slices 1.1, 1.2, 1.3, 2.1, 2.2). Additional kinds (`skills/`, `decisions/`) appear as their first session of that kind lands.
