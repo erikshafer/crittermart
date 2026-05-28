@@ -7,4 +7,8 @@
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>

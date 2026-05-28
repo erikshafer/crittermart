@@ -5,8 +5,10 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/CritterMart.AppHost/CritterMart.AppHost.csproj" />
     <Project Path="src/CritterMart.Catalog/CritterMart.Catalog.csproj" />
     <Project Path="src/CritterMart.Inventory/CritterMart.Inventory.csproj" />
+    <Project Path="src/CritterMart.ServiceDefaults/CritterMart.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CritterMart.Catalog.Tests/CritterMart.Catalog.Tests.csproj" />
