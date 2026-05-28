@@ -158,9 +158,9 @@ CritterMart/
 | [`docs/vision.md`](docs/vision.md) | Canonical source of truth — purpose, bounded contexts, non-goals |
 | [`docs/context-map/README.md`](docs/context-map/README.md) | Cross-BC DDD relationships and integration topology |
 | [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output ([round-one rolled-up model](docs/workshops/001-crittermart-event-model.md)) |
-| [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs (per slice, forthcoming) |
-| [`docs/specs/`](docs/specs/) | OpenSpec proposals (per slice, forthcoming) |
-| [`docs/decisions/`](docs/decisions/) | 10 round-one ADRs |
+| [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs (one per actor journey) |
+| [`openspec/changes/`](openspec/changes/) | OpenSpec proposals + SHALL specs (per slice; workspace is a peer to `docs/`, ADR 011) |
+| [`docs/decisions/`](docs/decisions/) | 12 round-one ADRs |
 | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized terse imperative list of architectural constraints |
 | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns (one current local skill: `event-modeling`; others defer to upstream) |
 | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records |
@@ -175,7 +175,7 @@ CritterMart's second deliberate purpose is exercising a disciplined SDD pipeline
 
 1. **Context Mapping** (cross-BC DDD vocabulary) — [`docs/context-map/README.md`](docs/context-map/README.md), amended as new BCs appear
 2. **Event Modeling workshop** (one rolled-up artifact for round one) — [`docs/workshops/001-crittermart-event-model.md`](docs/workshops/001-crittermart-event-model.md)
-3. **OpenSpec proposal + Narrative siblings** (per slice, must agree) — `docs/specs/{slice}/proposal.md` + `docs/narratives/NNN-{actor}-{journey}.md`
+3. **OpenSpec proposal + Narrative siblings** (per slice, must agree) — `openspec/changes/{change}/proposal.md` + `docs/narratives/NNN-{actor}-{journey}.md`
 4. **Prompt** (per session, frozen at session start) — [`docs/prompts/README.md`](docs/prompts/README.md)
 5. **Execute + Retrospective** (per session, retro before PR opens) — [`docs/retrospectives/README.md`](docs/retrospectives/README.md)
 

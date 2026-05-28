@@ -2,7 +2,7 @@
 
 NDD-informed journey specs, one per actor journey. See [CLAUDE.md § 4b](../../CLAUDE.md) for the routing-layer treatment of where narratives sit in the pipeline.
 
-A narrative is a journey-scoped spec, written from one actor's perspective, threading multiple workshop slices into one coherent experience. Narratives are NDD-informed (Narrative-Driven Development, Sam Hatoum / Xolvio — principles, not the commercial tool). The narrative is the human-readable companion to the per-slice OpenSpec proposal at `docs/specs/{slice}/proposal.md`; both must agree, but they address different audiences (narrative for humans, proposal for machines).
+A narrative is a journey-scoped spec, written from one actor's perspective, threading multiple workshop slices into one coherent experience. Narratives are NDD-informed (Narrative-Driven Development, Sam Hatoum / Xolvio — principles, not the commercial tool). The narrative is the human-readable companion to the per-slice OpenSpec proposal at `openspec/changes/{change}/proposal.md` (with its SHALL delta at `openspec/changes/{change}/specs/{capability}/spec.md`; ADR 011); both must agree, but they address different audiences (narrative for humans, proposal for machines).
 
 ## File naming
 
@@ -32,12 +32,12 @@ Each session that touches a narrative bumps its version and appends to `## Docum
 
 ## Sibling artifact
 
-For each workshop slice the narrative threads, a sibling **OpenSpec proposal** at `docs/specs/{slice}/proposal.md` *(forthcoming)* carries the precise, machine-readable SHALL statements for the same slice. The two artifacts share a source (the workshop slice) and a scope (one vertical slice) but address two audiences — and **must agree**. If the narrative and proposal contradict, the next session that touches either pairs an update to the other.
+For each workshop slice the narrative threads, a sibling **OpenSpec proposal** at `openspec/changes/{change}/` carries the precise, machine-readable SHALL statements for the same slice. The two artifacts share a source (the workshop slice) and a scope (one vertical slice) but address two audiences — and **must agree**. If the narrative and proposal contradict, the next session that touches either pairs an update to the other.
 
 ## Cross-references
 
 - [CLAUDE.md § 4b](../../CLAUDE.md) — narrative routing-layer treatment.
-- [`../specs/`](../specs/) *(forthcoming)* — sibling OpenSpec proposal layer; per-slice machine-readable SHALL specs.
+- [`openspec/changes/`](../../openspec/changes/) — sibling OpenSpec proposal layer; per-slice machine-readable SHALL specs (the openspec workspace, a peer to `docs/`; ADR 011).
 - [`../workshops/`](../workshops/) — the source slices a narrative threads.
 - [`../prompts/narratives/`](../prompts/narratives/) *(forthcoming)* and [`../retrospectives/narratives/`](../retrospectives/narratives/) *(forthcoming)* — per-narrative authoring session records.
 

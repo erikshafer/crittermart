@@ -30,7 +30,7 @@ The methodology for facilitating, simulating, or planning an Event Modeling work
 - [CLAUDE.md §§ 2–3](../../CLAUDE.md) — Domain Storytelling and Event Modeling Workshop routing-layer sections.
 - [`../skills/event-modeling/SKILL.md`](../skills/event-modeling/SKILL.md) — *how* a workshop is conducted.
 - [`../prompts/workshops/`](../prompts/workshops/) and [`../retrospectives/workshops/`](../retrospectives/workshops/) — per-workshop session intent and outcome records.
-- Workshop slices flow into per-slice OpenSpec proposals at `docs/specs/` *(forthcoming)* and sibling narratives at `docs/narratives/` *(forthcoming)*.
+- Workshop slices flow into per-slice OpenSpec proposals at `openspec/changes/` (the openspec workspace, a peer to `docs/`; ADR 011) and sibling narratives at `docs/narratives/`.
 
 ## Current population
 
