@@ -60,7 +60,7 @@ Per slice, two sibling artifacts are produced from the event model before any co
 
 A precise, machine-friendly spec. Capabilities and requirements are expressed as SHALL statements. The GWT scenarios authored in the event-modeling workshop become spec scenarios here. The proposal is the authoritative spec the implementation prompt references and the implementation must satisfy.
 
-- **Artifact:** `docs/specs/{slice}/proposal.md` (or follow the standard OpenSpec layout if a tool convention is adopted).
+- **Artifact:** an openspec change at `openspec/changes/{change}/`, authored and validated with the openspec CLI (the adopted tool convention). Each change holds `proposal.md` (Why/What/Capabilities/Impact) and a per-capability SHALL delta at `openspec/changes/{change}/specs/{capability}/spec.md`. The `openspec/` workspace is a peer to `docs/` at the repo root (the CLI hardcodes the directory name; it is not relocatable under `docs/`). The companion `design.md` and `tasks.md` artifacts are authored in the implementation session, not the proposal session.
 - **Why:** narratives are persuasive but imprecise; an event-model slice is precise but fragmented. The OpenSpec proposal is the unambiguous, testable contract that bridges them. It is what the code is checked against.
 
 #### 4b. Narrative
@@ -184,22 +184,21 @@ docs/
   vision.md         ← project overview, goals, principles
   context-map/      ← cross-BC relationships in DDD vocab
   workshops/        ← Event Modeling / Domain Storytelling output
-  specs/            ← OpenSpec proposals, per slice
   narratives/       ← NDD-informed journey specs
   skills/           ← component-scoped patterns
     _template/      ← skill authoring template
     DEBT.md         ← skill-file gaps surfaced but deferred
   rules/            ← AI-optimized structural constraints
   decisions/        ← ADRs
-  prompts/
-    workshops/
-    narratives/
-    skills/
-    decisions/
-    implementations/
+  prompts/          ← per-session intent (workshops/, narratives/, specs/, rules/, docs/, research/, …)
   retrospectives/
     (mirrors prompts/)
   research/         ← spikes and exploratory work
+
+openspec/           ← OpenSpec workspace (peer to docs/), authored + validated via the openspec CLI
+  changes/          ← per-change artifacts: proposal.md, specs/<capability>/spec.md, design.md, tasks.md
+    archive/        ← archived (shipped) changes
+  specs/            ← main specs, synced from a change on archive
 ```
 
 Subdirectories appear as their first artifact lands; don't pre-create empty ones.
@@ -221,7 +220,7 @@ This section is the routing layer's payload — the actual orientation a fresh s
 | Vision | [`docs/vision.md`](docs/vision.md) | Project purpose and non-goals |
 | Context map | [`docs/context-map/README.md`](docs/context-map/README.md) | Cross-BC relationships in DDD strategic-design vocab |
 | Workshops | [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output (Domain Storytelling skipped for round one) |
-| OpenSpec proposals | `docs/specs/` *(forthcoming)* | Per-slice machine-readable SHALL specs |
+| OpenSpec proposals | [`openspec/changes/`](openspec/) | Per-capability machine-readable SHALL specs, authored + validated via the openspec CLI; workspace is a peer to `docs/` |
 | Narratives | [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs, one per actor journey |
 | Prompts | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records, frozen at session start |
 | Retrospectives | [`docs/retrospectives/`](docs/retrospectives/README.md) | Per-session outcome records, spec-delta closure |
