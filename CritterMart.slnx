@@ -4,4 +4,10 @@
     <File Path="Directory.Packages.props" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/CritterMart.Catalog/CritterMart.Catalog.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CritterMart.Catalog.Tests/CritterMart.Catalog.Tests.csproj" />
+  </Folder>
 </Solution>
