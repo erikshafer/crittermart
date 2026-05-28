@@ -3,8 +3,8 @@ narrative: 001
 title: The Seller Manages the Catalog
 actor: Seller
 status: draft
-version: v1.0
-slices: [1.1]
+version: v1.1
+slices: [1.1, 1.3]
 references:
   - docs/workshops/001-crittermart-event-model.md (§ 2 Catalog BC, § 4 Catalog event vocabulary, § 5 slice 1.1, § 6.1 GWT scenarios)
   - docs/vision.md (single-seller framing)
@@ -22,7 +22,7 @@ Workshop 001 refers to this actor as the *operator* at the GWT level. In this na
 The Seller's catalog-management journey threads two Workshop 001 slices in round one:
 
 - **Slice 1.1 — Publish a product.** Authored in this narrative version. Two Moments below cover the happy path and the duplicate-SKU failure.
-- **Slice 1.3 — Change a product's price.** Forthcoming. When that slice's OpenSpec proposal is drafted, this narrative is updated to thread its Moment(s) and the version bumps to `v1.1`.
+- **Slice 1.3 — Change a product's price.** Authored in this narrative version (v1.1). Moment 3 below covers the Seller dropping a product's price and the audit trail that records the change.
 
 Slice 1.2 (Browse and view products) belongs to the *Customer's* journey and is excluded here; it is the subject of a separate, future narrative.
 
@@ -48,13 +48,23 @@ The `ProductPublished` event recorded here is not state-reconstruction material.
 
 The failure is idempotent by design. A retry, whether intentional or the consequence of an absent-minded second submit, never produces a second document for the same SKU. The audit trail remains clean: one `ProductPublished` event per SKU, with no shadow events from failed attempts.
 
+## Moment 3 — Adjusting a product's price
+
+**Context.** Months after publishing, the Seller decides to run a seasonal sale on the *Cosmic Critter Plush* (`crit-001`), dropping it from `$24.99` to `$19.99`. The product has been live on the storefront at `$24.99` since Moment 1, and its audit stream holds a single `ProductPublished` moment.
+
+**Interaction.** The Seller opens the product's pricing surface, enters the new price `19.99`, and confirms.
+
+**System response.** The Catalog service receives `ChangeProductPrice { sku: "crit-001", newPrice: 19.99 }`, loads the existing `crit-001` `Product`, updates its price to `19.99`, and appends a `ProductPriceChanged` lifecycle moment to `crit-001`'s audit stream carrying both the **old price (`24.99`)** and the **new price (`19.99`)**. The `Product` document's current price is now `19.99` — it remains the source of truth — and the storefront listing (`ProductCatalogView`, slice 1.2) immediately shows `19.99` to any browsing customer. The audit stream now holds two moments for `crit-001`: `ProductPublished` (the original `24.99` listing) and `ProductPriceChanged` (`24.99` → `19.99`). That is a durable, append-only history of how the price evolved — answerable later without reconstructing it from document change logs. This is the same "even CRUD wants events for audit" framing as Moment 1, now exercised by a stream that genuinely grows over a product's life.
+
+A customer who already had the Cosmic Critter Plush in their cart when the price changed still sees the snapshot price taken at add-to-cart time; the change does **not** ripple to live carts. That deliberate non-event is described below.
+
 ## Forthcoming Moments
 
-The Seller's catalog-management journey will gain at least one more Moment when slice 1.3 is authored:
+With slices 1.1 and 1.3 both authored, the Seller's round-one catalog-management journey is complete. Longer-road extensions would thread further Moments when their slices are authored:
 
-- **Moment 3 — Adjusting a product's price.** The Seller decides to drop the Cosmic Critter Plush from `$24.99` to `$19.99` for a sale. The `ChangeProductPrice` command appends a `ProductPriceChanged` lifecycle moment carrying the old and new prices, and the `ProductCatalogView` updates to reflect the new price on the storefront. The audit trail preserves the original price for posterity; the document's current price is the new value.
+- **Product discontinuation.** A `ProductDiscontinued` lifecycle moment (parked in Workshop 001 § 4 / § 9) would append a third kind of event to a product's stream and remove it from the customer-facing listing. Out of scope for round one.
 
-When that Moment lands, the narrative's `slices` frontmatter becomes `[1.1, 1.3]`, the version bumps to `v1.1`, and `## Document History` records the amendment.
+When such a Moment lands, the narrative's `slices` frontmatter grows, the version bumps, and `## Document History` records the amendment.
 
 ## What the Seller does *not* yet see
 
@@ -68,3 +78,4 @@ Two non-events are worth naming here because their absence is a deliberate round
 | Version | Date       | Notes                                                                                                                                                                                                                                                          |
 | ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | v1.0    | 2026-05-27 | Initial commit. Covers Workshop 001 slice 1.1 (Publish a product) as two Moments: happy path (publish a first product) and duplicate-SKU failure (`ProductAlreadyPublished`). Slice 1.3 (`ChangeProductPrice`) noted as the next planned extension; not yet authored. |
+| v1.1    | 2026-05-28 | Threads Workshop 001 slice 1.3 (Change a product's price). Adds Moment 3 (Adjusting a product's price — `crit-001` `24.99` → `19.99`, `ProductPriceChanged` recording old + new price as the second moment on the audit stream). `slices` → `[1.1, 1.3]`. Authored in the consolidated one-PR slice mode (see the slice 1.3 retrospective). |
