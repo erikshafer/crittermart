@@ -1,7 +1,7 @@
 ---
-version: v1.0
+version: v1.1
 status: Active
-date: 2026-05-26
+date: 2026-05-28
 references:
   - docs/vision.md
   - docs/context-map/README.md
@@ -16,6 +16,7 @@ references:
   - docs/decisions/008-inline-projections-async-teaser-no-daemon.md
   - docs/decisions/009-polecat-deferred-for-round-one.md
   - docs/decisions/010-openspec-narrative-sibling-pipeline.md
+  - docs/decisions/012-critter-stack-2026-upgrade.md
   - CLAUDE.md
 ---
 
@@ -79,6 +80,13 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - That async projection is `CartAbandonmentReport`. (Workshop 001 § 7)
 - No async daemon is driven in the demo path for round one. (ADR 008, Workshop 001 § 7)
 
+## Build & code generation
+
+- The stack targets the Critter Stack 2026 line: Wolverine 6, Marten 9, JasperFx 2. (ADR 012)
+- Wolverine runtime codegen runs in `TypeLoadMode.Dynamic` via the `WolverineFx.RuntimeCompilation` package for round one; Static/AOT (`codegen write` + `TypeLoadMode.Static`) is deferred. (ADR 012)
+- Marten code generation is source-generated and automatic — no `Internal/Generated/` folder, no `dotnet run -- codegen write` for the Marten portion, no codegen-config knobs. (ADR 012)
+- Marten 9's flipped `StoreOptions` defaults are adopted; `RestoreV8Defaults()` is not called. (ADR 012)
+
 ## Event naming
 
 - Event names are past tense, carry no `Event` suffix, and are domain-meaningful. (Workshop 001 § 4)
@@ -113,3 +121,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | Version | Date       | Notes |
 | ------- | ---------- | ----- |
 | v1.0    | 2026-05-26 | Initial round-one structural-constraints synthesis from ADRs 001–010, vision.md, context map, Workshop 001, and CLAUDE.md operating disciplines. |
+| v1.1    | 2026-05-28 | Added the **Build & code generation** section (Critter Stack 2026 line; Wolverine Dynamic codegen via `WolverineFx.RuntimeCompilation`; Marten source-gen; v9 defaults adopted), paired with ADR 012. |
