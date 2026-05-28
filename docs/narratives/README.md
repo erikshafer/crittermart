@@ -43,6 +43,9 @@ For each workshop slice the narrative threads, a sibling **OpenSpec proposal** a
 
 ## Current population
 
-**One narrative.** [`001-seller-manage-catalog.md`](001-seller-manage-catalog.md) — the Seller's catalog-management journey, covering Workshop 001 slice 1.1 (Publish a product). The narrative is scoped wider than slice 1.1; slice 1.3 (Change a product's price) is forward-looked and will extend the narrative when its OpenSpec proposal is authored. Customer-facing slice 1.2 (Browse and view products) is excluded; it will live in a separate Customer narrative.
+**Two narratives.**
+
+- [`001-seller-manage-catalog.md`](001-seller-manage-catalog.md) — the Seller's catalog-management journey, covering Workshop 001 slice 1.1 (Publish a product). Scoped wider than slice 1.1; slice 1.3 (Change a product's price) is forward-looked and will extend the narrative when its OpenSpec proposal is authored.
+- [`002-customer-browse-catalog.md`](002-customer-browse-catalog.md) — the Customer's catalog-browsing journey, covering Workshop 001 slice 1.2 (Browse and view products), a read-only query slice. Scoped to discovery; the Customer's cart/order steps (slices 3.1, 4.1) live in the Orders BC and are noted as forthcoming. First Customer-actor narrative.
 
 This first narrative was authored before its sibling OpenSpec proposal at `docs/specs/1.1/proposal.md` (forthcoming). The narrative-first ordering for this triangle is a per-session choice, not yet a pipeline convention; see the paired retrospective at `docs/retrospectives/narratives/001-seller-manage-catalog.md` (forthcoming) for the rationale and whether the choice earns its keep across subsequent triangles.
