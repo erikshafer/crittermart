@@ -14,7 +14,7 @@
 
 CritterMart is a teaching reference architecture for **event sourcing with the Critter Stack** — JasperFx's family of .NET libraries including [Wolverine](https://wolverine.netlify.app/) (messaging and command handling) and [Marten](https://martendb.io/) (event sourcing + document storage over PostgreSQL). The project's two purposes are explicit and in priority order:
 
-1. **It is the working example for an Event Sourcing with Marten talk.** First delivered at ImprovingU (round one), then to an online .NET user group (round two). 50-minute talk, 30-minute cut, no live coding — CritterMart code and design artifacts carry the pedagogical weight, with the Place Order journey as the centerpiece.
+1. **It is a working example for an Event Sourcing with Marten talk.** CritterMart code and design artifacts carry the pedagogical weight, with the Place Order journey as the centerpiece.
 2. **It is a sandbox for a disciplined Spec-Driven Development pipeline.** Each vertical slice is produced via Context Mapping → Event Modeling workshop → OpenSpec proposal + sibling narrative → prompt → execute + retrospective, in that order, before any code is written. The pipeline doubles as the talk's section on what AI-assisted .NET development looks like in 2026.
 
 CritterMart sits alongside other Critter-family reference architectures (CritterBids for auctions, CritterCab for ride-sharing, CritterSupply for broader ecommerce). It is deliberately **the smallest of them in domain scope** — single-seller storefront, four bounded contexts, one of which is stubbed — and the most deliberate about exposing its own design pipeline as a first-class artifact.
@@ -135,14 +135,16 @@ CritterMart/
 │   ├── vision.md               # Canonical source of truth — purpose, BCs, non-goals
 │   ├── context-map/            # Cross-BC DDD relationships and topology
 │   ├── workshops/              # Event Modeling output (round-one rolled-up model)
-│   ├── narratives/             # NDD-informed journey specs (per slice, forthcoming)
-│   ├── specs/                  # OpenSpec proposals (per slice, forthcoming)
-│   ├── decisions/              # 10 round-one ADRs
+│   ├── narratives/             # NDD-informed journey specs (per slice)
+│   ├── decisions/              # Round-one ADRs
 │   ├── rules/                  # AI-optimized structural constraints
 │   ├── skills/                 # Component-scoped patterns (event-modeling skill local)
 │   ├── prompts/                # Per-session intent records, frozen at session start
 │   ├── retrospectives/         # Per-session outcome records, spec-delta closure
 │   └── research/               # Spikes and exploratory work
+├── openspec/                   # OpenSpec workspace (peer to docs/) — CLI-managed
+│   ├── changes/                # Per-slice changes (proposal.md + SHALL specs)
+│   └── specs/                  # Main specs, synced from a change on archive
 ├── src/                        # Forthcoming — per-service projects land per slice
 ├── CLAUDE.md                   # AI development entry point and pipeline overview
 ├── LICENSE                     # MIT
@@ -158,9 +160,9 @@ CritterMart/
 | [`docs/vision.md`](docs/vision.md) | Canonical source of truth — purpose, bounded contexts, non-goals |
 | [`docs/context-map/README.md`](docs/context-map/README.md) | Cross-BC DDD relationships and integration topology |
 | [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output ([round-one rolled-up model](docs/workshops/001-crittermart-event-model.md)) |
-| [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs (one per actor journey) |
-| [`openspec/changes/`](openspec/changes/) | OpenSpec proposals + SHALL specs (per slice; workspace is a peer to `docs/`, ADR 011) |
-| [`docs/decisions/`](docs/decisions/) | 12 round-one ADRs |
+| [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs (per slice) |
+| [`openspec/changes/`](openspec/changes/) | OpenSpec proposals + per-capability SHALL specs (per slice, CLI-managed) |
+| [`docs/decisions/`](docs/decisions/) | Round-one ADRs (indexed in the folder README) |
 | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized terse imperative list of architectural constraints |
 | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns (one current local skill: `event-modeling`; others defer to upstream) |
 | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records |
