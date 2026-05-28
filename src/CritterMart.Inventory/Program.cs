@@ -38,7 +38,19 @@ builder.Host.UseWolverine(opts =>
 
 builder.Services.AddWolverineHttp();
 
+// Swagger UI over the (OpenAPI-described) Wolverine.Http endpoints — a demo/devex affordance.
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    // Send the root to the Swagger UI (302) so localhost:<port>/ lands on the docs.
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+}
 
 app.MapWolverineEndpoints();
 

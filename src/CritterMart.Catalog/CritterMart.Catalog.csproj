@@ -6,6 +6,7 @@
     <!-- Wolverine 6 extracted the Roslyn runtime compiler out of core; Dynamic
          codegen mode throws at startup without it (round-one posture, ADR 012). -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>

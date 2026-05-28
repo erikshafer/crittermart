@@ -24,6 +24,10 @@
         <PackageVersion Include="WolverineFx.Marten" Version="6.1.0" />
         <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.1.0" />
     </ItemGroup>
+    <!-- API documentation (Swagger UI) -->
+    <ItemGroup>
+        <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    </ItemGroup>
     <!-- Test packages -->
     <ItemGroup>
         <PackageVersion Include="Alba" Version="8.5.2" />
