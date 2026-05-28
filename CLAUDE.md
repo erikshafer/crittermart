@@ -226,7 +226,7 @@ This section is the routing layer's payload — the actual orientation a fresh s
 | Retrospectives | [`docs/retrospectives/`](docs/retrospectives/README.md) | Per-session outcome records, spec-delta closure |
 | Skills | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns local to CritterMart (one current skill: event-modeling) |
 | Rules | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized structural constraints |
-| ADRs | [`docs/decisions/`](docs/decisions/) | Significant architectural decisions |
+| ADRs | [`docs/decisions/`](docs/decisions/README.md) | Significant architectural decisions (indexed in the folder README) |
 | Research | `docs/research/` *(forthcoming)* | Spikes and exploratory work |
 
 ### External-skill path overrides
