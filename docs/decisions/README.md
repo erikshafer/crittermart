@@ -46,6 +46,7 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [010](010-openspec-narrative-sibling-pipeline.md) | OpenSpec + Sibling Narrative for the SDD Pipeline | Accepted |
 | [011](011-openspec-cli-grain-aware-layered-integration.md) | openspec CLI as Proposal Tooling, Grain-Aware Layered Integration | Accepted |
 | [012](012-critter-stack-2026-upgrade.md) | Critter Stack 2026 Upgrade (Wolverine 6 / Marten 9) | Accepted |
+| [013](013-critterwatch-deferred-to-messaging-slices.md) | CritterWatch Deferred to the 4.x Messaging Slices | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 
