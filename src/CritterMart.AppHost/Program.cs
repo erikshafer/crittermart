@@ -21,4 +21,10 @@ builder.AddProject<Projects.CritterMart_Inventory>("inventory")
     .WithReference(crittermart)
     .WaitFor(crittermart);
 
+// Orders is the second event-sourced service (Cart aggregate, slice 3.1). Postgres only
+// this slice — its first cross-BC RabbitMQ flow (Reserve stock) arrives in slice 4.2.
+builder.AddProject<Projects.CritterMart_Orders>("orders")
+    .WithReference(crittermart)
+    .WaitFor(crittermart);
+
 builder.Build().Run();

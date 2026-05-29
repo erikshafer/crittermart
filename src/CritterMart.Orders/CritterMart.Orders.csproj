@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx.Http" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -8,10 +8,12 @@
     <Project Path="src/CritterMart.AppHost/CritterMart.AppHost.csproj" />
     <Project Path="src/CritterMart.Catalog/CritterMart.Catalog.csproj" />
     <Project Path="src/CritterMart.Inventory/CritterMart.Inventory.csproj" />
+    <Project Path="src/CritterMart.Orders/CritterMart.Orders.csproj" />
     <Project Path="src/CritterMart.ServiceDefaults/CritterMart.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CritterMart.Catalog.Tests/CritterMart.Catalog.Tests.csproj" />
     <Project Path="tests/CritterMart.Inventory.Tests/CritterMart.Inventory.Tests.csproj" />
+    <Project Path="tests/CritterMart.Orders.Tests/CritterMart.Orders.Tests.csproj" />
   </Folder>
 </Solution>
