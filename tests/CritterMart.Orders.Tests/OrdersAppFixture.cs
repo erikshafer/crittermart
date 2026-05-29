@@ -9,8 +9,7 @@ namespace CritterMart.Orders.Tests;
 // InventoryAppFixture — the established event-sourced-service integration-test pattern.
 public class OrdersAppFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .Build();
 
     public IAlbaHost Host { get; private set; } = null!;
