@@ -9,8 +9,7 @@ namespace CritterMart.Catalog.Tests;
 // config provider (WebApplicationBuilder adds it after appsettings.json, so it wins).
 public class CatalogAppFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .Build();
 
     public IAlbaHost Host { get; private set; } = null!;

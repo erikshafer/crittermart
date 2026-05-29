@@ -8,8 +8,7 @@ namespace CritterMart.Inventory.Tests;
 // the test collection. Connection string injected via the env-var config provider.
 public class InventoryAppFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .Build();
 
     public IAlbaHost Host { get; private set; } = null!;
