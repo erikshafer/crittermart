@@ -26,4 +26,14 @@ public partial class StockLevelViewProjection : SingleStreamProjection<StockLeve
         view.Reserved += e.Quantity;
         view.Reservations.Add(e.OrderId);
     }
+
+    // Inverse of Apply(StockReserved) (slice 2.3): the reservation is given back to the pool.
+    // Dropping the order id from Reservations is what makes a duplicate release a no-op — the
+    // handler's guard then finds no reservation for the order and appends nothing.
+    public void Apply(StockReleased e, StockLevelView view)
+    {
+        view.Available += e.Quantity;
+        view.Reserved -= e.Quantity;
+        view.Reservations.Remove(e.OrderId);
+    }
 }

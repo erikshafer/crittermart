@@ -1,6 +1,9 @@
 extern alias InventoryApp;
 
 using Alba;
+using CritterMart.Orders.Order;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Xunit;
@@ -29,7 +32,19 @@ public class CrossBcFixture : IAsyncLifetime
 
         // Inventory first so its ReserveStock listener exists before Orders sends one.
         InventoryHost = await AlbaHost.For<InventoryApp::Program>();
-        OrdersHost = await AlbaHost.For<Program>();
+
+        // Swap the always-approve stub for a runtime-configurable one so a single shared Orders
+        // host can drive both the approve (reserve smoke) and decline (release smoke) paths. The
+        // crossbc collection runs serially, so the decline smoke flips ShouldApprove off and back
+        // around its order without racing the reserve smoke — and without a second Orders host that
+        // would compete for the reply queue or a second broker/Postgres that would race the
+        // process-global connection-string env vars.
+        OrdersHost = await AlbaHost.For<Program>(x => x.ConfigureServices(services =>
+        {
+            services.RemoveAll<IPaymentProvider>();
+            services.AddSingleton<ConfigurableStubPaymentProvider>();
+            services.AddSingleton<IPaymentProvider>(sp => sp.GetRequiredService<ConfigurableStubPaymentProvider>());
+        }));
     }
 
     public async Task DisposeAsync()
@@ -53,3 +68,16 @@ public class CrossBcFixture : IAsyncLifetime
 
 [CollectionDefinition("crossbc")]
 public class CrossBcCollection : ICollectionFixture<CrossBcFixture>;
+
+// A stubbed payment provider whose decision is flipped by the test rather than by any value in the
+// order payload (keeping with the 4.3 stub policy: no magic domain values). Approves by default —
+// the reserve smoke relies on that; the release smoke sets ShouldApprove = false around its order.
+public class ConfigurableStubPaymentProvider : IPaymentProvider
+{
+    public bool ShouldApprove { get; set; } = true;
+
+    public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command) =>
+        Task.FromResult(ShouldApprove
+            ? new PaymentDecision(command.OrderId, Approved: true, AuthCode: $"stub-{Guid.NewGuid()}", Reason: null)
+            : new PaymentDecision(command.OrderId, Approved: false, AuthCode: null, Reason: "declined"));
+}
