@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Marten-336791?logo=postgresql&logoColor=white)](https://martendb.io/)
-[![Wolverine](https://img.shields.io/badge/Wolverine-5%2B-512BD4)](https://wolverine.netlify.app/)
+[![Wolverine](https://img.shields.io/badge/Wolverine-6%2B-512BD4)](https://wolverine.netlify.app/)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4.x-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -50,9 +50,9 @@ CritterMart deploys as **three separate .NET 10 services** — Catalog, Inventor
 
 | Bounded Context | Responsibility | Storage | Status |
 |---|---|---|---|
-| **Catalog** | Products, prices, descriptions | Marten document store | Workshop complete; implementation forthcoming |
-| **Inventory** | Stock per SKU, reservations | Event-sourced (Marten) | Workshop complete; implementation forthcoming |
-| **Orders** | Cart, Order (process manager), payment timeout | Event-sourced (Marten) | Workshop complete; implementation forthcoming |
+| **Catalog** | Products, prices, descriptions | Marten document store | Implemented — slices 1.1–1.3 (publish, browse, change price) |
+| **Inventory** | Stock per SKU, reservations | Event-sourced (Marten) | Implemented — slices 2.1 receive + 2.2 reserve (Inventory-side; cross-BC delivery lands in 4.2) |
+| **Orders** | Cart, Order (process manager), payment timeout | Event-sourced (Marten) | In progress — slice 3.1 add-to-cart (Cart aggregate); Order journey (4.x) forthcoming |
 | **Identity** *(stubbed)* | Customer identifier | Hardcoded in frontend (round one) | Stubbed by design; deployed-service promotion queued in [vision.md § Long road](docs/vision.md) |
 
 Catalog has no BC-level integration with Inventory or Orders in round one — product fields cross only via the frontend, which snapshots them into Cart commands at add-to-cart time. The Orders ↔ Inventory relationship is **Customer-Supplier** (Inventory is the supplier, Orders the customer). Identity's relationship to the three deployed services is **Conformist** with no active wire integration. See [`docs/context-map/README.md`](docs/context-map/README.md) for the full topology, integration relationships table, and round-one stubs.
@@ -64,7 +64,7 @@ Catalog has no BC-level integration with Inventory or Orders in round one — pr
 | Layer | Choice |
 |---|---|
 | Runtime | C# 14 / .NET 10 |
-| Messaging | [Wolverine](https://wolverine.netlify.app/) 5+ over RabbitMQ |
+| Messaging | [Wolverine](https://wolverine.netlify.app/) 6+ over RabbitMQ |
 | Persistence | [Marten](https://martendb.io/) 9+ on PostgreSQL (shared database, schema-per-service) |
 | HTTP | Wolverine.Http (per service; no BFF for round one) |
 | Testing | [Alba](https://jasperfx.github.io/alba/) (integration), xUnit + Shouldly (unit) |
@@ -95,7 +95,7 @@ The pipeline itself doubles as the talk's section on what AI-assisted .NET devel
 
 ## Getting Started
 
-> **Status note.** CritterMart is in the **design phase** for round one. The full design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete; the `src/` tree is intentionally empty and will populate per slice as the per-slice implementation loop runs. The instructions below reflect the intended local-development workflow once `src/CritterMart.AppHost` and the per-service projects are in place.
+> **Status note.** CritterMart is in the **per-slice implementation phase** for round one. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` is populated: three Wolverine services (Catalog, Inventory, Orders), the `CritterMart.AppHost` Aspire orchestrator, and `CritterMart.ServiceDefaults`. Slices ship per the per-slice loop — Catalog (1.1–1.3) and Inventory (2.1–2.2) are in, and the Orders BC is underway (slice 3.1 add-to-cart). The instructions below reflect the working local-development workflow.
 
 ### Prerequisites
 
@@ -115,15 +115,15 @@ CritterMart's design pipeline assumes an AI session-runner (Claude Code, in auth
 
 Both skill collections install globally (to `~/.claude/skills/` and a universal mirror) and are discovered by Claude Code at session start with no per-project registration. Each machine installs them independently — they are not vendored into this repo. The two installers have independent upgrade cycles; do not try to consolidate them.
 
-### Run locally (intended workflow)
+### Run locally
 
-Once the AppHost project lands, .NET Aspire will boot PostgreSQL, RabbitMQ, and the three services together:
+.NET Aspire boots PostgreSQL, RabbitMQ, and the services together:
 
 ```bash
-dotnet run --project src/CritterMart.AppHost
+dotnet run --project src/CritterMart.AppHost --launch-profile http
 ```
 
-The Aspire dashboard will surface OpenTelemetry traces for the Place Order journey across all three services. Until the AppHost is in place, the project is a documentation-and-design artifact — the canonical entry point is [`CLAUDE.md`](CLAUDE.md), not a running app.
+The Aspire dashboard (default `http://localhost:15090`) surfaces OpenTelemetry traces across services; the cross-service Place Order trace fills in as the Order journey (4.x) lands. The canonical entry point for the design pipeline remains [`CLAUDE.md`](CLAUDE.md).
 
 ---
 
@@ -145,7 +145,7 @@ CritterMart/
 ├── openspec/                   # OpenSpec workspace (peer to docs/) — CLI-managed
 │   ├── changes/                # Per-slice changes (proposal.md + SHALL specs)
 │   └── specs/                  # Main specs, synced from a change on archive
-├── src/                        # Forthcoming — per-service projects land per slice
+├── src/                        # Catalog, Inventory, Orders services + AppHost + ServiceDefaults
 ├── CLAUDE.md                   # AI development entry point and pipeline overview
 ├── LICENSE                     # MIT
 └── README.md                   # You are here

@@ -267,14 +267,16 @@ The `Given` clauses reference events already on the relevant stream (preconditio
 ### 3.1 Add item to cart — `AddToCart`
 
 **Happy path — first item.**
-- **Given** no cart exists for `customer-X`.
+- **Given** no open cart exists for `customer-X`.
 - **When** the customer issues `AddToCart { customerId: "customer-X", sku: "crit-001", quantity: 1, productSnapshot: {...} }`.
-- **Then** a new Cart stream is created for `customer-X` with events `CartCreated { customerId: "customer-X" }` and `CartItemAdded { sku: "crit-001", quantity: 1, snapshot: {...} }`. `CartView` shows the one line. A `CartActivityTimeout` self-message is scheduled for the cart's deadline.
+- **Then** a new Cart stream is created — keyed by a generated `cartId`, with `customerId` riding as a field — recording `CartCreated { cartId, customerId: "customer-X" }` and `CartItemAdded { sku: "crit-001", quantity: 1, snapshot: {...} }`. `CartView` shows the one line. *(Cart-activity timeout scheduling is deferred to slice 3.4 — see the amendment note below and §8 item 1.)*
 
 **Happy path — adding a second item to an existing cart.**
 - **Given** the Cart stream shows `CartCreated`, `CartItemAdded { sku: "crit-001", quantity: 1 }`.
 - **When** the customer issues `AddToCart { ..., sku: "crit-002", quantity: 3, ... }`.
-- **Then** the Cart stream appends `CartItemAdded { sku: "crit-002", quantity: 3 }`. `CartView` shows two lines. The previously-scheduled `CartActivityTimeout` is rescheduled (cancel-and-reschedule policy — see open question in §9).
+- **Then** the customer's open cart is resolved by querying `CartView` on `customerId` (a partial-unique index scoped to `IsOpen` carts enforces one open cart per customer), and the Cart stream appends `CartItemAdded { sku: "crit-002", quantity: 3 }`. `CartView` shows two lines. *(The cancel-and-reschedule timeout behavior is deferred to slice 3.4 — see §8 item 1.)*
+
+> **Amendment (v1.1, 2026-05-30 — realized in slice 3.1, PR #25).** The v1.0 wording above implied the Cart stream is keyed by `customerId`. As shipped, slice 3.1 keys the stream by a **generated `cartId`** (parallels the Order stream's `orderId`); `customerId` rides as a field on `CartCreated`, and the customer's single open cart is resolved by querying `CartView` on `customerId` behind a **partial-unique index** (`Predicate "(data ->> 'IsOpen')::boolean = true"`) that enforces one open cart per customer at the database. The **`CartActivityTimeout`** machinery (scheduling, refresh, cancel-and-reschedule) is **deferred to slice 3.4** — slice 3.1 ships no timeout. Durable spec: `openspec/specs/shopping-cart/spec.md`; see also `docs/narratives/004-customer-purchase.md` and `docs/retrospectives/implementations/006-slice-3-1-add-to-cart.md`.
 
 ### 3.2 Remove item from cart — `RemoveCartItem`
 
@@ -470,3 +472,4 @@ Items the Architect, QA, Product Owner, and Domain Expert voices surfaced but di
 | Version | Date       | Notes                                                                                                                                                                                                                                       |
 | ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | v1.0    | 2026-05-26 | Initial commit. Round-one rolled-up model: four BCs, 17 slices, full Place Order storyboard, event vocabulary, GWT scenarios for all slices with required failure paths. `CartAbandonmentReport` selected as the round-one async projection teaser per ADR 008. |
+| v1.1    | 2026-05-30 | `tidy: docs` amendment after slice 3.1 shipped (PR #25). Amended § 6.1 (slice 3.1 GWT): the Cart stream is keyed by a generated `cartId`, not `customerId` (which rides as a field on `CartCreated`); the open cart is resolved via a partial-unique `CartView` index on `customerId`. `CartActivityTimeout` scheduling/refresh deferred to slice 3.4 (none ships in 3.1). Realized in `openspec/specs/shopping-cart/spec.md` + retrospective 006. Slice table (§5) left at the model-level intent intentionally. |
