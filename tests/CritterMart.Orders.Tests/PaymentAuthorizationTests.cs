@@ -72,11 +72,12 @@ public class PaymentAuthorizationTests
         authorized.Amount.ShouldBe(Total); // the authorized amount is the order's own total
     }
 
-    // Failure branch (precondition for slice 4.6): a declining provider yields PaymentAuthFailed.
-    // No OrderConfirmed is appended; the status stays stock_reserved (PaymentAuthFailed carries no
-    // status change — the cancellation that turns it terminal is the deferred slice 4.6).
+    // Slice 4.6 decline-cancel: a declining provider records PaymentAuthFailed, then the aggregate
+    // decision cancels the order (OrderCancelled { payment_declined }) and cascades a single
+    // ReleaseStock carrying the order's lines back to Inventory. This supersedes slice 4.3's interim
+    // non-terminal decline — the order now reaches its terminal cancelled state and gives stock back.
     [Fact]
-    public async Task a_declined_payment_records_a_failure_and_does_not_confirm()
+    public async Task a_declined_payment_cancels_the_order_and_releases_the_reserved_stock()
     {
         await ResetOrdersAsync();
 
@@ -92,16 +93,25 @@ public class PaymentAuthorizationTests
         var store = host.Services.GetRequiredService<IDocumentStore>();
         var orderId = await SeedPlacedOrderAsync(store, "customer-Y");
 
-        await host.InvokeMessageAndWaitAsync(new Contracts.StockReserved(orderId));
+        var tracked = await host.InvokeMessageAndWaitAsync(new Contracts.StockReserved(orderId));
+
+        // Exactly one cross-BC release is cascaded, carrying the order's line (ReleaseStock has no
+        // local handler, so it is routed out — the tracked session captures it with transports stubbed).
+        var release = tracked.Sent.SingleMessage<Contracts.ReleaseStock>();
+        release.OrderId.ShouldBe(orderId);
+        release.Lines.ShouldHaveSingleItem();
+        release.Lines[0].Sku.ShouldBe(Plush.Sku);
+        release.Lines[0].Quantity.ShouldBe(Plush.Quantity);
 
         await using var session = store.LightweightSession();
 
         var view = await session.LoadAsync<OrderStatusView>(orderId);
-        view!.Status.ShouldBe(OrderStatus.StockReserved); // not confirmed; no terminal until 4.6
+        view!.Status.ShouldBe(OrderStatus.Cancelled); // terminal now, not stock_reserved
 
         var events = await session.Events.FetchStreamAsync(orderId);
-        events.Count.ShouldBe(3); // OrderPlaced + StockReserved + PaymentAuthFailed (no confirm)
+        events.Count.ShouldBe(4); // OrderPlaced + StockReserved + PaymentAuthFailed + OrderCancelled
         events[2].Data.ShouldBeOfType<PaymentAuthFailed>().Reason.ShouldBe("declined");
+        events[3].Data.ShouldBeOfType<OrderCancelled>().Reason.ShouldBe(CancelReason.PaymentDeclined);
     }
 
     // Idempotency: a duplicate/late StockReserved on an already-confirmed order re-triggers
