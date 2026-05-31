@@ -1,7 +1,9 @@
 # shopping-cart Specification
 
 ## Purpose
-TBD - created by archiving change slice-3-1-add-to-cart. Update Purpose after archive.
+
+The `shopping-cart` capability manages the Customer's pre-checkout cart as an event-sourced `Cart` stream (keyed by a generated `cartId`) projected into an inline `CartView` read model. Slice 3.1 covers adding items (cart creation + line append); slice 4.1 covers checking the cart out on order placement (the terminal `CartCheckedOut`, which flips `IsOpen` to false); later slices add remove-item (3.2), change-quantity (3.3), and inactivity abandonment (3.4). The cart never reads the Catalog — product name and price arrive snapshotted on the command and stay authoritative through checkout. This is one of the Orders bounded context's two capabilities; the other is `order-lifecycle` (the Order aggregate).
+
 ## Requirements
 ### Requirement: Add an item to the cart
 
@@ -22,4 +24,16 @@ The system SHALL allow the Customer to add an item (a SKU and a quantity) to the
 - **THEN** the same `Cart` stream appends `CartItemAdded { sku: "crit-002", quantity: 3, snapshot: { name: "Nebula Newt", price: 18.00 } }`
 - **AND** no new `Cart` stream is created
 - **AND** the `CartView` for that cart shows two lines: `crit-001` quantity `1` at `24.99`, and `crit-002` quantity `3` at `18.00`
+
+### Requirement: Check out the cart on order placement
+
+The system SHALL terminate the Customer's open cart when an order is placed from it. In the same transaction that records `OrderPlaced` on the new Order stream, the system SHALL append a `CartCheckedOut` event carrying the new `orderId` to the cart's stream, and the inline `CartView` SHALL set `IsOpen` to false. A checked-out cart SHALL no longer be resolved as the customer's open cart, so the customer is free to start a new cart, and a repeat placement against the same cart SHALL find no open cart. The checked-out cart's line items SHALL be retained as readable history.
+
+#### Scenario: Placing an order checks out the cart
+
+- **GIVEN** the Customer `customer-X` has an open `Cart` stream with one or more line items
+- **WHEN** the Customer issues `PlaceOrder { customerId: "customer-X" }`
+- **THEN** the `Cart` stream appends `CartCheckedOut { orderId }` in the same transaction as `OrderPlaced`
+- **AND** the `CartView` for that cart has `IsOpen` set to false while its line items are retained
+- **AND** the customer no longer has an open cart
 
