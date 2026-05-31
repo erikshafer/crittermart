@@ -1,7 +1,7 @@
 ---
-version: v1.1
+version: v1.2
 status: Active
-date: 2026-05-28
+date: 2026-05-31
 references:
   - docs/vision.md
   - docs/context-map/README.md
@@ -17,6 +17,7 @@ references:
   - docs/decisions/009-polecat-deferred-for-round-one.md
   - docs/decisions/010-openspec-narrative-sibling-pipeline.md
   - docs/decisions/012-critter-stack-2026-upgrade.md
+  - docs/decisions/014-published-language-contracts-project.md
   - CLAUDE.md
 ---
 
@@ -45,6 +46,9 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - No synchronous service-to-service HTTP. (context map § Round-one stubs, ADR 001)
 - Handler code is portable across Wolverine transports; transport choice is configuration, not code. (ADR 003)
 - Catalog has no BC-level integration with Inventory or Orders; product fields cross only via the frontend. (context map § Integration relationships)
+- Cross-BC message contracts (the wire records both services exchange) live in the shared `CritterMart.Contracts` project, referenced by both services — the published language of the Orders↔Inventory Customer-Supplier relationship. (ADR 014)
+- `CritterMart.Contracts` is not a service — no handlers, no `Program`, no persistence, no Wolverine/Marten dependency — so referencing it from both services does not breach "services do not reference each other's projects". (ADR 014, ADR 001)
+- `Contracts` owns only the wire messages; each context maps an inbound message to its own stream event, and stream events do not leak into the shared project. (ADR 014)
 
 ## HTTP surface
 
@@ -122,3 +126,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | ------- | ---------- | ----- |
 | v1.0    | 2026-05-26 | Initial round-one structural-constraints synthesis from ADRs 001–010, vision.md, context map, Workshop 001, and CLAUDE.md operating disciplines. |
 | v1.1    | 2026-05-28 | Added the **Build & code generation** section (Critter Stack 2026 line; Wolverine Dynamic codegen via `WolverineFx.RuntimeCompilation`; Marten source-gen; v9 defaults adopted), paired with ADR 012. |
+| v1.2    | 2026-05-31 | Added three **Cross-service messaging** rules for the published-language `CritterMart.Contracts` project (shared, both services reference it; not a service so no ADR 001 breach; owns wire messages only), paired with ADR 014 (slice 4.2's first cross-BC flow). |
