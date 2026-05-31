@@ -52,7 +52,7 @@ CritterMart deploys as **three separate .NET 10 services** — Catalog, Inventor
 |---|---|---|---|
 | **Catalog** | Products, prices, descriptions | Marten document store | Implemented — slices 1.1–1.3 (publish, browse, change price) |
 | **Inventory** | Stock per SKU, reservations | Event-sourced (Marten) | Implemented — slices 2.1 receive + 2.2 reserve (Inventory-side; cross-BC delivery lands in 4.2) |
-| **Orders** | Cart, Order (process manager), payment timeout | Event-sourced (Marten) | In progress — slice 3.1 add-to-cart (Cart aggregate); Order journey (4.x) forthcoming |
+| **Orders** | Cart, Order (process manager), payment timeout | Event-sourced (Marten) | In progress — Cart (3.1 add-to-cart) + Order placement (4.1 place-order); cross-BC reservation (4.2) and the rest of the Order journey forthcoming |
 | **Identity** *(stubbed)* | Customer identifier | Hardcoded in frontend (round one) | Stubbed by design; deployed-service promotion queued in [vision.md § Long road](docs/vision.md) |
 
 Catalog has no BC-level integration with Inventory or Orders in round one — product fields cross only via the frontend, which snapshots them into Cart commands at add-to-cart time. The Orders ↔ Inventory relationship is **Customer-Supplier** (Inventory is the supplier, Orders the customer). Identity's relationship to the three deployed services is **Conformist** with no active wire integration. See [`docs/context-map/README.md`](docs/context-map/README.md) for the full topology, integration relationships table, and round-one stubs.
@@ -95,7 +95,7 @@ The pipeline itself doubles as the talk's section on what AI-assisted .NET devel
 
 ## Getting Started
 
-> **Status note.** CritterMart is in the **per-slice implementation phase** for round one. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` is populated: three Wolverine services (Catalog, Inventory, Orders), the `CritterMart.AppHost` Aspire orchestrator, and `CritterMart.ServiceDefaults`. Slices ship per the per-slice loop — Catalog (1.1–1.3) and Inventory (2.1–2.2) are in, and the Orders BC is underway (slice 3.1 add-to-cart). The instructions below reflect the working local-development workflow.
+> **Status note.** CritterMart is in the **per-slice implementation phase** for round one. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` is populated: three Wolverine services (Catalog, Inventory, Orders), the `CritterMart.AppHost` Aspire orchestrator, and `CritterMart.ServiceDefaults`. Slices ship per the per-slice loop — Catalog (1.1–1.3) and Inventory (2.1–2.2) are in, and the Orders BC is underway (3.1 add-to-cart, 4.1 place-order). The instructions below reflect the working local-development workflow.
 
 ### Prerequisites
 
