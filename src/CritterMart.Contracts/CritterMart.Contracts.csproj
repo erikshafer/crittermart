@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Published language for the Orders <-> Inventory Customer-Supplier relationship
+    (context map). Holds ONLY the cross-BC message contracts that travel over RabbitMQ;
+    no Wolverine/Marten dependency, no stream events (those stay in each service). Both
+    services ProjectReference this — the single source of truth for the wire shapes.
+    Slice 4.2; see openspec/changes/slice-4-2-reserve-stock/design.md decision 4.
+  -->
+
+</Project>

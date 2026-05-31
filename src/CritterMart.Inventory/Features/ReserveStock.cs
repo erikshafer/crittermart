@@ -1,33 +1,53 @@
+using Contracts = CritterMart.Contracts;
 using CritterMart.Inventory.Stock;
+using JasperFx.Events;
 using Marten;
-using Microsoft.AspNetCore.Http;
-using Wolverine.Http;
 
 namespace CritterMart.Inventory.Features;
 
-// Reserve stock against an order (Workshop 001 slice 2.2). Interim HTTP trigger;
-// slice 4.2 routes ReserveStock from Orders over RabbitMQ to the same logic.
-public record ReserveStock(string OrderId, int Quantity);
-
-public static class ReserveStockEndpoint
+// Reserve a whole order's stock in response to a cross-BC ReserveStock message from Orders
+// (Workshop 001 slice 4.2). This replaces the interim slice-2.2 HTTP route (POST
+// /stock/{sku}/reservations) — the message is now the sole trigger (design.md decision 7).
+//
+// All-or-nothing across the order's lines (decision 2): every line's SKU Stock stream gets a
+// StockReserved in one transaction, or none does. Idempotent against duplicate delivery via a
+// per-SKU reservation guard on StockLevelView (decision 8). The granted/refused outcome is
+// cascaded back to Orders as a Contracts message (routed over RabbitMQ by conventional routing).
+public static class ReserveStockHandler
 {
-    [WolverinePost("/stock/{sku}/reservations")]
-    public static async Task<IResult> Post(string sku, ReserveStock command, IDocumentSession session)
+    public static async Task<object> Handle(Contracts.ReserveStock message, IDocumentSession session)
     {
-        var stream = await session.Events.FetchForWriting<StockLevelView>(sku);
-
-        // Refuse if there is no stock for this SKU or not enough available — leave the
-        // Stock stream unmodified (Workshop § 6.1: insufficient stock does not modify the stream).
-        if (stream.Aggregate is null || stream.Aggregate.Available < command.Quantity)
+        // Load each line's stream once: the StockLevelView aggregate carries available stock and
+        // the order ids already reserved, and the IEventStream is what we append the grant to.
+        var streams = new List<(Contracts.ReserveStockLine Line, IEventStream<StockLevelView> Stream)>();
+        foreach (var line in message.Lines)
         {
-            return Results.Problem(
-                title: "InsufficientStock",
-                detail: $"Cannot reserve {command.Quantity} of '{sku}'; insufficient available stock.",
-                statusCode: StatusCodes.Status409Conflict);
+            var stream = await session.Events.FetchForWriting<StockLevelView>(line.Sku);
+            streams.Add((line, stream));
         }
 
-        stream.AppendOne(new StockReserved(sku, command.OrderId, command.Quantity));
-        // AutoApplyTransactions commits; the inline StockLevelView projection updates available/reserved.
-        return Results.NoContent();
+        // Idempotency (at-least-once): if this order already holds a reservation on these streams,
+        // do not reserve again — re-publish the granted outcome (Orders is itself idempotent).
+        if (streams.Any(s => s.Stream.Aggregate?.Reservations.Contains(message.OrderId) == true))
+        {
+            return new Contracts.StockReserved(message.OrderId);
+        }
+
+        // Refuse the entire order if ANY line has insufficient (or no) available stock. No stream
+        // is modified, so nothing is reserved and the order's cancellation releases nothing.
+        var anyShort = streams.Any(s =>
+            s.Stream.Aggregate is null || s.Stream.Aggregate.Available < s.Line.Quantity);
+        if (anyShort)
+        {
+            return new Contracts.StockReservationFailed(message.OrderId, "insufficient");
+        }
+
+        // Reserve every line on its SKU stream; AutoApplyTransactions commits them together.
+        foreach (var (line, stream) in streams)
+        {
+            stream.AppendOne(new StockReserved(line.Sku, message.OrderId, line.Quantity));
+        }
+
+        return new Contracts.StockReserved(message.OrderId);
     }
 }

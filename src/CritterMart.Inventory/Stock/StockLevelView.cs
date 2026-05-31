@@ -4,12 +4,14 @@ namespace CritterMart.Inventory.Stock;
 
 // Inline snapshot of a SKU's Stock stream — the readable stock level, projected
 // from events (not a stored mutable number). Id is the SKU (the stream key).
-// Reserved stays 0 until reservations land in slice 2.2.
+// Reservations lists the order ids holding a reservation on this SKU; it is what the
+// slice-4.2 reserve handler reads to stay idempotent under at-least-once delivery.
 public class StockLevelView
 {
     public string Id { get; set; } = string.Empty;
     public int Available { get; set; }
     public int Reserved { get; set; }
+    public List<string> Reservations { get; set; } = [];
 }
 
 // Single-stream projection (Marten 9 partial-class convention). Marten constructs
@@ -22,5 +24,6 @@ public partial class StockLevelViewProjection : SingleStreamProjection<StockLeve
     {
         view.Available -= e.Quantity;
         view.Reserved += e.Quantity;
+        view.Reservations.Add(e.OrderId);
     }
 }

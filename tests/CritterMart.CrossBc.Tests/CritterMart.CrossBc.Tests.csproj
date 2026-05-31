@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Alba" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <!--
+    Cross-BC smoke (slice 4.2): boots BOTH services against one real RabbitMQ broker + one
+    shared Postgres. Both services define `public partial class Program` in the global
+    namespace, so the Inventory reference is aliased (extern alias InventoryApp) to keep
+    AlbaHost.For<Program>() unambiguous — Orders stays global, Inventory is InventoryApp::Program.
+    Contracts is referenced directly (un-aliased) so the wire types stay global.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CritterMart.Orders\CritterMart.Orders.csproj" />
+    <ProjectReference Include="..\..\src\CritterMart.Inventory\CritterMart.Inventory.csproj" Aliases="InventoryApp" />
+    <ProjectReference Include="..\..\src\CritterMart.Contracts\CritterMart.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

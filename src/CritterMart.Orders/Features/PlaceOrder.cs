@@ -1,3 +1,4 @@
+using Contracts = CritterMart.Contracts;
 using CritterMart.Orders.Cart;
 using CritterMart.Orders.Order;
 using Marten;
@@ -16,8 +17,13 @@ public record PlaceOrderResponse(string OrderId);
 
 public static class PlaceOrderEndpoint
 {
+    // Returns the HTTP response AND a cascaded ReserveStock message (slice 4.2). Wolverine.Http
+    // treats the IResult as the response and publishes the second tuple member through the outbox
+    // when the Marten transaction commits — so the order is durably placed before the cross-BC
+    // reservation request goes out. On a rejection there is no order, so the cascade is null
+    // (Wolverine skips a null cascading message).
     [WolverinePost("/orders")]
-    public static async Task<IResult> Post(PlaceOrder command, IDocumentSession session)
+    public static async Task<(IResult, Contracts.ReserveStock?)> Post(PlaceOrder command, IDocumentSession session)
     {
         // Resolve the customer's open cart — the same indexed CartView query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
@@ -29,10 +35,10 @@ public static class PlaceOrderEndpoint
 
         if (cart is null)
         {
-            return Results.Problem(
+            return (Results.Problem(
                 title: "NoOpenCart",
                 detail: $"Customer '{command.CustomerId}' has no open cart to place.",
-                statusCode: StatusCodes.Status409Conflict);
+                statusCode: StatusCodes.Status409Conflict), null);
         }
 
         // Defensive guard for the workshop's CartEmpty path. Unreachable in 4.1 (a cart is
@@ -40,10 +46,10 @@ public static class PlaceOrderEndpoint
         // moment 3.2 makes a lineless-but-open cart reachable.
         if (cart.Lines.Count == 0)
         {
-            return Results.Problem(
+            return (Results.Problem(
                 title: "CartEmpty",
                 detail: $"Customer '{command.CustomerId}' has an empty cart.",
-                statusCode: StatusCodes.Status409Conflict);
+                statusCode: StatusCodes.Status409Conflict), null);
         }
 
         var orderId = Guid.NewGuid().ToString();
@@ -61,7 +67,13 @@ public static class PlaceOrderEndpoint
         var cartStream = await session.Events.FetchForWriting<CartView>(cart.Id);
         cartStream.AppendOne(new CartCheckedOut(orderId));
 
-        return Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId));
+        // Cascade the whole order's reservation request to Inventory over RabbitMQ (slice 4.2,
+        // design.md decision 2): one message carrying every line, reserved all-or-nothing.
+        var reserveStock = new Contracts.ReserveStock(
+            orderId,
+            items.Select(i => new Contracts.ReserveStockLine(i.Sku, i.Quantity)).ToList());
+
+        return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock);
     }
 }
 

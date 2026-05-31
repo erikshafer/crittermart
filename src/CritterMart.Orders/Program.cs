@@ -6,6 +6,7 @@ using Marten;
 using Wolverine;
 using Wolverine.Http;
 using Wolverine.Marten;
+using Wolverine.RabbitMQ;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +46,20 @@ builder.Services.AddMarten(opts =>
 
 builder.Host.UseWolverine(opts =>
 {
+    // Pin handler/endpoint discovery to this service's assembly. Explicit (not auto-detected)
+    // so discovery is deterministic when another service's assembly is loaded in the same
+    // process — e.g. the cross-BC smoke test boots Orders and Inventory side by side.
+    opts.ApplicationAssembly = typeof(Program).Assembly;
+
+    // Cross-BC messaging over RabbitMQ (ADR 003, slice 4.2). Aspire injects the "rabbitmq"
+    // connection string via WithReference; conventional routing derives exchanges/queues from
+    // message types, so there's no explicit topology to maintain (design.md decision 6).
+    // Orders cascades ReserveStock (no local handler → routed to the broker) and handles the
+    // StockReserved / StockReservationFailed replies (auto-listened by convention).
+    opts.UseRabbitMqUsingNamedConnection("rabbitmq")
+        .AutoProvision()
+        .UseConventionalRouting();
+
     opts.Policies.AutoApplyTransactions();
 });
 

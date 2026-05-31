@@ -1,13 +1,18 @@
 using Alba;
+using Contracts = CritterMart.Contracts;
 using CritterMart.Inventory.Features;
 using CritterMart.Inventory.Stock;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using Wolverine.Tracking;
 using Xunit;
 
 namespace CritterMart.Inventory.Tests;
 
+// Slice 4.2: reserving stock now arrives as a cross-BC ReserveStock message (the interim HTTP
+// route is gone). These are Wolverine tracked-session tests — InvokeMessageAndWaitAsync drives
+// the handler and the tracked session captures the cascaded reply, with no real broker.
 [Collection("inventory")]
 [Trait("Category", "Integration")]
 public class ReserveStockTests
@@ -30,60 +35,87 @@ public class ReserveStockTests
             _.StatusCodeShouldBe(204);
         });
 
-    // Workshop 001 § 6.1 slice 2.2 happy path: reserve available stock.
+    private static Contracts.ReserveStock Reserve(string orderId, params (string Sku, int Qty)[] lines) =>
+        new(orderId, [.. lines.Select(l => new Contracts.ReserveStockLine(l.Sku, l.Qty))]);
+
+    // Workshop 001 § 6.1 slice 4.2 / spec: reserve every line atomically, publish StockReserved back.
     [Fact]
-    public async Task reserving_available_stock_appends_the_event_and_adjusts_the_level()
+    public async Task reserving_every_available_line_reserves_atomically_and_publishes_back()
+    {
+        await ResetInventoryAsync();
+        await ReceiveAsync("crit-001", 100);
+        await ReceiveAsync("crit-002", 50);
+
+        var tracked = await _fixture.Host.InvokeMessageAndWaitAsync(
+            Reserve("ord-A", ("crit-001", 2), ("crit-002", 3)));
+
+        // The granted outcome is cascaded back to Orders.
+        tracked.Sent.SingleMessage<Contracts.StockReserved>().OrderId.ShouldBe("ord-A");
+
+        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
+        await using var session = store.LightweightSession();
+
+        var crit001 = await session.LoadAsync<StockLevelView>("crit-001");
+        crit001.ShouldNotBeNull();
+        crit001.Available.ShouldBe(98);
+        crit001.Reserved.ShouldBe(2);
+
+        var crit002 = await session.LoadAsync<StockLevelView>("crit-002");
+        crit002.ShouldNotBeNull();
+        crit002.Available.ShouldBe(47);
+        crit002.Reserved.ShouldBe(3);
+    }
+
+    // Spec: any short line refuses the WHOLE order — no stream modified, StockReservationFailed back.
+    [Fact]
+    public async Task a_short_line_refuses_the_whole_order_and_publishes_failure()
+    {
+        await ResetInventoryAsync();
+        await ReceiveAsync("crit-001", 100);
+        await ReceiveAsync("crit-002", 1);
+
+        var tracked = await _fixture.Host.InvokeMessageAndWaitAsync(
+            Reserve("ord-B", ("crit-001", 2), ("crit-002", 3)));
+
+        var failed = tracked.Sent.SingleMessage<Contracts.StockReservationFailed>();
+        failed.OrderId.ShouldBe("ord-B");
+        failed.Reason.ShouldBe("insufficient");
+
+        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
+        await using var session = store.LightweightSession();
+
+        // Neither SKU was touched — the available line was not reserved because the other was short.
+        var crit001 = await session.LoadAsync<StockLevelView>("crit-001");
+        crit001!.Available.ShouldBe(100);
+        crit001.Reserved.ShouldBe(0);
+        (await session.Events.FetchStreamAsync("crit-001")).Count.ShouldBe(1);
+
+        var crit002 = await session.LoadAsync<StockLevelView>("crit-002");
+        crit002!.Available.ShouldBe(1);
+        crit002.Reserved.ShouldBe(0);
+        (await session.Events.FetchStreamAsync("crit-002")).Count.ShouldBe(1);
+    }
+
+    // Spec: duplicate delivery for an already-reserved order does not double-reserve (idempotent).
+    [Fact]
+    public async Task a_duplicate_reserve_for_the_same_order_does_not_double_reserve()
     {
         await ResetInventoryAsync();
         await ReceiveAsync("crit-001", 100);
 
-        await _fixture.Host.Scenario(_ =>
-        {
-            _.Post.Json(new ReserveStock("ord-A", 2)).ToUrl("/stock/crit-001/reservations");
-            _.StatusCodeShouldBe(204);
-        });
+        await _fixture.Host.InvokeMessageAndWaitAsync(Reserve("ord-A", ("crit-001", 2)));
+        var tracked = await _fixture.Host.InvokeMessageAndWaitAsync(Reserve("ord-A", ("crit-001", 2)));
+
+        // The duplicate re-publishes the granted outcome (Orders is itself idempotent)...
+        tracked.Sent.SingleMessage<Contracts.StockReserved>().OrderId.ShouldBe("ord-A");
 
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
 
+        // ...but the level is unchanged and only ONE StockReserved was ever appended.
         var view = await session.LoadAsync<StockLevelView>("crit-001");
-        view.ShouldNotBeNull();
-        view.Available.ShouldBe(98);
+        view!.Available.ShouldBe(98);
         view.Reserved.ShouldBe(2);
-
-        var events = await session.Events.FetchStreamAsync("crit-001");
-        events.Count.ShouldBe(2);
-        events[0].Data.ShouldBeOfType<StockReceived>();
-        var reserved = events[1].Data.ShouldBeOfType<StockReserved>();
-        reserved.OrderId.ShouldBe("ord-A");
-        reserved.Quantity.ShouldBe(2);
-    }
-
-    // Workshop 001 § 6.1 slice 2.2 failure path: insufficient stock is refused, stream unchanged.
-    [Fact]
-    public async Task reserving_more_than_available_is_refused_and_leaves_the_stream_unchanged()
-    {
-        await ResetInventoryAsync();
-        await ReceiveAsync("crit-001", 1);
-
-        await _fixture.Host.Scenario(_ =>
-        {
-            _.Post.Json(new ReserveStock("ord-B", 2)).ToUrl("/stock/crit-001/reservations");
-            _.StatusCodeShouldBe(409);
-        });
-
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await using var session = store.LightweightSession();
-
-        // The view is unchanged (still 1 available, 0 reserved).
-        var view = await session.LoadAsync<StockLevelView>("crit-001");
-        view.ShouldNotBeNull();
-        view.Available.ShouldBe(1);
-        view.Reserved.ShouldBe(0);
-
-        // No StockReserved was appended — only the original StockReceived.
-        var events = await session.Events.FetchStreamAsync("crit-001");
-        events.Count.ShouldBe(1);
-        events[0].Data.ShouldBeOfType<StockReceived>();
+        (await session.Events.FetchStreamAsync("crit-001")).Count.ShouldBe(2); // StockReceived + 1 StockReserved
     }
 }

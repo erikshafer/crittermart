@@ -1,10 +1,12 @@
 using Alba;
+using Contracts = CritterMart.Contracts;
 using CritterMart.Orders.Cart;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Order;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using Wolverine.Tracking;
 using Xunit;
 
 namespace CritterMart.Orders.Tests;
@@ -83,6 +85,29 @@ public class PlaceOrderTests
 
         var cartEvents = await session.Events.FetchStreamAsync(cartId);
         cartEvents[^1].Data.ShouldBeOfType<CartCheckedOut>();
+    }
+
+    // Workshop 001 § 6.1 slice 4.2: placing an order cascades a single whole-order ReserveStock
+    // to Inventory carrying every line. The tracked session captures the cascaded message.
+    [Fact]
+    public async Task placing_an_order_cascades_a_whole_order_reserve_stock_request()
+    {
+        await ResetOrdersAsync();
+
+        await AddAsync("customer-X", "crit-001", 2, CosmicCritterPlush);
+        await AddAsync("customer-X", "crit-002", 3, NebulaNewt);
+
+        var orderId = string.Empty;
+        var tracked = await _fixture.Host.ExecuteAndWaitAsync(async () =>
+        {
+            orderId = await PlaceOrderAsync("customer-X");
+        });
+
+        var reserve = tracked.Sent.SingleMessage<Contracts.ReserveStock>();
+        reserve.OrderId.ShouldBe(orderId);
+        reserve.Lines.Count.ShouldBe(2);
+        reserve.Lines.ShouldContain(l => l.Sku == "crit-001" && l.Quantity == 2);
+        reserve.Lines.ShouldContain(l => l.Sku == "crit-002" && l.Quantity == 3);
     }
 
     // Workshop 001 § 6.1 slice 4.1, failure path: no open cart → rejected, no Order stream.
