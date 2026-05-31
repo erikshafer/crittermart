@@ -1,7 +1,9 @@
 # product-catalog Specification
 
 ## Purpose
-TBD - created by archiving change slice-1-1-publish-product. Update Purpose after archive.
+
+The `product-catalog` capability is the single-seller storefront's catalog: the Seller publishes products (each identified by a unique SKU and carrying a name, description, and price), re-prices them, and Customers browse the published set. It is the Catalog bounded context's one capability and CritterMart's only **document-store-backed** context — products are Marten documents surfaced through the inline `ProductCatalogView` read model, with a per-product `ProductPublished` event recorded purely as an audit moment (not an event-sourced aggregate, in deliberate contrast to the event-sourced Inventory and Orders contexts). The price a product carries here is the list price; once a Customer adds an item to a cart it is snapshotted into the Orders BC, so later re-pricing never alters an in-flight cart or order. Slices 1.1 (publish), 1.2 (browse), and 1.3 (change price) make up this capability; round one models no categories, search, media, or stock levels (stock is the Inventory BC's `stock-management`).
+
 ## Requirements
 ### Requirement: Publish a product to the catalog
 
