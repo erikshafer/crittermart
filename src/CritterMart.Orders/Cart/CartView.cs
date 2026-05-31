@@ -9,8 +9,9 @@ public record CartLine(string Sku, int Quantity, string Name, decimal Price);
 // Id is the stream key (the generated cartId). CustomerId is carried so the open cart
 // can be resolved from a command that knows only the customer (design.md decision 2),
 // and a partial unique index on it (registered in Program.cs) enforces one open cart
-// per customer. IsOpen is always true in slice 3.1 — checkout (4.1) / abandon (3.4)
-// will flip it, and the index predicate already scopes uniqueness to open carts.
+// per customer. IsOpen flips to false at checkout (4.1, CartCheckedOut); abandon (3.4)
+// will also close it. The index predicate scopes uniqueness to open carts, so a closed
+// cart frees the customer to start a fresh one.
 public class CartView
 {
     public string Id { get; set; } = string.Empty;
@@ -32,4 +33,8 @@ public partial class CartViewProjection : SingleStreamProjection<CartView, strin
 
     public void Apply(CartItemAdded e, CartView view) =>
         view.Lines.Add(new CartLine(e.Sku, e.Quantity, e.Snapshot.Name, e.Snapshot.Price));
+
+    // Checkout closes the cart (slice 4.1). Lines are retained — the checked-out cart stays
+    // readable history; only IsOpen flips, which the partial-unique index keys off of.
+    public void Apply(CartCheckedOut e, CartView view) => view.IsOpen = false;
 }

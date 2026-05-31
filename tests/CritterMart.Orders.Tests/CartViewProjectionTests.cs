@@ -57,4 +57,19 @@ public class CartViewProjectionTests
         view.Lines[0].ShouldBe(new CartLine("crit-001", 1, "Cosmic Critter Plush", 24.99m));
         view.Lines[1].ShouldBe(new CartLine("crit-002", 3, "Nebula Newt", 18.00m));
     }
+
+    // CartCheckedOut closes the cart (slice 4.1): IsOpen flips false, which frees the customer
+    // to start a fresh cart. Lines are retained — the checked-out cart is still readable history.
+    [Fact]
+    public void checking_out_closes_the_cart_but_keeps_its_lines()
+    {
+        var view = new CartView();
+
+        _projection.Apply(new CartCreated("cart-1", "customer-X"), view);
+        _projection.Apply(new CartItemAdded("crit-001", 1, CosmicCritterPlush), view);
+        _projection.Apply(new CartCheckedOut("order-1"), view);
+
+        view.IsOpen.ShouldBeFalse();
+        view.Lines.ShouldHaveSingleItem().Sku.ShouldBe("crit-001");
+    }
 }
