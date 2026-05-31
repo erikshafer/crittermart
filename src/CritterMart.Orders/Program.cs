@@ -1,4 +1,5 @@
 using CritterMart.Orders.Cart;
+using CritterMart.Orders.Order;
 using JasperFx.Events;
 using JasperFx.Events.Projections;
 using Marten;
@@ -25,8 +26,9 @@ builder.Services.AddMarten(opts =>
         // Cart streams are keyed by a generated cartId (a string).
         opts.Events.StreamIdentity = StreamIdentity.AsString;
 
-        // Inline single-stream projection — the readable cart (ADR 008; no async daemon).
+        // Inline single-stream projections — the readable cart and order (ADR 008; no daemon).
         opts.Projections.Add<CartViewProjection>(ProjectionLifecycle.Inline);
+        opts.Projections.Add<OrderStatusViewProjection>(ProjectionLifecycle.Inline);
 
         // One computed index on CartView.CustomerId that serves the open-cart resolution
         // query AND, scoped to open carts, enforces "one open cart per customer" at the DB
