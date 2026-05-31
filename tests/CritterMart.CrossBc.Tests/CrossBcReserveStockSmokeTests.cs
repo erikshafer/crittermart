@@ -61,15 +61,15 @@ public class CrossBcReserveStockSmokeTests
                 orderId = result.ReadAsJson<PlaceOrderResponse>()!.OrderId;
             }));
 
-        // The Klefter StockReserved landed on the Order stream — the order cleared the stock gate.
+        // The Klefter StockReserved landed on the Order stream — the cross-broker grant was
+        // recorded. (Since slice 4.3 the order then runs the in-process payment gate on to
+        // confirmed; that chain is covered deterministically by PaymentAuthorizationTests. This
+        // wire-smoke asserts only the cross-BC product: the grant is present on the stream.)
         var store = _fixture.OrdersHost.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
 
-        var view = await session.LoadAsync<OrderStatusView>(orderId);
-        view!.Status.ShouldBe(OrderStatus.StockReserved);
-
         var events = await session.Events.FetchStreamAsync(orderId);
-        events[^1].Data.ShouldBeOfType<StockReserved>();
+        events.ShouldContain(e => e.Data is StockReserved);
 
         // And Inventory really reserved the stock against the order.
         var inventoryStore = _fixture.InventoryHost.Services.GetRequiredService<IDocumentStore>();

@@ -40,9 +40,13 @@ public class StockReservationOutcomeTests
         return orderId;
     }
 
-    // Klefter grant: StockReserved → Order stream StockReserved, status stock_reserved.
+    // Klefter grant: the inbound StockReserved is recorded as an Order-stream StockReserved
+    // commit. Since slice 4.3, a granted reservation also opens the payment gate, so stock_reserved
+    // is now a transient step rather than the terminal — the fixture's approving stub carries the
+    // order on to confirmed. This test pins only that the grant is recorded; the full payment
+    // chain (PaymentAuthorized → OrderConfirmed) is covered by PaymentAuthorizationTests.
     [Fact]
-    public async Task a_granted_reservation_is_recorded_and_advances_the_status()
+    public async Task a_granted_reservation_is_recorded_as_a_klefter_commit()
     {
         await ResetOrdersAsync();
         var orderId = await SeedPlacedOrderAsync("customer-X");
@@ -52,12 +56,8 @@ public class StockReservationOutcomeTests
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
 
-        var view = await session.LoadAsync<OrderStatusView>(orderId);
-        view!.Status.ShouldBe(OrderStatus.StockReserved);
-
         var events = await session.Events.FetchStreamAsync(orderId);
-        events.Count.ShouldBe(2); // OrderPlaced + StockReserved
-        events[^1].Data.ShouldBeOfType<StockReserved>();
+        events[1].Data.ShouldBeOfType<StockReserved>(); // Inventory's grant, recorded on the Order stream
     }
 
     // Klefter refusal (slice 4.5): StockReservationFailed → failure commit + OrderCancelled, cancelled.
