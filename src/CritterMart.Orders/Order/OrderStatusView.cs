@@ -2,12 +2,14 @@ using Marten.Events.Aggregation;
 
 namespace CritterMart.Orders.Order;
 
-// The status values an Order moves through. Slice 4.1 only ever reaches AwaitingConfirmation;
-// stock-reserved, payment-authorized, confirmed, and cancelled arrive with slices 4.2–4.7,
-// folded onto this same view as those events land on the Order stream.
+// The status values an Order moves through. Slice 4.1 reaches AwaitingConfirmation; slice 4.2
+// adds StockReserved (stock gate cleared) and Cancelled (stock failure → 4.5); payment-authorized
+// and confirmed arrive with slices 4.3–4.4, folded onto this same view as those events land.
 public static class OrderStatus
 {
     public const string AwaitingConfirmation = "awaiting_confirmation";
+    public const string StockReserved = "stock_reserved";
+    public const string Cancelled = "cancelled";
 }
 
 // Inline snapshot of an Order stream — the Workshop's OrderStatusView read model. Id is the
@@ -34,4 +36,12 @@ public partial class OrderStatusViewProjection : SingleStreamProjection<OrderSta
         view.Lines = [.. e.Items];
         view.Total = e.Total;
     }
+
+    // Klefter grant (slice 4.2): the stock gate is cleared.
+    public void Apply(StockReserved e, OrderStatusView view) => view.Status = OrderStatus.StockReserved;
+
+    // Terminal cancellation (slice 4.5 reaches this via OrderCancelled). StockReservationFailed
+    // itself is recorded on the stream for audit but carries no view status change — the
+    // cancellation that follows it is what the Customer sees.
+    public void Apply(OrderCancelled e, OrderStatusView view) => view.Status = OrderStatus.Cancelled;
 }

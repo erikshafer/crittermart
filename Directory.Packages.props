@@ -22,6 +22,7 @@
         <PackageVersion Include="WolverineFx" Version="6.1.0" />
         <PackageVersion Include="WolverineFx.Http" Version="6.1.0" />
         <PackageVersion Include="WolverineFx.Marten" Version="6.1.0" />
+        <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.1.0" />
         <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.1.0" />
     </ItemGroup>
     <!-- API documentation (Swagger UI) -->
@@ -33,6 +34,7 @@
         <PackageVersion Include="Alba" Version="8.5.2" />
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
         <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
+        <PackageVersion Include="Testcontainers.RabbitMq" Version="4.12.0" />
         <PackageVersion Include="xunit" Version="2.9.3" />
         <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
         <PackageVersion Include="Shouldly" Version="4.3.0" />

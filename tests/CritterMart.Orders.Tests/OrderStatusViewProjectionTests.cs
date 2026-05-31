@@ -29,4 +29,26 @@ public class OrderStatusViewProjectionTests
         view.Lines[1].ShouldBe(Newt);
         view.Total.ShouldBe(103.98m);
     }
+
+    // Slice 4.2: the Klefter StockReserved commit advances the status past the stock gate.
+    [Fact]
+    public void stock_reserved_advances_status_to_stock_reserved()
+    {
+        var view = new OrderStatusView { Status = OrderStatus.AwaitingConfirmation };
+
+        _projection.Apply(new StockReserved("order-1"), view);
+
+        view.Status.ShouldBe(OrderStatus.StockReserved);
+    }
+
+    // Slice 4.5: OrderCancelled is terminal — the view reads cancelled.
+    [Fact]
+    public void order_cancelled_sets_status_to_cancelled()
+    {
+        var view = new OrderStatusView { Status = OrderStatus.AwaitingConfirmation };
+
+        _projection.Apply(new OrderCancelled("order-1", CancelReason.StockUnavailable), view);
+
+        view.Status.ShouldBe(OrderStatus.Cancelled);
+    }
 }

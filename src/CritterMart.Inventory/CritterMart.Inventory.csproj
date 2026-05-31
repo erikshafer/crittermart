@@ -3,12 +3,15 @@
   <ItemGroup>
     <PackageReference Include="WolverineFx.Http" />
     <PackageReference Include="WolverineFx.Marten" />
+    <!-- Cross-BC messaging over RabbitMQ (slice 4.2, ADR 003). -->
+    <PackageReference Include="WolverineFx.RabbitMQ" />
     <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CritterMart.Contracts\CritterMart.Contracts.csproj" />
     <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
   </ItemGroup>
 

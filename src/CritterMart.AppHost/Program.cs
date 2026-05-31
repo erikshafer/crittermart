@@ -6,12 +6,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgres = builder.AddPostgres("postgres");
 var crittermart = postgres.AddDatabase("crittermart");
 
-// RabbitMQ for cross-service messaging (ADR 003). Provisioned now so it's in the
-// dashboard and ready, but NOT yet referenced by a service — the first cross-BC
-// message flows in slice 2.2 (Reserve stock), which will WithReference it then.
-// (Gating a service's startup on RabbitMQ health before it consumes RabbitMQ only
-// delays boot.)
-builder.AddRabbitMQ("rabbitmq");
+// RabbitMQ for cross-service messaging (ADR 003). The first cross-BC message flows in
+// slice 4.2 (Reserve stock): Orders cascades ReserveStock to Inventory and the
+// StockReserved / StockReservationFailed reply returns — so both services WithReference it.
+// WaitFor lets AutoProvision declare exchanges/queues reliably against a healthy broker.
+var rabbitmq = builder.AddRabbitMQ("rabbitmq");
 
 builder.AddProject<Projects.CritterMart_Catalog>("catalog")
     .WithReference(crittermart)
@@ -19,12 +18,16 @@ builder.AddProject<Projects.CritterMart_Catalog>("catalog")
 
 builder.AddProject<Projects.CritterMart_Inventory>("inventory")
     .WithReference(crittermart)
-    .WaitFor(crittermart);
+    .WithReference(rabbitmq)
+    .WaitFor(crittermart)
+    .WaitFor(rabbitmq);
 
-// Orders is the second event-sourced service (Cart aggregate, slice 3.1). Postgres only
-// this slice — its first cross-BC RabbitMQ flow (Reserve stock) arrives in slice 4.2.
+// Orders is the second event-sourced service (Cart + Order aggregates, slices 3.1/4.1).
+// Slice 4.2 sends its first cross-BC RabbitMQ flow (Reserve stock) to Inventory.
 builder.AddProject<Projects.CritterMart_Orders>("orders")
     .WithReference(crittermart)
-    .WaitFor(crittermart);
+    .WithReference(rabbitmq)
+    .WaitFor(crittermart)
+    .WaitFor(rabbitmq);
 
 builder.Build().Run();
