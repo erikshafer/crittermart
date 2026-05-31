@@ -65,6 +65,12 @@ builder.Host.UseWolverine(opts =>
 
 builder.Services.AddWolverineHttp();
 
+// The stubbed payment provider (slice 4.3). Round one stubs payment (vision.md non-goal), so the
+// default always approves; integration tests swap a declining IPaymentProvider to exercise the
+// failure branch. A real gateway integration would replace only this registration.
+builder.Services.AddSingleton<CritterMart.Orders.Order.IPaymentProvider,
+    CritterMart.Orders.Order.StubPaymentProvider>();
+
 // Swagger UI over the (OpenAPI-described) Wolverine.Http endpoints — a demo/devex affordance.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

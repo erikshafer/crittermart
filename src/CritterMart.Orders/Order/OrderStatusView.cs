@@ -3,12 +3,15 @@ using Marten.Events.Aggregation;
 namespace CritterMart.Orders.Order;
 
 // The status values an Order moves through. Slice 4.1 reaches AwaitingConfirmation; slice 4.2
-// adds StockReserved (stock gate cleared) and Cancelled (stock failure → 4.5); payment-authorized
-// and confirmed arrive with slices 4.3–4.4, folded onto this same view as those events land.
+// adds StockReserved (stock gate cleared) and Cancelled (stock failure → 4.5); slice 4.3 adds
+// PaymentAuthorized (payment gate cleared) and slice 4.4 adds Confirmed (both gates closed —
+// the terminal success state). All fold onto this same view as their events land.
 public static class OrderStatus
 {
     public const string AwaitingConfirmation = "awaiting_confirmation";
     public const string StockReserved = "stock_reserved";
+    public const string PaymentAuthorized = "payment_authorized";
+    public const string Confirmed = "confirmed";
     public const string Cancelled = "cancelled";
 }
 
@@ -39,6 +42,15 @@ public partial class OrderStatusViewProjection : SingleStreamProjection<OrderSta
 
     // Klefter grant (slice 4.2): the stock gate is cleared.
     public void Apply(StockReserved e, OrderStatusView view) => view.Status = OrderStatus.StockReserved;
+
+    // Klefter grant (slice 4.3): the payment gate is cleared. PaymentAuthFailed has no Apply —
+    // like StockReservationFailed it is recorded for audit but drives no status change; the
+    // OrderCancelled that follows it (slice 4.6) is what the Customer would see.
+    public void Apply(PaymentAuthorized e, OrderStatusView view) => view.Status = OrderStatus.PaymentAuthorized;
+
+    // Terminal success (slice 4.4): both gates closed. Appended together with PaymentAuthorized,
+    // so the view settles on confirmed — payment_authorized is the transient intermediate.
+    public void Apply(OrderConfirmed e, OrderStatusView view) => view.Status = OrderStatus.Confirmed;
 
     // Terminal cancellation (slice 4.5 reaches this via OrderCancelled). StockReservationFailed
     // itself is recorded on the stream for audit but carries no view status change — the

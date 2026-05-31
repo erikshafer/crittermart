@@ -41,6 +41,28 @@ public class OrderStatusViewProjectionTests
         view.Status.ShouldBe(OrderStatus.StockReserved);
     }
 
+    // Slice 4.3: the Klefter PaymentAuthorized commit advances the status past the payment gate.
+    [Fact]
+    public void payment_authorized_advances_status_to_payment_authorized()
+    {
+        var view = new OrderStatusView { Status = OrderStatus.StockReserved };
+
+        _projection.Apply(new PaymentAuthorized("order-1", "stub-abc123", 103.98m), view);
+
+        view.Status.ShouldBe(OrderStatus.PaymentAuthorized);
+    }
+
+    // Slice 4.4: OrderConfirmed is the terminal success state — both gates closed.
+    [Fact]
+    public void order_confirmed_sets_status_to_confirmed()
+    {
+        var view = new OrderStatusView { Status = OrderStatus.PaymentAuthorized };
+
+        _projection.Apply(new OrderConfirmed("order-1"), view);
+
+        view.Status.ShouldBe(OrderStatus.Confirmed);
+    }
+
     // Slice 4.5: OrderCancelled is terminal — the view reads cancelled.
     [Fact]
     public void order_cancelled_sets_status_to_cancelled()

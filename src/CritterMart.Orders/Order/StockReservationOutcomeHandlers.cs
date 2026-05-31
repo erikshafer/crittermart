@@ -11,15 +11,21 @@ namespace CritterMart.Orders.Order;
 
 public static class StockReservedHandler
 {
-    public static async Task Handle(Contracts.StockReserved message, IDocumentSession session)
+    public static async Task<AuthorizePayment?> Handle(Contracts.StockReserved message, IDocumentSession session)
     {
         var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
         if (stream.Aggregate?.Status != OrderStatus.AwaitingConfirmation)
         {
-            return; // terminal, already reserved, or unknown order — ignore
+            return null; // terminal, already reserved, or unknown order — ignore (no cascade)
         }
 
         stream.AppendOne(new StockReserved(message.OrderId));
+
+        // Stock gate cleared → open the payment gate (slice 4.3). Cascade AuthorizePayment for the
+        // order total; it has a local handler, so Wolverine routes it in-process (local routing
+        // wins over the RabbitMQ convention) rather than over the broker. The guard above makes
+        // this idempotent: a duplicate StockReserved on an already-progressed order returns null.
+        return new AuthorizePayment(message.OrderId, stream.Aggregate.Total);
     }
 }
 
