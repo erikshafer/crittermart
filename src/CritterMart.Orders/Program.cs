@@ -16,6 +16,14 @@ builder.AddServiceDefaults();
 var connectionString = builder.Configuration.GetConnectionString("crittermart")
     ?? "Host=localhost;Port=5432;Database=crittermart;Username=postgres;Password=postgres";
 
+// The payment deadline (slice 4.7): how long a placed order may sit non-terminal before the
+// scheduled OrderPaymentTimeout cancels it. Config-driven so the Aspire demo can shorten it
+// (e.g. 30s) without recompiling; one value feeds both the PlaceOrder schedule and the
+// OrdersAwaitingPayment projection's visible deadline.
+var paymentTimeout = builder.Configuration.GetValue<TimeSpan?>("Orders:PaymentTimeout")
+    ?? PaymentDeadline.Default;
+builder.Services.AddSingleton(new PaymentDeadline(paymentTimeout));
+
 builder.Services.AddMarten(opts =>
     {
         opts.Connection(connectionString);
@@ -30,6 +38,11 @@ builder.Services.AddMarten(opts =>
         // Inline single-stream projections — the readable cart and order (ADR 008; no daemon).
         opts.Projections.Add<CartViewProjection>(ProjectionLifecycle.Inline);
         opts.Projections.Add<OrderStatusViewProjection>(ProjectionLifecycle.Inline);
+
+        // The Bruun todo-list (slice 4.7): a second inline projection over the same Order stream.
+        // Instance-registered (not generic) because the projection carries the configured payment
+        // timeout — the row's visible deadline must match the schedule PlaceOrder actually sets.
+        opts.Projections.Add(new OrdersAwaitingPaymentProjection(paymentTimeout), ProjectionLifecycle.Inline);
 
         // One computed index on CartView.CustomerId that serves the open-cart resolution
         // query AND, scoped to open carts, enforces "one open cart per customer" at the DB
@@ -61,6 +74,11 @@ builder.Host.UseWolverine(opts =>
         .UseConventionalRouting();
 
     opts.Policies.AutoApplyTransactions();
+
+    // Durable local queues (slice 4.7): scheduled OrderPaymentTimeout self-messages are persisted
+    // through the Marten-backed message store, so an order's payment deadline survives a service
+    // restart — the timer fires (or no-ops against a settled stream) when the service comes back.
+    opts.Policies.UseDurableLocalQueues();
 });
 
 builder.Services.AddWolverineHttp();

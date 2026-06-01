@@ -3,6 +3,7 @@ using CritterMart.Orders.Cart;
 using CritterMart.Orders.Order;
 using Marten;
 using Microsoft.AspNetCore.Http;
+using Wolverine;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
@@ -17,13 +18,16 @@ public record PlaceOrderResponse(string OrderId);
 
 public static class PlaceOrderEndpoint
 {
-    // Returns the HTTP response AND a cascaded ReserveStock message (slice 4.2). Wolverine.Http
-    // treats the IResult as the response and publishes the second tuple member through the outbox
-    // when the Marten transaction commits — so the order is durably placed before the cross-BC
-    // reservation request goes out. On a rejection there is no order, so the cascade is null
-    // (Wolverine skips a null cascading message).
+    // Returns the HTTP response AND two cascaded outputs: a ReserveStock message (slice 4.2) and a
+    // SCHEDULED OrderPaymentTimeout self-message (slice 4.7). Wolverine.Http treats the IResult as
+    // the response and publishes the other tuple members through the outbox when the Marten
+    // transaction commits — so the order is durably placed before the cross-BC reservation request
+    // goes out, and the payment deadline is set in the same step that placed the order (the Bruun
+    // temporal automation's starting gun; Workshop slice 4.1 writes-to). On a rejection there is no
+    // order, so both cascades are null (Wolverine skips null cascading messages).
     [WolverinePost("/orders")]
-    public static async Task<(IResult, Contracts.ReserveStock?)> Post(PlaceOrder command, IDocumentSession session)
+    public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
+        PlaceOrder command, IDocumentSession session, PaymentDeadline deadline)
     {
         // Resolve the customer's open cart — the same indexed CartView query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
@@ -38,7 +42,7 @@ public static class PlaceOrderEndpoint
             return (Results.Problem(
                 title: "NoOpenCart",
                 detail: $"Customer '{command.CustomerId}' has no open cart to place.",
-                statusCode: StatusCodes.Status409Conflict), null);
+                statusCode: StatusCodes.Status409Conflict), null, null);
         }
 
         // Defensive guard for the workshop's CartEmpty path. Unreachable in 4.1 (a cart is
@@ -49,7 +53,7 @@ public static class PlaceOrderEndpoint
             return (Results.Problem(
                 title: "CartEmpty",
                 detail: $"Customer '{command.CustomerId}' has an empty cart.",
-                statusCode: StatusCodes.Status409Conflict), null);
+                statusCode: StatusCodes.Status409Conflict), null, null);
         }
 
         var orderId = Guid.NewGuid().ToString();
@@ -73,7 +77,12 @@ public static class PlaceOrderEndpoint
             orderId,
             items.Select(i => new Contracts.ReserveStockLine(i.Sku, i.Quantity)).ToList());
 
-        return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock);
+        // Schedule the payment deadline (slice 4.7): a self-message delivered back to this service
+        // after the configured timeout. If the order has settled by then, the timeout handler's
+        // terminal guard makes it a no-op; if not, the order is cancelled and its stock released.
+        var paymentTimeout = new OrderPaymentTimeout(orderId).DelayedFor(deadline.Duration);
+
+        return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock, paymentTimeout);
     }
 }
 
@@ -84,5 +93,19 @@ public static class OrderEndpoint
     {
         var view = await session.LoadAsync<OrderStatusView>(orderId);
         return view is null ? Results.NotFound() : Results.Ok(view);
+    }
+
+    // The Bruun todo-list (slice 4.7): every order still awaiting its terminal state, soonest
+    // deadline first. Rows appear when an order is placed and vanish when it confirms or cancels
+    // (the OrdersAwaitingPayment projection's conditional delete) — so this list is always the
+    // live set of orders the payment-timeout automation is watching. A literal route segment, so
+    // it wins over /orders/{orderId} by ASP.NET Core route precedence.
+    [WolverineGet("/orders/awaiting-payment")]
+    public static async Task<IResult> GetAwaitingPayment(IQuerySession session)
+    {
+        var rows = await session.Query<OrderAwaitingPayment>()
+            .OrderBy(x => x.Deadline)
+            .ToListAsync();
+        return Results.Ok(rows);
     }
 }
