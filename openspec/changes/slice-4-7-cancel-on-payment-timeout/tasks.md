@@ -39,5 +39,5 @@
 
 - [x] 6.1 `dotnet build` + `dotnet test` green (full solution; Inventory + Catalog + CrossBc untouched and still green)
 - [x] 6.2 `openspec validate slice-4-7-cancel-on-payment-timeout --strict` passes
-- [ ] 6.3 Narrative 004 → v1.5 (Moment 6; `slices` adds 4.7; Document History row) — in this PR
-- [ ] 6.4 Author `docs/retrospectives/implementations/011-slice-4-7-cancel-on-payment-timeout.md`; record the durability answer (1.2) and whether the Order lifecycle is now complete for round one; `openspec archive` deferred to a post-merge `tidy:` step
+- [x] 6.3 Narrative 004 → v1.5 (Moment 6; `slices` adds 4.7; Document History row) — in this PR
+- [x] 6.4 Author `docs/retrospectives/implementations/011-slice-4-7-cancel-on-payment-timeout.md`; record the durability answer (1.2) and whether the Order lifecycle is now complete for round one; `openspec archive` deferred to a post-merge `tidy:` step
