@@ -110,6 +110,26 @@ public class PlaceOrderTests
         reserve.Lines.ShouldContain(l => l.Sku == "crit-002" && l.Quantity == 3);
     }
 
+    // Workshop 001 § 6 slice 4.7: placing an order also schedules the payment-deadline
+    // self-message. The tracked session captures it as scheduled — not executed — so this test
+    // never waits for real time; the timeout's behavior when it fires lives in PaymentTimeoutTests.
+    [Fact]
+    public async Task placing_an_order_schedules_a_payment_timeout()
+    {
+        await ResetOrdersAsync();
+
+        await AddAsync("customer-X", "crit-001", 1, CosmicCritterPlush);
+
+        var orderId = string.Empty;
+        var tracked = await _fixture.Host.ExecuteAndWaitAsync(async () =>
+        {
+            orderId = await PlaceOrderAsync("customer-X");
+        });
+
+        var timeout = tracked.Scheduled.SingleMessage<OrderPaymentTimeout>();
+        timeout.OrderId.ShouldBe(orderId);
+    }
+
     // Workshop 001 § 6.1 slice 4.1, failure path: no open cart → rejected, no Order stream.
     [Fact]
     public async Task placing_an_order_with_no_open_cart_is_rejected()
