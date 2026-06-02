@@ -46,5 +46,5 @@
 
 - [x] 8.1 `docs/narratives/004-customer-purchase.md` → v1.7: Moment 1B (the cart left behind) + frontmatter slices + Document History row.
 - [x] 8.2 `docs/skills/DEBT.md` — the Marten-pattern third-use row (instance-registered projection / `IEvent<T>` fold / conditional delete, now 3× each; candidate local skill, deferred to a `tidy: skills` session).
-- [ ] 8.3 `docs/retrospectives/implementations/013-slice-3-4-cart-abandonment.md` — outcome, refinements, spec-delta confirmation.
-- [ ] 8.4 `openspec validate slice-3-4-cart-abandonment --strict` green; consolidated PR opened.
+- [x] 8.3 `docs/retrospectives/implementations/013-slice-3-4-cart-abandonment.md` — outcome, refinements, spec-delta confirmation.
+- [x] 8.4 `openspec validate slice-3-4-cart-abandonment --strict` green; consolidated PR opened.
