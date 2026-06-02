@@ -143,6 +143,43 @@ public class PlaceOrderTests
         });
     }
 
+    // Slice 3.2 makes a lineless-but-open cart reachable for the first time, turning the
+    // CartEmpty guard (shipped defensively in 4.1) into live code: add an item, remove it,
+    // then try to place the order — rejected, no Order stream created.
+    [Fact]
+    public async Task placing_an_order_from_an_emptied_cart_is_rejected()
+    {
+        await ResetOrdersAsync();
+
+        await AddAsync("customer-X", "crit-001", 1, CosmicCritterPlush);
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Delete.Url("/carts/customer-X/items/crit-001");
+            _.StatusCodeShouldBe(204);
+        });
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Json(new PlaceOrder("customer-X")).ToUrl("/orders");
+            _.StatusCodeShouldBe(409);
+        });
+
+        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
+        await using var session = store.LightweightSession();
+
+        // No Order stream was created; the emptied cart stays open.
+        var orders = await session.Query<OrderStatusView>()
+            .Where(o => o.CustomerId == "customer-X")
+            .ToListAsync();
+        orders.ShouldBeEmpty();
+
+        var carts = await session.Query<CartView>()
+            .Where(v => v.CustomerId == "customer-X" && v.IsOpen)
+            .ToListAsync();
+        carts.ShouldHaveSingleItem().Lines.ShouldBeEmpty();
+    }
+
     // Workshop 001 § 6.1 slice 4.1, failure path: a second placement (the cart is already
     // checked out) is rejected and creates no second order.
     [Fact]

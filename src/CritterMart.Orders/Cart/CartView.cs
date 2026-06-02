@@ -31,8 +31,37 @@ public partial class CartViewProjection : SingleStreamProjection<CartView, strin
         view.IsOpen = true;
     }
 
-    public void Apply(CartItemAdded e, CartView view) =>
-        view.Lines.Add(new CartLine(e.Sku, e.Quantity, e.Snapshot.Name, e.Snapshot.Price));
+    // Lines are keyed by SKU (slices 3.2/3.3 resolved 3.1's deferred merge question): adding a
+    // SKU already in the cart merges quantities into its one line. The first add's snapshotted
+    // name/price stays authoritative — consistent with snapshot-wins-until-checkout.
+    public void Apply(CartItemAdded e, CartView view)
+    {
+        var index = view.Lines.FindIndex(l => l.Sku == e.Sku);
+        if (index < 0)
+        {
+            view.Lines.Add(new CartLine(e.Sku, e.Quantity, e.Snapshot.Name, e.Snapshot.Price));
+        }
+        else
+        {
+            view.Lines[index] = view.Lines[index] with { Quantity = view.Lines[index].Quantity + e.Quantity };
+        }
+    }
+
+    // Removing a SKU drops its line (slice 3.2). Removing the last line leaves the cart open and
+    // empty — a legitimate state; PlaceOrder's CartEmpty guard protects checkout.
+    public void Apply(CartItemRemoved e, CartView view) =>
+        view.Lines.RemoveAll(l => l.Sku == e.Sku);
+
+    // A quantity change rewrites the line's quantity in place (slice 3.3); the snapshotted
+    // name/price are untouched.
+    public void Apply(CartItemQuantityChanged e, CartView view)
+    {
+        var index = view.Lines.FindIndex(l => l.Sku == e.Sku);
+        if (index >= 0)
+        {
+            view.Lines[index] = view.Lines[index] with { Quantity = e.Quantity };
+        }
+    }
 
     // Checkout closes the cart (slice 4.1). Lines are retained — the checked-out cart stays
     // readable history; only IsOpen flips, which the partial-unique index keys off of.
