@@ -4,6 +4,7 @@ using CritterMart.Orders.Features;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using Wolverine.Tracking;
 using Xunit;
 
 namespace CritterMart.Orders.Tests;
@@ -98,6 +99,42 @@ public class AddToCartTests
         events[0].Data.ShouldBeOfType<CartCreated>();
         events[1].Data.ShouldBeOfType<CartItemAdded>();
         events[2].Data.ShouldBeOfType<CartItemAdded>();
+    }
+
+    // Slice 3.4: creating a cart also schedules its inactivity deadline. The tracked session
+    // captures it as scheduled — not executed — so this test never waits for real time; the
+    // fired timeout's behavior lives in CartAbandonmentTests.
+    [Fact]
+    public async Task creating_a_cart_schedules_an_activity_timeout()
+    {
+        await ResetOrdersAsync();
+
+        var cartId = string.Empty;
+        var tracked = await _fixture.Host.ExecuteAndWaitAsync(async () =>
+        {
+            cartId = await AddAsync("customer-X", "crit-001", 1, CosmicCritterPlush);
+        });
+
+        var timeout = tracked.Scheduled.SingleMessage<CartActivityTimeout>();
+        timeout.CartId.ShouldBe(cartId);
+    }
+
+    // Slice 3.4, fire-and-check: a SUBSEQUENT add to the same open cart schedules nothing — one
+    // timeout per cart suffices; this add's event timestamp is the activity the fired timeout
+    // will check (and re-aim itself against).
+    [Fact]
+    public async Task adding_to_an_existing_cart_schedules_no_further_timeout()
+    {
+        await ResetOrdersAsync();
+
+        await AddAsync("customer-X", "crit-001", 1, CosmicCritterPlush);
+
+        var tracked = await _fixture.Host.ExecuteAndWaitAsync(async () =>
+        {
+            await AddAsync("customer-X", "crit-002", 3, NebulaNewt);
+        });
+
+        tracked.Scheduled.AllMessages().OfType<CartActivityTimeout>().ShouldBeEmpty();
     }
 
     // The cart is readable over HTTP at GET /carts/{cartId}.

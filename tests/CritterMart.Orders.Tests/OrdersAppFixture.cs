@@ -1,4 +1,5 @@
 using Alba;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Wolverine;
 using Xunit;
@@ -17,6 +18,13 @@ public class OrdersAppFixture : IAsyncLifetime
 
     public IAlbaHost Host { get; private set; } = null!;
 
+    // Slice 3.4: the abandonment handler reads "now" from an injected TimeProvider so tests can
+    // drive the clock across the inactivity window instead of waiting real time. This settable
+    // provider overrides Program.cs's TimeProvider.System registration (last registration wins);
+    // only CartAbandonmentHandler consumes it, so other tests are unaffected. Cart-abandonment
+    // tests reset it to real "now" at their start.
+    public TestTimeProvider Time { get; } = new();
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
@@ -25,7 +33,11 @@ public class OrdersAppFixture : IAsyncLifetime
         // time; the transport is stubbed below, so nothing actually connects.
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", "amqp://guest:guest@localhost:5672");
         Host = await AlbaHost.For<Program>(x =>
-            x.ConfigureServices(services => services.DisableAllExternalWolverineTransports()));
+            x.ConfigureServices(services =>
+            {
+                services.DisableAllExternalWolverineTransports();
+                services.AddSingleton<TimeProvider>(Time);
+            }));
     }
 
     public async Task DisposeAsync()
@@ -39,6 +51,15 @@ public class OrdersAppFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("ConnectionStrings__crittermart", null);
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", null);
     }
+}
+
+// A clock the tests own: GetUtcNow() returns whatever Now was last set to. Plain BCL subclass —
+// no package, no mock framework.
+public class TestTimeProvider : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+
+    public override DateTimeOffset GetUtcNow() => Now;
 }
 
 [CollectionDefinition("orders")]

@@ -64,6 +64,12 @@ The report projection is registered `ProjectionLifecycle.Async` with **no** `Add
 
 `Orders:CartActivityTimeout` (default **2 hours** — workshop § 7's ">2h as abandoned" rebuild story implies it) binds to a `CartActivityDeadline(TimeSpan)` singleton consumed by both the `AddToCart` schedule and the `CartsAwaitingActivityProjection`'s visible deadline — one value, two faces, same as `PaymentDeadline`.
 
+### Decision 8 — Time is an injected dependency (`TimeProvider`)
+
+The handler reads "now" from an injected `TimeProvider` (BCL abstraction, registered as `TimeProvider.System` in Program.cs) instead of calling `DateTimeOffset.UtcNow`. The integration-test fixture overrides it with a settable test clock, so both the abandon path (clock advanced past the window) and the reschedule path (clock not advanced) are deterministically testable with zero real-time waits — the concrete mitigation for the clock-semantics risk below. No new packages; only `CartAbandonmentHandler` consumes it, so the override is invisible to every other test.
+
+*(Decided during implementation — the prompt's deliverable plan did not name the `OrdersAppFixture` amendment this requires; the retro records the divergence.)*
+
 ### Decision 7 — Spec delta scope: minimal MODIFIED (user fork 4)
 
 Only *Add an item to the cart* is MODIFIED (it gains the schedule-on-creation behavior). Remove/change-quantity/checkout requirements are untouched: their "open cart" phrasing already absorbs abandoned carts through the `NoOpenCart` rejection — the open-cart abstraction does the work, no contract text changes.
