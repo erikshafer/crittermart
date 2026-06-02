@@ -24,6 +24,18 @@ var paymentTimeout = builder.Configuration.GetValue<TimeSpan?>("Orders:PaymentTi
     ?? PaymentDeadline.Default;
 builder.Services.AddSingleton(new PaymentDeadline(paymentTimeout));
 
+// The cart inactivity window (slice 3.4): how long a cart may sit without activity before the
+// scheduled CartActivityTimeout abandons it. Config-driven like the payment deadline above; one
+// value feeds the AddToCart schedule, the abandonment handler's fire-and-check decision, and the
+// CartsAwaitingActivity projection's visible deadline.
+var cartActivityTimeout = builder.Configuration.GetValue<TimeSpan?>("Orders:CartActivityTimeout")
+    ?? CartActivityDeadline.Default;
+builder.Services.AddSingleton(new CartActivityDeadline(cartActivityTimeout));
+
+// Time as a dependency (slice 3.4): the abandonment handler compares event timestamps against
+// "now" — injected as TimeProvider so tests can drive the clock instead of waiting real time.
+builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddMarten(opts =>
     {
         opts.Connection(connectionString);
@@ -43,6 +55,16 @@ builder.Services.AddMarten(opts =>
         // Instance-registered (not generic) because the projection carries the configured payment
         // timeout — the row's visible deadline must match the schedule PlaceOrder actually sets.
         opts.Projections.Add(new OrdersAwaitingPaymentProjection(paymentTimeout), ProjectionLifecycle.Inline);
+
+        // The cart-side Bruun todo-list (slice 3.4): the same shape over the Cart stream —
+        // instance-registered with the configured inactivity window.
+        opts.Projections.Add(new CartsAwaitingActivityProjection(cartActivityTimeout), ProjectionLifecycle.Inline);
+
+        // The round-one ASYNC projection teaser (ADR 008, slice 3.4): registered with the async
+        // lifecycle but NO AddAsyncDaemon anywhere — the daily abandonment report stays empty
+        // until an on-demand rebuild materializes it from the events. That emptiness is the
+        // talk's teaching beat, not a bug.
+        opts.Projections.Add<CartAbandonmentReportProjection>(ProjectionLifecycle.Async);
 
         // One computed index on CartView.CustomerId that serves the open-cart resolution
         // query AND, scoped to open carts, enforces "one open cart per customer" at the DB
