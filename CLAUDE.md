@@ -62,6 +62,7 @@ A precise, machine-friendly spec. Capabilities and requirements are expressed as
 
 - **Artifact:** an openspec change at `openspec/changes/{change}/`, authored and validated with the openspec CLI (the adopted tool convention). Each change holds `proposal.md` (Why/What/Capabilities/Impact) and a per-capability SHALL delta at `openspec/changes/{change}/specs/{capability}/spec.md`. The `openspec/` workspace is a peer to `docs/` at the repo root (the CLI hardcodes the directory name; it is not relocatable under `docs/`). The companion `design.md` and `tasks.md` artifacts are authored in the implementation session, not the proposal session.
 - **Why:** narratives are persuasive but imprecise; an event-model slice is precise but fragmented. The OpenSpec proposal is the unambiguous, testable contract that bridges them. It is what the code is checked against.
+- **Capability granularity:** one capability per aggregate (or document type), not per bounded context. A BC with one aggregate carries one capability (Catalog → `product-catalog`, Inventory → `stock-management`); a BC with several carries several (Orders → `shopping-cart` for Cart, `order-lifecycle` for Order). Confirmed across all round-one capabilities (retros implementations/003, implementations/004, docs/004, implementations/013).
 
 #### 4b. Narrative
 
@@ -170,6 +171,12 @@ Use `tidy: <area> — <details>` for sessions whose deliverable is maintenance o
 - `tidy: encode-<rule>` — lifting a refinement into a convention file.
 
 New artifacts (workshops, narratives, ADRs, slices) do **not** use `tidy:` — those carry their own subjects.
+
+### Tidy ceremony rule
+
+A tidy session that authors **spec content** — a workshop or narrative amendment, a spec `## Purpose`, a convention encoding — carries the full prompt/retro pair. A tidy that is **purely mechanical** — file moves, index counts, archive commands with no content authored — may run light (no prompt/retro pair).
+
+The distinction is what the session *writes*, not how long it takes. Settled in retro docs/007 and held across five consecutive tidies (retros docs/007–010) before being encoded here.
 
 ### Capture intent in durable, structured form
 

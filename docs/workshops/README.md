@@ -20,6 +20,7 @@ Per CLAUDE.md § 3 *Output discipline*:
 - Each slice has a *reads-from* list (which prior events the slice consumes) and a *writes-to* list (which new events the slice produces).
 - Each slice has at least one **GWT happy path** scenario.
 - **Failure paths are explicit, not implied.** A slice that handles a failure mode names it as its own GWT scenario or as a sibling slice.
+- **Frontmatter `version:` tracks the Document History.** Every amendment bumps both the frontmatter version and the Document History table — they must never disagree. (Matches the narrative convention; encoded after retro docs/010 surfaced five amendments that bumped only the table.)
 
 ## How a workshop is conducted
 
