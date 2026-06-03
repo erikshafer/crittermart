@@ -15,10 +15,13 @@ Local skills under this directory exist **only when a CritterMart-specific conve
 
 - [`event-modeling/SKILL.md`](event-modeling/SKILL.md) — the event-modeling methodology skill. Authored as a project skill because it embeds CritterMart-specific pipeline integration (the four BCs, artifact paths, in-project workshop precedent, project-named slices, adjunct event-modeling patterns adopted for CritterMart) that the upstream library does not.
 
+## Skill debt
+
+- [`DEBT.md`](DEBT.md) — gaps surfaced during sessions but deferred to a future `tidy: skills` PR. Created in slice 3.4 (PR #41) with its first row: the three CritterMart Marten projection conventions (instance registration, `IEvent<T>` metadata folds, conditional deletes — each now used 3×) plus the `partial`-keyword nuance Marten 9's source generator requires.
+
 ## Forthcoming companions
 
 - `_template/SKILL.md` — authoring template referenced in [CLAUDE.md § Skills](../../CLAUDE.md). Lands when the first need for a second local skill surfaces, or when a template gap is explicitly recognized. Not pre-created — empty templates are ceremony.
-- `DEBT.md` — gaps surfaced during sessions but deferred to a future skill-tidy PR. Lands when the first deferred gap is recorded.
 
 ## Cross-references
 
