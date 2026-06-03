@@ -1,7 +1,7 @@
 ---
-version: v1.2
+version: v1.3
 status: Active
-date: 2026-05-31
+date: 2026-06-02
 references:
   - docs/vision.md
   - docs/context-map/README.md
@@ -109,6 +109,9 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - Vision-doc updates are deliberate, never opportunistic. (CLAUDE.md § Routing Layer)
 - A new bounded context requires a paired context-map update and workshop pass. (CLAUDE.md § Do Not — round one)
 - A future ADR that changes a structural constraint pairs with a rule-file update in the same PR. (this file, header)
+- A tidy that authors spec content carries the full prompt/retro pair; a purely mechanical tidy may run light. (CLAUDE.md § Operating Disciplines, retros docs/007–010)
+- One OpenSpec capability per aggregate or document type, not per bounded context. (CLAUDE.md § 4a; Orders = `shopping-cart` + `order-lifecycle`)
+- Workshop frontmatter `version:` tracks the workshop's Document History; both bump in every amendment. (docs/workshops/README.md, retro docs/010)
 
 ## Round-one explicit deferrals
 
@@ -127,3 +130,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.0    | 2026-05-26 | Initial round-one structural-constraints synthesis from ADRs 001–010, vision.md, context map, Workshop 001, and CLAUDE.md operating disciplines. |
 | v1.1    | 2026-05-28 | Added the **Build & code generation** section (Critter Stack 2026 line; Wolverine Dynamic codegen via `WolverineFx.RuntimeCompilation`; Marten source-gen; v9 defaults adopted), paired with ADR 012. |
 | v1.2    | 2026-05-31 | Added three **Cross-service messaging** rules for the published-language `CritterMart.Contracts` project (shared, both services reference it; not a service so no ADR 001 breach; owns wire messages only), paired with ADR 014 (slice 4.2's first cross-BC flow). |
+| v1.3    | 2026-06-02 | Added three **SDD pipeline discipline** rules from the `tidy: encode` bundle: the tidy ceremony rule (spec-content tidy → full prompt/retro pair; mechanical tidy → may run light), one-capability-per-aggregate OpenSpec granularity, and workshop frontmatter version tracking. Paired with the matching CLAUDE.md additions (§ Operating Disciplines, § 4a). |

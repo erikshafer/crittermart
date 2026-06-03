@@ -3,7 +3,7 @@ workshop: 001
 title: CritterMart Round-One Rolled-Up Event Model
 scope: All four bounded contexts (Catalog, Inventory, Orders, Identity stubbed); round-one success criteria from vision.md
 status: Draft
-version: v1.0
+version: v1.5
 date: 2026-05-26
 participants: session-runner in solo multi-persona mode (Facilitator, Domain Expert, Architect, Backend Developer, Frontend Developer, QA, Product Owner, UX)
 references:

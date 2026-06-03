@@ -14,10 +14,11 @@ Local skills under this directory exist **only when a CritterMart-specific conve
 ## Current local skills
 
 - [`event-modeling/SKILL.md`](event-modeling/SKILL.md) — the event-modeling methodology skill. Authored as a project skill because it embeds CritterMart-specific pipeline integration (the four BCs, artifact paths, in-project workshop precedent, project-named slices, adjunct event-modeling patterns adopted for CritterMart) that the upstream library does not.
+- [`marten-projection-conventions/SKILL.md`](marten-projection-conventions/SKILL.md) — CritterMart's Marten projection conventions (the load-bearing `partial`, instance registration for config, `IEvent<T>` metadata folds, `ShouldDelete` conditional deletes, `Identity<IEvent<T>>` multi-stream routing, and the fold-testing pattern). Authored in the `tidy: encode` bundle, draining DEBT row 1; defers Marten API mechanics to the upstream projection skills and records only the CritterMart-layered conventions with in-repo precedents.
 
 ## Skill debt
 
-- [`DEBT.md`](DEBT.md) — gaps surfaced during sessions but deferred to a future `tidy: skills` PR. Created in slice 3.4 (PR #41) with its first row: the three CritterMart Marten projection conventions (instance registration, `IEvent<T>` metadata folds, conditional deletes — each now used 3×) plus the `partial`-keyword nuance Marten 9's source generator requires.
+- [`DEBT.md`](DEBT.md) — gaps surfaced during sessions but deferred to a future `tidy: skills` PR. Created in slice 3.4 (PR #41) with its first row: the three CritterMart Marten projection conventions (instance registration, `IEvent<T>` metadata folds, conditional deletes — each now used 3×) plus the `partial`-keyword nuance Marten 9's source generator requires. **Row 1 drained** by the `tidy: encode` bundle (the `marten-projection-conventions` skill above); no open rows remain.
 
 ## Forthcoming companions
 
