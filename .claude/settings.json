@@ -56,21 +56,22 @@
       "Bash(gh auth:*)",
 
       "Bash(openspec:*)",
+      "Bash(npx openspec:*)",
       "Bash(npx openspec@latest:*)",
       "Bash(npx ctx7@latest:*)",
 
       "WebSearch",
       "WebFetch(domain:wolverinefx.net)",
-      "WebFetch(domain:www.wolverinefx.io)",
-      "WebFetch(domain:www.martendb.io)",
-      "WebFetch(domain:www.jasperfx.net)",
+      "WebFetch(domain:wolverinefx.io)",
+      "WebFetch(domain:martendb.io)",
+      "WebFetch(domain:jasperfx.net)",
       "WebFetch(domain:polecat.jasperfx.net)",
       "WebFetch(domain:jasperfx.github.io)",
       "WebFetch(domain:weasel.jasperfx.net)",
       "WebFetch(domain:shared-libs.jasperfx.net)",
       "WebFetch(domain:critterwatch.jasperfx.net)",
       "WebFetch(domain:eventmodeling.org)",
-      "WebFetch(domain:www.eventmodelers.de)"
+      "WebFetch(domain:eventmodelers.de)"
     ],
     "ask": [
       "Bash(git commit:*)",
