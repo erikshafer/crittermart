@@ -255,7 +255,7 @@ This is the only path override in round one. Other Critter Stack reference archi
 | Testing | Alba (integration), xUnit + Shouldly (unit) |
 | Orchestration | .NET Aspire |
 | Observability | OpenTelemetry |
-| Frontend | TBD |
+| Frontend | Vite + React SPA (TS, TanStack Query, Tailwind v4, shadcn/ui), per-service Wolverine.Http, no BFF — ADR 015/016 |
 
 ### Architectural non-negotiables
 
