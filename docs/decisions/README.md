@@ -48,6 +48,8 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [012](012-critter-stack-2026-upgrade.md) | Critter Stack 2026 Upgrade (Wolverine 6 / Marten 9) | Accepted |
 | [013](013-critterwatch-deferred-to-messaging-slices.md) | CritterWatch Deferred to the 4.x Messaging Slices | Accepted |
 | [014](014-published-language-contracts-project.md) | Published-Language Cross-BC Contracts in a Shared `CritterMart.Contracts` Project | Accepted |
+| [015](015-vite-react-frontend-stack.md) | Vite + React SPA as the Round-Two Frontend Stack | Accepted |
+| [016](016-frontend-full-pipeline-ui-first-class.md) | Frontend Modeled Through the Full Pipeline — UI First-Class in the Event Model | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 
