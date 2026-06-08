@@ -19,11 +19,11 @@
   </ItemGroup>
   <!-- Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2) -->
   <ItemGroup>
-    <PackageVersion Include="WolverineFx" Version="6.4.3" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.4.3" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.4.3" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.4.3" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.4.3" />
+    <PackageVersion Include="WolverineFx" Version="6.5.1" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.5.1" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.5.1" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.5.1" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.5.1" />
   </ItemGroup>
   <!-- API documentation (Swagger UI) -->
   <ItemGroup>
