@@ -4,26 +4,26 @@
   </PropertyGroup>
   <!-- .NET Aspire 13 (orchestration; ADR 004) -->
   <ItemGroup>
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.2" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.2" />
-    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.4.2" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.4.3" />
   </ItemGroup>
   <!-- Observability (OpenTelemetry; ADR 005) -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
   </ItemGroup>
   <!-- Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2) -->
   <ItemGroup>
-    <PackageVersion Include="WolverineFx" Version="6.5.1" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.5.1" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.5.1" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.5.1" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.5.1" />
+    <PackageVersion Include="WolverineFx" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.8.0" />
   </ItemGroup>
   <!-- API documentation (Swagger UI) -->
   <ItemGroup>
