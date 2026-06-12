@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- The JasperFx trial license key lives in user secrets (JasperFx:LicenseKey), never in git. -->
+    <UserSecretsId>crittermart-critterwatch</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The monitoring console: embedded dashboard SPA, Marten event store, SignalR hub. -->
+    <PackageReference Include="CritterWatch" />
+    <!-- Telemetry arrives over the same RabbitMQ broker the services use (ADR 003). -->
+    <PackageReference Include="WolverineFx.RabbitMQ" />
+    <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+  </ItemGroup>
+
+</Project>

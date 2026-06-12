@@ -5,6 +5,7 @@
     <PackageReference Include="WolverineFx.Marten" />
     <!-- Cross-BC messaging over RabbitMQ (slice 4.2, ADR 003). -->
     <PackageReference Include="WolverineFx.RabbitMQ" />
+    <PackageReference Include="Wolverine.CritterWatch" />
     <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="Swashbuckle.AspNetCore" />

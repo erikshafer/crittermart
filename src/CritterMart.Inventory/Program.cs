@@ -3,6 +3,7 @@ using JasperFx.Events;
 using JasperFx.Events.Projections;
 using Marten;
 using Wolverine;
+using Wolverine.CritterWatch;
 using Wolverine.Http;
 using Wolverine.Marten;
 using Wolverine.RabbitMQ;
@@ -39,6 +40,10 @@ builder.Host.UseWolverine(opts =>
     // process — e.g. the cross-BC smoke test boots Orders and Inventory side by side.
     opts.ApplicationAssembly = typeof(Program).Assembly;
 
+    // How this service identifies itself on the CritterWatch dashboard (and the key of its
+    // event stream in the console's store) — must be unique across monitored services.
+    opts.ServiceName = "Inventory";
+
     // Cross-BC messaging over RabbitMQ (ADR 003, slice 4.2). Aspire injects the "rabbitmq"
     // connection string via WithReference; conventional routing derives exchanges/queues from
     // message types (design.md decision 6). Inventory handles ReserveStock (auto-listened by
@@ -46,6 +51,12 @@ builder.Host.UseWolverine(opts =>
     opts.UseRabbitMqUsingNamedConnection("rabbitmq")
         .AutoProvision()
         .UseConventionalRouting();
+
+    // Metrics/health flow to the shared `critterwatch` queue; the console sends control
+    // commands (pause projections, DLQ replay, …) back on this service's private queue.
+    opts.AddCritterWatchMonitoring(
+        new Uri("rabbitmq://queue/critterwatch"),
+        new Uri("rabbitmq://queue/inventory-control"));
 
     opts.Policies.AutoApplyTransactions();
 });

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CritterMart.Catalog\CritterMart.Catalog.csproj" />
+    <ProjectReference Include="..\CritterMart.CritterWatch\CritterMart.CritterWatch.csproj" />
     <ProjectReference Include="..\CritterMart.Inventory\CritterMart.Inventory.csproj" />
     <ProjectReference Include="..\CritterMart.Orders\CritterMart.Orders.csproj" />
   </ItemGroup>

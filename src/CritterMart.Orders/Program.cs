@@ -4,6 +4,7 @@ using JasperFx.Events;
 using JasperFx.Events.Projections;
 using Marten;
 using Wolverine;
+using Wolverine.CritterWatch;
 using Wolverine.Http;
 using Wolverine.Marten;
 using Wolverine.RabbitMQ;
@@ -94,6 +95,16 @@ builder.Host.UseWolverine(opts =>
     opts.UseRabbitMqUsingNamedConnection("rabbitmq")
         .AutoProvision()
         .UseConventionalRouting();
+
+    // How this service identifies itself on the CritterWatch dashboard (and the key of its
+    // event stream in the console's store) — must be unique across monitored services.
+    opts.ServiceName = "Orders";
+
+    // Metrics/health flow to the shared `critterwatch` queue; the console sends control
+    // commands (pause projections, DLQ replay, …) back on this service's private queue.
+    opts.AddCritterWatchMonitoring(
+        new Uri("rabbitmq://queue/critterwatch"),
+        new Uri("rabbitmq://queue/orders-control"));
 
     opts.Policies.AutoApplyTransactions();
 

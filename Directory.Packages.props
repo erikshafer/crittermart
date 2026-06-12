@@ -25,6 +25,11 @@
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.8.0" />
   </ItemGroup>
+  <!-- CritterWatch monitoring console + per-service client (out-of-band trial; same Critter Stack 2026 line) -->
+  <ItemGroup>
+    <PackageVersion Include="CritterWatch" Version="0.9.1" />
+    <PackageVersion Include="Wolverine.CritterWatch" Version="0.9.1" />
+  </ItemGroup>
   <!-- API documentation (Swagger UI) -->
   <ItemGroup>
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />

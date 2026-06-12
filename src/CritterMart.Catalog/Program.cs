@@ -1,8 +1,10 @@
 using JasperFx.Events;
 using Marten;
 using Wolverine;
+using Wolverine.CritterWatch;
 using Wolverine.Http;
 using Wolverine.Marten;
+using Wolverine.RabbitMQ;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +31,22 @@ builder.Services.AddMarten(opts =>
 
 builder.Host.UseWolverine(opts =>
 {
+    // How this service identifies itself on the CritterWatch dashboard (and the key of its
+    // event stream in the console's store) — must be unique across monitored services.
+    opts.ServiceName = "Catalog";
+
+    // RabbitMQ solely as the CritterWatch telemetry channel — Catalog has no cross-BC
+    // message flows (no UseConventionalRouting on purpose). Aspire injects the "rabbitmq"
+    // connection string via WithReference.
+    opts.UseRabbitMqUsingNamedConnection("rabbitmq")
+        .AutoProvision();
+
+    // Metrics/health flow to the shared `critterwatch` queue; the console sends control
+    // commands (pause listeners, chaos monkey, …) back on this service's private queue.
+    opts.AddCritterWatchMonitoring(
+        new Uri("rabbitmq://queue/critterwatch"),
+        new Uri("rabbitmq://queue/catalog-control"));
+
     // Document write + audit-event append commit in one transaction.
     opts.Policies.AutoApplyTransactions();
 });

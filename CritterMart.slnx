@@ -8,6 +8,7 @@
     <Project Path="src/CritterMart.AppHost/CritterMart.AppHost.csproj" />
     <Project Path="src/CritterMart.Catalog/CritterMart.Catalog.csproj" />
     <Project Path="src/CritterMart.Contracts/CritterMart.Contracts.csproj" />
+    <Project Path="src/CritterMart.CritterWatch/CritterMart.CritterWatch.csproj" />
     <Project Path="src/CritterMart.Inventory/CritterMart.Inventory.csproj" />
     <Project Path="src/CritterMart.Orders/CritterMart.Orders.csproj" />
     <Project Path="src/CritterMart.ServiceDefaults/CritterMart.ServiceDefaults.csproj" />
