@@ -22,7 +22,7 @@ public record PaymentDecision(string OrderId, bool Approved, string? AuthCode, s
 // without polluting the domain payload with magic values (the chosen stub policy).
 public interface IPaymentProvider
 {
-    Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command);
+    public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command);
 }
 
 // Round-one stub: always approves, returning a synthetic "stub-…" auth code. The failure branch

@@ -1,4 +1,3 @@
-using Contracts = CritterMart.Contracts;
 using Alba;
 using CritterMart.Orders.Cart;
 using CritterMart.Orders.Features;
@@ -8,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Wolverine.Tracking;
 using Xunit;
+using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Orders.Tests;
 

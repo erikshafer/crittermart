@@ -1,5 +1,5 @@
-using Contracts = CritterMart.Contracts;
 using Marten;
+using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Orders.Order;
 

@@ -1,6 +1,6 @@
-using Contracts = CritterMart.Contracts;
 using CritterMart.Inventory.Stock;
 using Marten;
+using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Inventory.Features;
 
