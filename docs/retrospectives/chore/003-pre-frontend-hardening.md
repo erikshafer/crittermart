@@ -38,11 +38,14 @@ CrossBc 3); `dotnet format --verify-no-changes` passed on the existing codebase 
   at the spec layer.
 - **Folding CORS into `AddServiceDefaults`** kept the per-`Program.cs` change to a single `app.UseCors()`
   line in each — minimal, symmetric, and the same shape across all three services.
-- **Verifying the format gate passes before adding it.** Running `dotnet format --verify-no-changes`
-  first meant the gate lands green rather than as a red check the next contributor has to chase. A gate
-  added without that check would have been a trap.
 - **The AskUserQuestion fork** (audit & defer vs. implement now) kept the cart-gap decision with the
   owner instead of silently expanding scope into endpoint code mid-chore.
+- **The gate immediately earned its keep.** On the first CI run it caught pre-existing style drift the
+  project had accumulated with no gate to stop it (the maintainer's "we let it slide") — alias `using`
+  directives sorted first instead of last (`IMPORTS`) across ~17 earlier-slice files, and a missing
+  `public` on `IPaymentProvider.AuthorizeAsync` (`IDE0040`). Both fixed in-PR (the gate-unblock
+  exception), `.gitattributes` `* text=auto eol=lf` added for cross-platform parity. A gate that finds
+  real debt on day one is the gate working, not the gate failing.
 
 ## What was harder than expected
 
@@ -55,6 +58,12 @@ CrossBc 3); `dotnet format --verify-no-changes` passed on the existing codebase 
   app isn't built), so the config is forward-looking: a Dev fallback now, with the AppHost expected to
   inject the real origin via `Cors__AllowedOrigins__*` once `AddViteApp` lands. Resisting the urge to
   hardcode a guessed production origin kept this from becoming churn the frontend session must undo.
+- **The format gate passed locally but failed on CI.** The pre-merge check ran
+  `dotnet format --verify-no-changes`; CI ran `... --verify-no-changes --no-restore` after an explicit
+  `dotnet restore`. The near-equivalent command masked the failures. Reproducing the *byte-identical* CI
+  command locally surfaced them at once. Separately, `.editorconfig`'s `end_of_line = lf` plus Windows
+  `core.autocrlf=true` produced local-only `ENDOFLINE` noise that CI (Linux/LF) never sees — resolved by
+  the `.gitattributes` `* text=auto eol=lf` normalization so the gate is deterministic on both.
 
 ## Methodology refinements that emerged
 
@@ -66,6 +75,11 @@ CrossBc 3); `dotnet format --verify-no-changes` passed on the existing codebase 
   audit doc), consistent with the tidy-ceremony rule's "what the session writes, not how long it takes"
   test — even though `chore` is not `tidy`. The two purely-mechanical index bumps here rode along and
   did not, on their own, warrant ceremony.
+- **Verify a new CI gate with the byte-identical command it will run, not a near-equivalent.** When
+  introducing a `dotnet format` (or any) gate, run the exact CI invocation locally — flags and all
+  (`--no-restore` after an explicit `restore`) — before trusting it. And when a gate's correctness
+  depends on file bytes (line endings), pin them in `.gitattributes` so Windows and Linux agree;
+  otherwise the gate is non-deterministic across the contributors who run it.
 
 ## Outstanding items / next-session inputs
 
