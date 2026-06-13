@@ -22,7 +22,8 @@ graph LR
 
     Orders -->|"ReserveStock command via RabbitMQ"| Inventory
     Inventory -->|"StockReserved / StockReservationFailed events via RabbitMQ"| Orders
-    Orders -->|"OrderCancelled event via RabbitMQ"| Inventory
+    Orders -->|"ReleaseStock command via RabbitMQ"| Inventory
+    Orders -->|"CommitStock command via RabbitMQ"| Inventory
 
     Identity -.->|"customer ID (conformist)"| Catalog
     Identity -.->|"customer ID (conformist)"| Inventory
@@ -35,7 +36,7 @@ Solid edges are active round-one integrations over RabbitMQ. Dashed edges are co
 
 | Pair | Pattern | Upstream | Messages | Notes |
 | --- | --- | --- | --- | --- |
-| Orders ↔ Inventory | Customer-Supplier | Inventory | `ReserveStock` command from Orders; `StockReserved` and `StockReservationFailed` events back to Orders; `OrderCancelled` event from Orders to Inventory to release the reservation | Bidirectional event flow over RabbitMQ. Orders is the customer; Inventory is the supplier whose capacity gates fulfillment. |
+| Orders ↔ Inventory | Customer-Supplier | Inventory | `ReserveStock` command from Orders; `StockReserved` and `StockReservationFailed` events back to Orders; `ReleaseStock` command from Orders on cancellation; `CommitStock` command from Orders on confirmation | Bidirectional flow over RabbitMQ. Orders is the customer; Inventory is the supplier whose capacity gates fulfillment. Every terminal order state has an Inventory consequence: confirm → `CommitStock`, cancel → `ReleaseStock`. |
 | Identity → Catalog, Inventory, Orders | Conformist | Identity | None (no traffic in round one) | Identity is stubbed. The three deployed services accept a customer ID from the hardcoded model without translation. A conceptual relationship only; no active wire integration. |
 
 **Catalog has no BC-level integration with the other services in round one.** Product information flows through the frontend, which reads Catalog over HTTP and passes the relevant product fields into Cart commands. The Cart aggregate snapshots that product data at add-to-cart time. This is presentation-layer composition, not a bounded-context integration, and the talk acknowledges the distinction.

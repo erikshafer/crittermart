@@ -11,6 +11,7 @@ public class StockLevelView
     public string Id { get; set; } = string.Empty;
     public int Available { get; set; }
     public int Reserved { get; set; }
+    public int Committed { get; set; }
     public List<string> Reservations { get; set; } = [];
 }
 
@@ -34,6 +35,13 @@ public partial class StockLevelViewProjection : SingleStreamProjection<StockLeve
     {
         view.Available += e.Quantity;
         view.Reserved -= e.Quantity;
+        view.Reservations.Remove(e.OrderId);
+    }
+
+    public void Apply(StockCommitted e, StockLevelView view)
+    {
+        view.Reserved -= e.Quantity;
+        view.Committed += e.Quantity;
         view.Reservations.Remove(e.OrderId);
     }
 }

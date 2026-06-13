@@ -44,13 +44,15 @@ public class CrossBcReserveStockSmokeTests
         });
 
         // Place the order and wait for the full cross-broker round-trip to settle: ReserveStock
-        // out to Inventory, StockReserved back to Orders, recorded as the Klefter commit.
+        // out to Inventory, StockReserved back to Orders, then the approve path continues through
+        // CommitStock back to Inventory (slice 2.4). Wait for CommitStock — the chain's terminal
+        // message — so no outbound messages leak into the next test's tracking scope.
         var orderId = string.Empty;
         await _fixture.OrdersHost.TrackActivity()
             .AlsoTrack(_fixture.InventoryHost)
             .IncludeExternalTransports()
             .Timeout(TimeSpan.FromSeconds(60))
-            .WaitForMessageToBeReceivedAt<Contracts.StockReserved>(_fixture.OrdersHost)
+            .WaitForMessageToBeReceivedAt<Contracts.CommitStock>(_fixture.InventoryHost)
             .ExecuteAndWaitAsync((Func<IMessageContext, Task>)(async context =>
             {
                 var result = await _fixture.OrdersHost.Scenario(_ =>
@@ -71,11 +73,12 @@ public class CrossBcReserveStockSmokeTests
         var events = await session.Events.FetchStreamAsync(orderId);
         events.ShouldContain(e => e.Data is StockReserved);
 
-        // And Inventory really reserved the stock against the order.
+        // Inventory reserved AND committed the stock (the approve path runs through to CommitStock).
         var inventoryStore = _fixture.InventoryHost.Services.GetRequiredService<IDocumentStore>();
         await using var inventorySession = inventoryStore.LightweightSession();
         var stock = await inventorySession.LoadAsync<InventoryApp::CritterMart.Inventory.Stock.StockLevelView>("crit-001");
-        stock!.Reserved.ShouldBe(2);
-        stock.Available.ShouldBe(98);
+        stock!.Available.ShouldBe(98);
+        stock.Reserved.ShouldBe(0);
+        stock.Committed.ShouldBe(2);
     }
 }
