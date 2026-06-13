@@ -54,6 +54,23 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.SOLUTION }} --no-restore
 
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+      # Style gate: fails the build if any file deviates from .editorconfig. The codebase passed
+      # clean when this gate was added (chore: pre-frontend hardening) — independent of build/test
+      # so a formatting slip is reported on its own check, not buried in a test failure.
+      - name: Verify formatting
+        run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore
+
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest

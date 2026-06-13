@@ -1,10 +1,10 @@
-using Contracts = CritterMart.Contracts;
 using CritterMart.Orders.Cart;
 using CritterMart.Orders.Order;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine;
 using Wolverine.Http;
+using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Orders.Features;
 

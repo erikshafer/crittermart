@@ -1,7 +1,5 @@
 extern alias InventoryApp;
-
 using Alba;
-using Contracts = CritterMart.Contracts;
 using CritterMart.Orders.Cart;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Order;
@@ -11,6 +9,7 @@ using Shouldly;
 using Wolverine;
 using Wolverine.Tracking;
 using Xunit;
+using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.CrossBc.Tests;
 

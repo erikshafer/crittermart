@@ -1,3 +1,11 @@
+# Normalize all text files to LF on checkout so the `dotnet format` gate — and
+# every contributor — sees identical bytes on Windows and CI (Linux). The repo's
+# stored blobs are already LF (core.autocrlf normalized them on commit); this
+# rule fixes the *checkout* side so a Windows working tree (autocrlf=true → CRLF)
+# stops tripping the gate's end-of-line check. The binary types below override it
+# (no conversion); shell scripts keep their explicit LF rule.
+* text=auto eol=lf
+
 *.ico binary
 *.gif binary
 *.png binary
