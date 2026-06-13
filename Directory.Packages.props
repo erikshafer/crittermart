@@ -30,6 +30,12 @@
     <PackageVersion Include="CritterWatch" Version="0.9.1" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="0.9.1" />
   </ItemGroup>
+  <!-- CritterWatch 0.9.1 transitively pulls MessagePack 2.5.x, which has a high-severity
+       CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version bump
+       that would break CritterWatch. Suppress until an upstream CritterWatch update resolves it. -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
+  </ItemGroup>
   <!-- API documentation (Swagger UI) -->
   <ItemGroup>
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />
