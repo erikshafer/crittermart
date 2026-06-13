@@ -19,6 +19,7 @@ public static class Extensions
     {
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
+        builder.AddFrontendCors();
 
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http =>
@@ -77,6 +78,33 @@ public static class Extensions
     {
         builder.Services.AddHealthChecks()
             .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+
+        return builder;
+    }
+
+    // CORS for the round-two SPA. The Vite + React storefront calls each Wolverine.Http service
+    // directly over HTTP with no BFF (ADR 006 / ADR 015), so every service must opt the browser
+    // origin in or the cross-origin calls are blocked. Origins come from config ("Cors:AllowedOrigins",
+    // an array); the AppHost injects the real frontend origin once AddViteApp lands. Until then,
+    // Development falls back to the conventional Vite dev-server origin so the storefront works on a
+    // plain `dotnet run`. Identity is a hardcoded id carried in the request body (ADR 009) — no
+    // cookies — so credentials are not allowed, which keeps AllowAnyHeader/AllowAnyMethod safe.
+    public static TBuilder AddFrontendCors<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
+    {
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (origins is null or { Length: 0 })
+        {
+            origins = builder.Environment.IsDevelopment()
+                ? ["http://localhost:5173"]
+                : [];
+        }
+
+        builder.Services.AddCors(options =>
+            options.AddDefaultPolicy(policy =>
+                policy.WithOrigins(origins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()));
 
         return builder;
     }

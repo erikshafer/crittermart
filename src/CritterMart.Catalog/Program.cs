@@ -67,6 +67,11 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/", () => Results.Redirect("/swagger"));
 }
 
+// Apply the default CORS policy (origins from config; ServiceDefaults). Lets the round-two
+// SPA call this service's endpoints cross-origin (ADR 006/015). No-op for same-origin and
+// Origin-less requests (e.g. Alba integration tests), so it is safe in every host.
+app.UseCors();
+
 app.MapWolverineEndpoints();
 
 app.Run();

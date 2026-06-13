@@ -1,0 +1,43 @@
+# Dependabot keeps dependencies current so the manual bump commits (see git history:
+# Aspire / WolverineFx / OpenTelemetry / Microsoft.Extensions) become reviewed PRs instead.
+# NuGet versions are centralized in /Directory.Packages.props (Central Package Management);
+# Dependabot reads that file when the ecosystem is "nuget" with the repo-root directory.
+#
+# Updates are grouped by stack family so a week's bumps arrive as a few coherent PRs rather
+# than one-per-package noise — mirroring how these were bumped by hand. A frontend "npm"
+# ecosystem block is intentionally omitted until the Vite app lands (ADR 015); add it then.
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      critter-stack:
+        patterns:
+          - "WolverineFx*"
+          - "Marten*"
+          - "JasperFx*"
+          - "Weasel*"
+      aspire:
+        patterns:
+          - "Aspire*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry*"
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      test-stack:
+        patterns:
+          - "Microsoft.NET.Test.Sdk"
+          - "xunit*"
+          - "Shouldly"
+          - "Alba"
+          - "Testcontainers*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
