@@ -2,6 +2,8 @@
 
 **Status**: Accepted
 
+> **Realized by [ADR 017](017-critterwatch-integrated.md).** The deferral held and was honored — CritterWatch was integrated out of band once slices 4.2–4.7 produced cross-BC traffic worth monitoring. ADR 017 is the successor this ADR predicted; it records the actual integration and resolves the Open Question below (Trial tier, key in user-secrets, nuget.org-sourced so no private-feed CI break). This ADR's deferral reasoning stands as the historical record; it is not reversed.
+
 ## Context
 
 CritterWatch (JasperFx) is a monitoring console for Wolverine services — live node/agent/endpoint health, messaging topology, and operational state. Integration is two packages (`Wolverine.CritterWatch` in each monitored service, `CritterWatch` in a server project), the server needs its own PostgreSQL database (`Database=critterwatch`), and wiring is `opts.AddCritterWatchMonitoring(...)` in each service plus `builder.AddCritterWatch(...)` + `app.UseCritterWatch()` in the server, with .NET Aspire orchestration recommended for local dev. The installed `wolverine-integrations-critterwatch-setup` skill is the eventual playbook.
