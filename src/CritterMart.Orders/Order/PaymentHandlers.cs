@@ -28,46 +28,38 @@ public static class AuthorizePaymentHandler
 // the payment gate (stock_reserved). A duplicate decision, or one for an order already confirmed /
 // terminal / unknown, is a silent no-op (returns null, so nothing is appended and nothing cascades).
 //
-// Returns ReleaseStock? as a cascading message: the decline path returns the cross-BC release to
-// publish, while the approve and no-op paths return null (a null return suppresses the cascade —
-// verified against the Wolverine docs). ReleaseStock has no Orders-local handler, so conventional
-// routing carries it to Inventory over RabbitMQ (the same precedence that routes ReserveStock).
+// Returns a nullable tuple: exactly one of CommitStock (approve) or ReleaseStock (decline) is
+// non-null; guard/no-op paths return (null, null). Wolverine sees both types at code-gen time and
+// provisions outbound routing for each. Neither has a local handler, so conventional routing
+// carries both to Inventory over RabbitMQ. A null tuple member simply doesn't cascade.
 public static class PaymentDecisionHandler
 {
-    public static async Task<Contracts.ReleaseStock?> Handle(PaymentDecision message, IDocumentSession session)
+    public static async Task<(Contracts.CommitStock?, Contracts.ReleaseStock?)> Handle(
+        PaymentDecision message, IDocumentSession session)
     {
         var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
         if (stream.Aggregate?.Status != OrderStatus.StockReserved)
         {
-            return null; // not at the payment gate (already decided, terminal, or unknown) — ignore
+            return (null, null);
         }
 
         if (message.Approved)
         {
-            // Slice 4.3 Klefter grant: the authorized amount is the order's own total (the
-            // provider response is transient and not re-read — the stream is the source of truth).
             stream.AppendOne(new PaymentAuthorized(message.OrderId, message.AuthCode!, stream.Aggregate.Total));
-
-            // Slice 4.4 aggregate decision: the stock gate was already cleared (the guard above
-            // proved it) and payment is now authorized — both gates are closed, so the order
-            // confirms. Payment is always the second gate to close (it only starts after stock is
-            // reserved), so confirmation deterministically follows the grant in this same commit.
             stream.AppendOne(new OrderConfirmed(message.OrderId));
-            return null; // success path cascades nothing
+
+            var commitLines = stream.Aggregate.Lines
+                .Select(l => new Contracts.CommitStockLine(l.Sku, l.Quantity))
+                .ToList();
+            return (new Contracts.CommitStock(message.OrderId, commitLines), null);
         }
 
-        // Slice 4.6 decline branch (the 4.5 shape: append the failure commit, then cancel). Record
-        // the refusal, then make the order terminal with OrderCancelled { payment_declined } in the
-        // same commit. Unlike the 4.5 stock-failure cancel, stock WAS reserved before the payment
-        // gate was reached, so this path must release it: cascade ReleaseStock carrying the order's
-        // lines (read from the Order stream — the source of truth) to Inventory (slice 2.3). The
-        // guard above proved we are at the payment gate, so the reservation is guaranteed to exist.
         stream.AppendOne(new PaymentAuthFailed(message.OrderId, message.Reason ?? "declined"));
         stream.AppendOne(new OrderCancelled(message.OrderId, CancelReason.PaymentDeclined));
 
         var lines = stream.Aggregate.Lines
             .Select(l => new Contracts.ReleaseStockLine(l.Sku, l.Quantity))
             .ToList();
-        return new Contracts.ReleaseStock(message.OrderId, lines);
+        return (null, new Contracts.ReleaseStock(message.OrderId, lines));
     }
 }

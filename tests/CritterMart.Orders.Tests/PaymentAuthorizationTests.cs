@@ -47,7 +47,7 @@ public class PaymentAuthorizationTests
     }
 
     // Happy path: stock reserved → AuthorizePayment cascaded → stub approves → PaymentAuthorized
-    // (Klefter) → both gates closed → OrderConfirmed. The order reaches its terminal success state.
+    // (Klefter) → both gates closed → OrderConfirmed → CommitStock cascaded to Inventory.
     [Fact]
     public async Task an_approved_payment_authorizes_and_confirms_the_order()
     {
@@ -55,7 +55,7 @@ public class PaymentAuthorizationTests
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         var orderId = await SeedPlacedOrderAsync(store, "customer-X");
 
-        await _fixture.Host.InvokeMessageAndWaitAsync(new Contracts.StockReserved(orderId));
+        var tracked = await _fixture.Host.InvokeMessageAndWaitAsync(new Contracts.StockReserved(orderId));
 
         await using var session = store.LightweightSession();
 
@@ -69,7 +69,15 @@ public class PaymentAuthorizationTests
 
         var authorized = (PaymentAuthorized)events[2].Data;
         authorized.AuthCode.ShouldStartWith("stub-");
-        authorized.Amount.ShouldBe(Total); // the authorized amount is the order's own total
+        authorized.Amount.ShouldBe(Total);
+
+        // Slice 2.4: the confirm path now cascades CommitStock to Inventory (no local handler,
+        // so it is routed out — the tracked session captures it with transports stubbed).
+        var commit = tracked.Sent.SingleMessage<Contracts.CommitStock>();
+        commit.OrderId.ShouldBe(orderId);
+        commit.Lines.ShouldHaveSingleItem();
+        commit.Lines[0].Sku.ShouldBe(Plush.Sku);
+        commit.Lines[0].Quantity.ShouldBe(Plush.Quantity);
     }
 
     // Slice 4.6 decline-cancel: a declining provider records PaymentAuthFailed, then the aggregate
