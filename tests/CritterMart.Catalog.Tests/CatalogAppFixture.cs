@@ -18,11 +18,17 @@ public class CatalogAppFixture : IAsyncLifetime
 
     public IAlbaHost Host { get; private set; } = null!;
 
+    // The storefront origin the frontend-bootstrap PR pins (Vite dev server on 5173). Injected into
+    // config via the exact key the AppHost uses in production (Cors__AllowedOrigins__0) so the CORS
+    // preflight test asserts the real config-driven allowlist, not the Development fallback.
+    public const string SpaOrigin = "http://localhost:5173";
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
         Environment.SetEnvironmentVariable("ConnectionStrings__crittermart", _postgres.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", "amqp://guest:guest@localhost:5672");
+        Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", SpaOrigin);
         Host = await AlbaHost.For<Program>(x =>
             x.ConfigureServices(services => services.DisableAllExternalWolverineTransports()));
     }
@@ -37,6 +43,7 @@ public class CatalogAppFixture : IAsyncLifetime
         await _postgres.DisposeAsync();
         Environment.SetEnvironmentVariable("ConnectionStrings__crittermart", null);
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", null);
+        Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", null);
     }
 }
 

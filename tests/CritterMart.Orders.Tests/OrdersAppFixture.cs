@@ -18,6 +18,11 @@ public class OrdersAppFixture : IAsyncLifetime
 
     public IAlbaHost Host { get; private set; } = null!;
 
+    // The storefront origin the frontend-bootstrap PR pins (Vite dev server on 5173). Injected into
+    // config below via the exact key the AppHost uses in production (Cors__AllowedOrigins__0) so the
+    // CORS preflight test asserts the real config-driven allowlist, not the Development fallback.
+    public const string SpaOrigin = "http://localhost:5173";
+
     // Slice 3.4: the abandonment handler reads "now" from an injected TimeProvider so tests can
     // drive the clock across the inactivity window instead of waiting real time. This settable
     // provider overrides Program.cs's TimeProvider.System registration (last registration wins);
@@ -32,6 +37,7 @@ public class OrdersAppFixture : IAsyncLifetime
         // A dummy connection so UseRabbitMqUsingNamedConnection("rabbitmq") resolves at config
         // time; the transport is stubbed below, so nothing actually connects.
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", "amqp://guest:guest@localhost:5672");
+        Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", SpaOrigin);
         Host = await AlbaHost.For<Program>(x =>
             x.ConfigureServices(services =>
             {
@@ -50,6 +56,7 @@ public class OrdersAppFixture : IAsyncLifetime
         await _postgres.DisposeAsync();
         Environment.SetEnvironmentVariable("ConnectionStrings__crittermart", null);
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", null);
+        Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", null);
     }
 }
 

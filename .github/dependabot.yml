@@ -4,8 +4,9 @@
 # Dependabot reads that file when the ecosystem is "nuget" with the repo-root directory.
 #
 # Updates are grouped by stack family so a week's bumps arrive as a few coherent PRs rather
-# than one-per-package noise — mirroring how these were bumped by hand. A frontend "npm"
-# ecosystem block is intentionally omitted until the Vite app lands (ADR 015); add it then.
+# than one-per-package noise — mirroring how these were bumped by hand. The frontend "npm"
+# ecosystem block (client/, added once the Vite app landed in the frontend-bootstrap PR, ADR 015)
+# groups by frontend family the same way; the pins are caret-minor and the lockfile is committed.
 version: 2
 updates:
   - package-ecosystem: "nuget"
@@ -36,6 +37,42 @@ updates:
           - "Shouldly"
           - "Alba"
           - "Testcontainers*"
+
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      forms-validation:
+        patterns:
+          - "react-hook-form"
+          - "@hookform/*"
+          - "zod"
+      frontend-test-stack:
+        patterns:
+          - "vitest"
+          - "@testing-library/*"
+          - "jsdom"
+      build-tooling:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
+          - "@types/node"
 
   - package-ecosystem: "github-actions"
     directory: "/"

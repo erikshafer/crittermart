@@ -33,14 +33,14 @@ var critterwatch = builder.AddProject<Projects.CritterMart_CritterWatch>("critte
 
 // Catalog gains a RabbitMQ reference solely for CritterWatch telemetry — it still has no
 // cross-BC message flows of its own.
-builder.AddProject<Projects.CritterMart_Catalog>("catalog")
+var catalog = builder.AddProject<Projects.CritterMart_Catalog>("catalog")
     .WithReference(crittermart)
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
     .WaitFor(critterwatch);
 
-builder.AddProject<Projects.CritterMart_Inventory>("inventory")
+var inventory = builder.AddProject<Projects.CritterMart_Inventory>("inventory")
     .WithReference(crittermart)
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
@@ -49,11 +49,41 @@ builder.AddProject<Projects.CritterMart_Inventory>("inventory")
 
 // Orders is the second event-sourced service (Cart + Order aggregates, slices 3.1/4.1).
 // Slice 4.2 sends its first cross-BC RabbitMQ flow (Reserve stock) to Inventory.
-builder.AddProject<Projects.CritterMart_Orders>("orders")
+var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     .WithReference(crittermart)
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
     .WaitFor(critterwatch);
+
+// The round-two customer storefront SPA (ADR 015) — a Vite + React app launched as part of the Aspire
+// orchestration so one `dotnet run` boots the full stack with the frontend visible in the dashboard
+// (ADR 004). It is a flat app at client/ (the single round-one SPA). The dev-server port is pinned to
+// 5173 so its origin is deterministic — that exact origin is injected into each service's CORS
+// allowlist just below, and it is the value ServiceDefaults.AddFrontendCors already falls back to.
+//
+// Each service's base URL is injected as a VITE_-prefixed env var (ADR 018 — no BFF, no proxy): Vite
+// exposes VITE_* on import.meta.env, which src/config.ts reads and Zod-validates. There is deliberately
+// no Vite proxy — the SPA issues genuine cross-origin requests in dev exactly as in the demo, so the
+// cross-network OpenTelemetry trace boundary is exercised continuously.
+var storefront = builder.AddViteApp("storefront", "../../client")
+    .WithHttpEndpoint(port: 5173, name: "http")
+    .WithEnvironment("VITE_CATALOG_URL", catalog.GetEndpoint("http"))
+    .WithEnvironment("VITE_INVENTORY_URL", inventory.GetEndpoint("http"))
+    .WithEnvironment("VITE_ORDERS_URL", orders.GetEndpoint("http"))
+    .WaitFor(catalog)
+    .WaitFor(inventory)
+    .WaitFor(orders);
+
+// CORS-origin injection (ADR 018 — symmetric with the URL injection above; the AppHost is the single
+// source of truth for the cross-origin wiring). Each service reads Cors:AllowedOrigins via
+// ServiceDefaults.AddFrontendCors; injecting the storefront's endpoint as Cors__AllowedOrigins__0 binds
+// to that string[] at index 0. The services are declared before the storefront and never WaitFor it, so
+// there is no startup cycle — only a lazily-resolved endpoint reference flowing the other way. The
+// pinned 5173 port means the origin is known regardless of resolution order.
+var storefrontOrigin = storefront.GetEndpoint("http");
+catalog.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
+inventory.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
+orders.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
 
 builder.Build().Run();
