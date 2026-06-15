@@ -2,9 +2,9 @@
 workshop: 001
 title: CritterMart Round-One Rolled-Up Event Model
 scope: All four bounded contexts (Catalog, Inventory, Orders, Identity stubbed); round-one success criteria from vision.md
-status: Round-one complete; round-two frontend amendments pending (ADR 016)
-version: v1.7
-date: 2026-06-13
+status: Round-one complete; round-two frontend amendments in progress (ADR 016 — wireframe dimension + slice 3.5 landed)
+version: v1.8
+date: 2026-06-14
 participants: session-runner in solo multi-persona mode (Facilitator, Domain Expert, Architect, Backend Developer, Frontend Developer, QA, Product Owner, UX)
 references:
   - docs/vision.md
@@ -164,6 +164,7 @@ Per the skill's Structured Output Format, augmented with `Reads-from` and `Write
 | 3.2 | Remove item from cart                              | `RemoveCartItem`         | `CartItemRemoved`                                   | `CartView`                                    | Orders                    | Cart stream                                | Cart stream; `CartView`; refresh `CartActivityTimeout`                        | P0       |
 | 3.3 | Change cart item quantity                          | `ChangeCartItemQuantity` | `CartItemQuantityChanged`                           | `CartView`                                    | Orders                    | Cart stream                                | Cart stream; `CartView`; refresh `CartActivityTimeout`                        | P1       |
 | 3.4 | Abandon cart on inactivity (Bruun pattern)         | *(scheduled)* `CartActivityTimeout` self-message | `CartAbandoned`           | `CartAbandonmentReport` (async — see §8)      | Orders                    | `CartsAwaitingActivity*`; Cart stream      | Cart stream; `CartsAwaitingActivity*` row removed; `CartAbandonmentReport`    | P1       |
+| 3.5 | View my open cart *(round-two view slice)*         | *(query)*                | —                                                   | `CartView`                                    | Orders                    | `CartView` (resolved by `customerId` via the partial-unique open-cart index) | —                                                                             | P0       |
 | 4.1 | Place order from cart                              | `PlaceOrder`             | `OrderPlaced`; `CartCheckedOut`                     | `OrderStatusView` (awaiting confirmation)     | Orders                    | Cart stream; Catalog snapshot in command   | Order stream; Cart stream; `OrderStatusView`; `OrdersAwaitingPayment*` row added; `OrderPaymentTimeout` scheduled | P0       |
 | 4.2 | Reserve stock cross-BC                             | *(system)* outbound `ReserveStock` to Inventory; consumes `StockReserved` or `StockReservationFailed` back | `StockReserved` (Klefter local commit) OR `StockReservationFailed` (Klefter local commit) | `OrderStatusView` | Orders ↔ Inventory | Order stream | Order stream; `OrderStatusView`                                          | P0       |
 | 4.3 | Authorize payment (Klefter translation-decision)   | *(system)* outbound `AuthorizePayment` to stubbed provider | `PaymentAuthorized` (Klefter local commit) OR `PaymentAuthFailed` (Klefter local commit) | `OrderStatusView` | Orders | Order stream | Order stream; `OrderStatusView`                                                                                | P0       |
@@ -172,14 +173,129 @@ Per the skill's Structured Output Format, augmented with `Reads-from` and `Write
 | 4.6 | Cancel order on payment-auth failure               | *(aggregate decision)* on `PaymentAuthFailed` | `OrderCancelled` (reason: `payment_declined`) | `OrderStatusView` (cancelled) | Orders → Inventory | Order stream | Order stream; `OrderStatusView`; `OrdersAwaitingPayment*` row removed; outbound `OrderCancelled` to Inventory | P0       |
 | 4.7 | Cancel order on payment timeout (Bruun pattern)    | *(scheduled)* `OrderPaymentTimeout` self-message | `OrderCancelled` (reason: `payment_timeout`) | `OrderStatusView` (cancelled) | Orders → Inventory | Order stream; `OrdersAwaitingPayment*`     | Order stream; `OrderStatusView`; `OrdersAwaitingPayment*` row removed; outbound `OrderCancelled` to Inventory | P0       |
 
-**Slice count by BC.** Catalog: 3 (1 P2). Inventory: 4. Orders Cart: 4. Orders Place Order journey: 7. Total: 18.
+**Slice count by BC.** Catalog: 3 (1 P2). Inventory: 4. Orders Cart: 5 (incl. round-two view slice 3.5). Orders Place Order journey: 7. Total: 19.
 
-**Slice priority distribution.** P0: 15. P1: 2 (`ChangeCartItemQuantity` and `CartAbandoned`). P2: 1 (`ChangeProductPrice`).
+**Slice priority distribution.** P0: 16. P1: 2 (`ChangeCartItemQuantity` and `CartAbandoned`). P2: 1 (`ChangeProductPrice`).
 
 **Pattern citations in the table.**
 
 - Bruun temporal-automation pattern is cited on slice 3.4 (`CartAbandoned` via `CartsAwaitingActivity*`) and slice 4.7 (`OrderCancelled` via `OrdersAwaitingPayment*`). The asterisk suffix marks the todo-list projection as a Bruun temporal-automation source.
 - Klefter translation-decision pattern is cited on slices 4.2, 4.3, 4.5, 4.6: any time Orders commits an external decision (Inventory's refusal, the stubbed provider's response) as a local event on its own stream.
+
+---
+
+## 5.1 Wireframe Dimension (round-two frontend amendment, ADR 016)
+
+Round one under-ran Event Modeling's view half: § 3's storyboard named "two screens flank the timeline" without drawing them, and the § 5 table carried a `View` column (the read model a screen binds to) but no wireframe. [ADR 016](../decisions/016-frontend-full-pipeline-ui-first-class.md) makes the UI first-class and calls for a **proportional** amendment — the wireframe dimension plus sketches of the net-new view slices, *not* a per-slice re-draw. This subsection is that amendment.
+
+**Realized as a dimension subsection, not a literal column.** ADR 016's wording is "a `Wireframe` column is added to the slice table." The round-one § 5 table is already nine columns across eighteen rows, most of them system-, operator-, or seller-facing rows that carry no customer wireframe; widening it to a tenth column that reads `—` for two-thirds of its rows would cost readability for little gain. The dimension is instead expressed here as a focused **slice → screen map** plus the sketches. The deliberate column→subsection divergence is recorded in this session's retrospective.
+
+**The presentation-state guardrail (ADR 016) governs what is — and isn't — modeled here.** An interaction that **reads a domain fact** is a view/query slice with a wireframe (so slice 3.5 below is modeled). An interaction that **produces a domain fact** is already a command slice — it simply gains a wireframe attachment (slices 3.1–3.3, 4.1). **Pure presentation state** — a modal opening, pagination, a theme toggle, the cart-badge animation — is **not an event** and lives only in frontend code and Narrative 005, never on a stream.
+
+### Slice → screen map (customer-facing slices)
+
+| Slice | Customer screen | Wireframe | Reads | Produces (command) |
+| --- | --- | --- | --- | --- |
+| 1.2 Browse and view products | Browse / Listing | **W1** | `ProductCatalogView` | — *(query)* |
+| 3.1 Add item to cart | Browse / Listing (cart badge) | **W1 → W2** | `CartView` | `AddToCart` |
+| 3.2 Remove item · 3.3 Change quantity | Cart Review | **W2** | `CartView` | `RemoveCartItem` · `ChangeCartItemQuantity` |
+| **3.5 View my open cart** *(NEW)* | Cart Review | **W2** | `CartView` (by `customerId`) | — *(query)* |
+| 4.1 Place order from cart | Cart Review → Confirmation | **W2 → W3** | `CartView`, then `OrderStatusView` | `PlaceOrder` |
+| 4.2–4.7 order lifecycle (status only) | Order Status / Tracking | **W4** | `OrderStatusView` | — *(system; status is read, not driven)* |
+
+Round-one slices **not** in this map carry no customer wireframe by design: catalog management (1.1, 1.3) is the Seller's surface; stock (2.1–2.4) is the Operator's/system's; cart abandonment (3.4) and the order-lifecycle decisions (4.2–4.7) are system- or clock-driven (the customer sees only their *result*, as a `OrderStatusView` status on W4). The operator todo-lists (`OrdersAwaitingPayment*`, `CartsAwaitingActivity*`) are operator-facing and outside the customer storefront this pass.
+
+### W1 — Browse / Listing  *(slice 1.2; folds product-detail Gap #2)*
+
+```text
++----------------------------------------------------------+
+|  CritterMart                                 [ Cart (2) ] |
++----------------------------------------------------------+
+|  Products                                                |
+|                                                          |
+|  +--------------------+    +--------------------+         |
+|  | Cosmic Critter     |    | Nebula Newt        |         |
+|  | Plush              |    |                    |         |
+|  | crit-001           |    | crit-002           |         |
+|  | $24.99             |    | $18.00             |         |
+|  | "a plush gremlin"  |    | "a vinyl newt"     |         |
+|  | [  Add to cart  ]  |    | [  Add to cart  ]  |         |
+|  +--------------------+    +--------------------+         |
++----------------------------------------------------------+
+```
+
+- **reads** `ProductCatalogView` — `GET /products` direct from Catalog (no BFF, [ADR 006](../decisions/006-wolverine-http-per-service-no-bff.md)); Zod-parsed at the boundary before the app trusts it (ADR 015 R3).
+- **`[ Add to cart ]`** issues `AddToCart` (slice 3.1); the cart badge bumps optimistically and reconciles against a refetched `CartView` (ADR 015 R4 — the read model, never the optimistic guess, is the source of truth).
+- **product detail** is rendered from the list payload — there is no `GET /products/{sku}` (Gap #2, low; deep-linkable detail deferred). The stubbed customer id ([ADR 009](../decisions/009-polecat-deferred-for-round-one.md)) rides along but gates nothing — the catalog is public.
+
+### W2 — Cart Review  *(slice 3.5 reads the cart; slices 3.2/3.3 edit it; slice 4.1 checks out)*
+
+```text
++----------------------------------------------------------+
+|  CritterMart                                 [ Cart (2) ] |
++----------------------------------------------------------+
+|  Your cart                                               |
+|                                                          |
+|  Cosmic Critter Plush  crit-001  $24.99  [-] 2 [+]  [x]  |
+|  Nebula Newt           crit-002  $18.00  [-] 3 [+]  [x]  |
+|                                          -------------    |
+|                                  Total        $103.98    |
+|                                                          |
+|                                       [   Place Order  ] |
++----------------------------------------------------------+
+```
+
+- **reads** `CartView` **resolved by customer** — slice **3.5 (NEW)**: `GET /carts/mine` (identity carried per the ADR 009 seam) returns the customer's one open cart, or "no open cart." This is **Gap #1 / BLOCKING**: every cart *command* is customer-keyed (the server resolves the open cart), but the only round-one cart *read* is `GET /carts/{cartId}` — so on a **cold load** the SPA, holding only the stubbed customer id, has no `cartId` and cannot render this screen. Slice 3.5 closes that, exposing the existing `CartView` over the existing partial-unique open-cart index (`Orders/Program.cs:74`). No new event.
+- **`[-]` / `[+]`** issue `ChangeCartItemQuantity` (slice 3.3); **`[x]`** issues `RemoveCartItem` (slice 3.2) — both optimistic, both reconciling against the refetched `CartView`. Quantity never re-prices; the snapshot price holds (Narrative 004, Moment 1A).
+- **empty cart stays open**: removing every line keeps it as the customer's open cart, just empty — the one thing it cannot do is `PlaceOrder` (`CartEmpty`).
+- **`[ Place Order ]`** issues `PlaceOrder` (slice 4.1) → W3.
+
+### W3 — Order Confirmation  *(slice 4.1 payoff)*
+
+```text
++----------------------------------------------------------+
+|  CritterMart                                 [ Cart (0) ] |
++----------------------------------------------------------+
+|                                                          |
+|        Order placed.                                     |
+|                                                          |
+|        Order    ord-7f3a                                 |
+|        Status   awaiting confirmation   (o)              |
+|        Total    $103.98                                  |
+|                                                          |
+|        [  Track this order  ]                            |
+|                                                          |
++----------------------------------------------------------+
+```
+
+- **returned by** the `PlaceOrder` response `{ orderId, status }` (slice 4.1).
+- **status is `awaiting_confirmation`** — an *honest* pending state, **not** a faked "confirmed." Unlike a cart edit (W2), placement cannot be optimistically resolved: it kicks off the cross-BC reserve-stock + authorize-payment process whose outcome the SPA does not yet know. This is the one beat where optimism stops and the SPA waits for server truth.
+- **cart badge resets to 0** — the checked-out cart is no longer the customer's open cart (a fresh one starts on the next `AddToCart`).
+- **the trace beat**: this `POST /orders` is the *front door* of the OpenTelemetry cross-service trace the talk demonstrates (ADR 015 § Consequences / vision success criterion) — the real HTTP hop from SPA into Orders, before the broker fan-out to Inventory.
+- **`[ Track this order ]`** → W4.
+
+### W4 — Order Status / Tracking  *(reads `OrderStatusView`; single order)*
+
+```text
++----------------------------------------------------------+
+|  CritterMart                                 [ Cart (0) ] |
++----------------------------------------------------------+
+|  Order  ord-7f3a                                         |
+|                                                          |
+|  Status   confirmed                                      |
+|           awaiting -> stock reserved -> confirmed        |
+|  Placed   2026-06-14 14:02 UTC                           |
+|                                                          |
+|  Cosmic Critter Plush  crit-001   x2          $49.98     |
+|  Nebula Newt           crit-002   x3          $54.00     |
+|                                   Total      $103.98     |
++----------------------------------------------------------+
+```
+
+- **reads** `OrderStatusView` — `GET /orders/{orderId}`, which exists today (the audit's ✅ row); single-order tracking needs no new slice.
+- **status walks** `awaiting_confirmation → stock_reserved → confirmed`, or settles on `cancelled` by one of three reasons — `stock_unavailable`, `payment_declined`, `payment_timeout` (the three failure routes of Narrative 004, Moments 3 / 5 / 6).
+- **no live push** round one (no SignalR — ADR 015, explicitly unlike CritterBids): the status converges by TanStack Query refetch/poll, never a socket.
+- **"My Orders" list** (`GET /orders?customerId=`) is **Gap #3** — named and deferred; single-order tracking covers the round-two storefront.
 
 ---
 
@@ -345,6 +461,20 @@ The `Given` clauses reference events already on the relevant stream (preconditio
 
 > **Amendment (v1.5, 2026-06-02 — realized in slice 3.4, PR #41).** Five notes on how this slice shipped. **(1) § 8 open question 1 is resolved as fire-and-check — and contained a factual error.** The open question's claim that "Wolverine supports both" scheduling policies is wrong: ctx7 verification against Wolverine's documentation established there is **no API to cancel or remove a pending scheduled envelope**, so literal cancel-and-reschedule was never implementable. **(2) The GWT label and the GWT behavior disagreed — the behavior wins.** § 8 said these GWTs "assume cancel-and-reschedule," but the failure path above ("activity intervened → reschedule *when the timeout fires*") describes fire-and-check; the shipped behavior matches the GWTs as written. One `CartActivityTimeout` is scheduled at cart creation; when it fires, the handler reads the Cart stream's fold (`CartView.LastActivityAt`) and either abandons, reschedules to `lastActivity + window`, or no-ops on a terminal cart. **(3) `CartAbandoned` is fatter than modeled**: `{ reason }` → `{ reason, lines, totalValue }` — the `CartAbandonmentReport` multi-stream projection can only fold what is on the events it consumes, and the handler already holds the folded cart (the same "record the decision with the data it was made on" idiom as `OrderPlaced.lines`). **(4) The slice-table "refresh `CartActivityTimeout`" writes-to clauses on rows 3.2/3.3 dissolve rather than land**: under fire-and-check, the edit events' append timestamps *are* the refresh — the 3.2/3.3 edit handlers were not touched (the deferral slices 3.1/3.2/3.3 carried resolves to "no code needed"). **(5) The report's shape is an implementation decision the § 7 sketch left open**: a daily rollup keyed by UTC calendar day (`Identity<IEvent<CartAbandoned>>` on the timestamp's date), folding count + total value + per-SKU tallies; registered async with **no daemon** (rebuild-on-demand only, ADR 008's strictest reading). Durable spec: `openspec/specs/shopping-cart/spec.md` (7 requirements); rationale: archived change `slice-3-4-cart-abandonment/design.md` Decisions 1–8 + faithfulness notes 1–5; see also `docs/narratives/004-customer-purchase.md` (Moment 1B) and `docs/retrospectives/implementations/013-slice-3-4-cart-abandonment.md`. **The Orders BC — and round one's modeled implementation set — is complete.**
 
+### 3.5 View my open cart — *(query)*  *(round-two view slice, ADR 016)*
+
+**Happy path.**
+- **Given** an open cart exists for `customer-X` — its Cart stream shows `CartCreated`, `CartItemAdded { crit-001 }`, `CartItemAdded { crit-002 }` (none of `CartCheckedOut` / `CartAbandoned`).
+- **When** the customer's storefront requests their open cart (`GET /carts/mine`, the customer carried by identity — the stubbed customer id per [ADR 009](../decisions/009-polecat-deferred-for-round-one.md)'s `useCurrentCustomer` seam; query-param vs. header is the slice's OpenSpec/implementation call).
+- **Then** the single open `CartView` for `customer-X` is returned — two SKU-keyed lines at their snapshot prices, with the cart total — resolved by `customerId` through the partial-unique open-cart index (`Orders/Program.cs:74`). **No new event** is appended.
+
+**Edge — no open cart (cold start, or last cart already terminal).**
+- **Given** `customer-X` has no open cart: either they never created one, or their most recent cart is `CartCheckedOut` (placed an order) or `CartAbandoned`.
+- **When** the storefront requests their open cart.
+- **Then** the query resolves to "no open cart" (`404` / empty) — *not* an error condition. The storefront renders an empty cart; the next `AddToCart` (slice 3.1) starts a fresh stream.
+
+**Note.** A pure query slice — no command, no event, no failure-of-write path; the read counterpart to the customer-keyed *write* side every cart command already uses (slices 3.1–3.3). It exposes the existing `CartView` projection over the existing open-cart index *by customer identity* rather than *by `cartId`*, closing **Gap #1** from the [pre-frontend endpoint audit](../research/pre-frontend-endpoint-audit.md) — the one blocking gap, because without it the cart-review screen (wireframe **W2**, § 5.1) cannot render on a cold load. The wireframe and the on-screen journey are in § 5.1 and [Narrative 005](../narratives/005-customer-storefront.md); the OpenSpec proposal and implementation are a later session.
+
 ### 4.1 Place order from cart — `PlaceOrder`
 
 **Happy path.**
@@ -509,3 +639,4 @@ Items the Architect, QA, Product Owner, and Domain Expert voices surfaced but di
 | v1.5    | 2026-06-02 | `tidy: docs` amendment after slice 3.4 shipped (PR #41). Amended § 6.1 (slice 3.4 GWTs) + § 8 (open question 1): (1) **scheduling policy resolved as fire-and-check, with a factual correction** — Wolverine has no scheduled-message cancellation API, so "Wolverine supports both" was wrong and cancel-and-reschedule was never implementable; the GWT scenarios as written described fire-and-check all along (the § 8 label was wrong, not the GWTs); (2) `CartAbandoned` ships fat (`{ reason, lines, totalValue }`) so the daily report can fold without cross-stream lookups; (3) the 3.2/3.3 "refresh `CartActivityTimeout`" clauses **dissolve** — edit-event timestamps are the refresh, no code needed; (4) the `CartAbandonmentReport` ships as a daily rollup (UTC-day keyed `MultiStreamProjection`), registered async with no daemon, rebuild-on-demand only (ADR 008). **The Orders BC — and round one's modeled implementation set — is complete: every modeled slice has shipped.** Realized in `openspec/specs/shopping-cart/spec.md` (7 requirements) + retrospective 013. Slice table (§5) left at the model-level intent intentionally. |
 | v1.6    | 2026-06-13 | Amendment for slice 2.4 — commit reserved stock on order confirmation. Added slice 2.4 to § 5 (Inventory: 3→4, Total: 17→18, P0: 14→15). Added § 6.1 GWT scenarios for 2.4 (happy path + duplicate/no-reservation idempotent no-ops). Resolved § 8 open question 2 as **no** (no symmetric cancel on stock-failure — no reservation exists to release or commit) and open question 3 as **yes, shipped** (`StockCommitted` event, `CommitStock` published-language command, `Committed` counter on `StockLevelView`). The Stock stream's reservation lifecycle is now complete: every `StockReserved` reaches a terminal event (`StockReleased` or `StockCommitted`). |
 | v1.7    | 2026-06-13 | **Round-one close marker** (`docs:` reconciliation, PR-pending). No model change — frontmatter reconciliation only: `status` Draft → "Round-one complete; round-two frontend amendments pending (ADR 016)" and `date` 2026-05-26 (the v1.0 date) → 2026-06-13 (the latest amendment), which had drifted behind this very history. **Round one is complete: all 18 modeled slices have shipped** (the original 17 plus slice 2.4) across Catalog (1.1–1.3), Inventory (2.1–2.4), Cart (3.1–3.4), and Order (4.1–4.7); each traces to an OpenSpec capability and a retro. This workshop is **not frozen** — round two amends it per [ADR 016](../decisions/016-frontend-full-pipeline-ui-first-class.md): a `Wireframe` column on the § 5/§ 6 slice table and net-new `event → projection → wireframe` view slices (the first being open-cart-by-customer, provisional slice 3.5, per the pre-frontend endpoint audit). Reconciled in the same session that authored [ADR 017](../decisions/017-critterwatch-integrated.md) + the `wolverine-cross-bc-cascading` skill + retrospective `docs/011`. |
+| v1.8    | 2026-06-14 | **First round-two frontend amendment** (ADR 016 frontend-mode entry, narratives/005 PR). Added net-new **view slice 3.5 "View my open cart"** to § 5 (Orders Cart 4→5, Total 18→19, P0 15→16) and its § 6 GWT (happy path + no-open-cart edge) — a customer-keyed read of the existing `CartView` over the existing open-cart index, **no new event**, closing **Gap #1** (the one *blocking* read-model gap from the [pre-frontend endpoint audit](../research/pre-frontend-endpoint-audit.md)). Added **§ 5.1 Wireframe Dimension**: the presentation-state guardrail restated, a customer-facing slice→screen map, and four ASCII wireframes **W1** Browse / **W2** Cart Review / **W3** Order Confirmation / **W4** Order Status — proportional per ADR 016, *not* a per-slice re-draw. The ADR's `Wireframe` *column* is realized as a *dimension subsection* (the frozen nine-column § 5 table is left intact); the divergence is recorded in retrospective `narratives/005`. Sibling artifact: [Narrative 005](../narratives/005-customer-storefront.md) (the screen lens of this dimension). No OpenSpec proposal and no code — slice 3.5's proposal + implementation are the next session. |
