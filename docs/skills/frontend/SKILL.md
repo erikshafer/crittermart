@@ -9,7 +9,7 @@ tags: [frontend, react, vite, tanstack-query, tanstack-router, zod, shadcn, cors
 
 How CritterMart's round-two storefront SPA is built, and the project-specific stances that the per-library skills cannot carry. The ADRs are the authority for *why*; this skill is the *how* a session-runner needs in seconds. When this skill and the code disagree, the code wins and this skill gets a DEBT row.
 
-> **Status: v1 seed.** Authored alongside the **first frontend-touching slice — 3.5 "View my open cart"** ([`openspec/changes/.../slice-3-5-view-open-cart`]), which is a *backend read endpoint* (`GET /carts/mine`). At authoring time `client/` does not yet exist — the Vite app, Aspire `AddViteApp` wiring, and the W2 cart-review screen land in a dedicated **frontend-bootstrap PR**. This seed records the conventions the ADRs already lock plus the one concrete integration slice 3.5 establishes (how the SPA reads the open cart). It is fleshed out — with real `client/` file references replacing the `[planned]` markers below — as components land. Treat `[planned]` items as decided conventions awaiting their first code precedent, not as open questions.
+> **Status: v2 — bootstrap landed.** The seed was authored alongside slice 3.5's backend read (`GET /carts/mine`) before any client code existed; the **frontend-bootstrap PR** then stood up `client/` (the flat single-app Vite SPA), the Aspire `AddViteApp` wiring, and the CORS-origin injection. This version converges the seed's former `[planned]` markers onto the real files: `client/src/config.ts` (the three Zod-validated service URLs), `client/src/api/client.ts` (the shared fetch — `X-Customer-Id` header + boundary parse), `client/src/identity/useCurrentCustomer.tsx` (the seam), `client/src/router.tsx` (code-based router), `client/package.json` + committed `client/package-lock.json` (the pins). What is still ahead, not yet in code: the **W2 cart-review screen** that consumes `GET /carts/mine` (the first screen slice) and its `CartViewSchema` — those land with the screen slices, and this skill gains their references then. When this skill and the code disagree, the code wins and this skill gets a DEBT row.
 
 **Defer-to-upstream discipline.** The installed per-library skills own the *library* mechanics: **`tanstack-query-best-practices`** (query/mutation APIs, cache keys), **`zod`** (schema authoring), **`shadcn`** + **`tailwind`** (components, v4 styling), **`react-hook-form`** (forms), **`vercel-react-best-practices`** / **`vercel-composition-patterns`** (React structure), **`web-design-guidelines`** (a11y/UX review). This skill documents only what CritterMart layers on top — the pins, the three-surface Zod boundary, the optimistic-UI contract, the identity seam, and the no-BFF/CORS posture. Do not consult this skill for library APIs; do not consult the library skills for the CritterMart convention.
 
@@ -34,7 +34,7 @@ The stack is pinned to the version line both sibling projects (CritterBids, MmoR
 | Node | `≥22` | shadcn/ui companions | `class-variance-authority`, `clsx`, `tailwind-merge` |
 | forms | `react-hook-form` + `@hookform/resolvers` | | |
 
-When a new dependency is added, pin it to a caret-minor range and commit the lockfile in the same PR. Do not bump the majors above without an ADR amendment — the pins are a cross-repo agreement, not a default.
+The pins are realized in `client/package.json` with the committed `client/package-lock.json` (and `@types/node` for the Vite config). When a new dependency is added, pin it to a caret-minor range and commit the lockfile in the same PR. Do not bump the majors above without an ADR amendment — the pins are a cross-repo agreement, not a default. (`react-hook-form` + `@hookform/resolvers` are pinned now; they gain their first consumer with the first form-bearing command slice.)
 
 ## Convention 2 — Zod at every one of the three wire boundaries ([ADR 015](../../decisions/015-vite-react-frontend-stack.md) R3)
 
@@ -61,10 +61,12 @@ Identity is the round-one stub: a hardcoded customer id behind a single React se
 How the id reaches the services (established by slice 3.5): the seam's value is set **once** on the shared HTTP client as the **`X-Customer-Id` header** — not appended per-call as a query param, and not placed in routes. Customer-keyed reads/commands then carry identity ambiently:
 
 ```ts
-// [planned] the shared fetch client sets identity once
-headers['X-Customer-Id'] = useCurrentCustomer();
-// the open-cart read (slice 3.5) then needs no per-call id:
-const res = await fetch(`${ordersBaseUrl}/carts/mine`);   // 200 → CartView, 404 → no open cart
+// client/src/api/client.ts — the shared fetch sets identity once from the seam (no per-call id):
+const ctx = useApiContext();                       // { customerId } sourced from useCurrentCustomer()
+const cart = await fetchParsed(`${serviceUrls.ordersUrl}/carts/mine`, CartViewSchema, ctx);
+// fetchParsed sets the X-Customer-Id header, then Zod-parses the body at the boundary.
+// 200 → CartView · 404 → throws NotFoundError ("no open cart", a domain state) · 400 → seam misfired.
+// (CartViewSchema is added by the W2 screen slice; fetchParsed + the header seam exist today.)
 ```
 
 Why ambient-header over a `?customerId=` query param: the route already says `/carts/mine`, so identity should not be restated in the URL, and the header is the closest round-one stand-in for the authenticated claim **Polecat** will eventually provide. The promotion is then a **localized swap** — the header becomes a `Bearer` token / claim, call sites unchanged — not a sweep that removes a param from every caller. (The server side resolves the open cart from this identity; see `src/CritterMart.Orders/Features/ViewMyCart.cs`.)
@@ -75,13 +77,13 @@ Why ambient-header over a `?customerId=` query param: the route already says `/c
 
 The SPA calls the three services **directly, cross-origin, in every environment**. There is **no BFF** ([ADR 006](../../decisions/006-wolverine-http-per-service-no-bff.md)) and **no Vite dev-server proxy** ([ADR 018](../../decisions/018-frontend-three-services-cors-posture.md)).
 
-- Each service's base URL is read from **Aspire-injected configuration** (env vars injected into the SPA resource by `AddViteApp`, [ADR 004](../../decisions/004-dotnet-aspire-orchestrator.md)) — never hard-coded, never assumed same-origin.
+- Each service's base URL is read from **Aspire-injected configuration** — `AddViteApp` injects `VITE_CATALOG_URL` / `VITE_INVENTORY_URL` / `VITE_ORDERS_URL` into the SPA resource ([ADR 004](../../decisions/004-dotnet-aspire-orchestrator.md); `src/CritterMart.AppHost/Program.cs`), which `client/src/config.ts` reads off `import.meta.env` and **Zod-validates at startup** (Convention 2 at the config boundary). Standalone `npm run dev` falls back to the services' launchSettings ports (5101/5102/5103). Never hard-coded, never assumed same-origin.
 - Because there is no proxy, dev issues **genuine cross-origin requests** exactly like prod — so the cross-network OpenTelemetry boundary (a hard success criterion) is exercised in dev, and a misconfigured CORS allowlist surfaces as a browser CORS error at the cheapest moment.
-- A new SPA origin (e.g. a new dev port) must be added to each service's `Cors:AllowedOrigins`. This is the honest cost of a no-BFF, three-service frontend; do not reach for a proxy to dodge it (that was the rejected CritterBids shape).
+- The CORS wiring is **symmetric with the URL injection**: the AppHost injects the storefront's origin into each service's `Cors:AllowedOrigins` (as `Cors__AllowedOrigins__0`), so it is the single source of truth for both directions. The dev port is pinned to `5173`, the value `ServiceDefaults.AddFrontendCors` already falls back to. A new SPA origin is added there, not via a proxy (that was the rejected CritterBids shape). The allowlist is asserted per service — `tests/CritterMart.{Catalog,Inventory,Orders}.Tests/CorsPolicyTests.cs`.
 
 ## Convention 6 — TanStack Router, code-based; presentation state stays off the event stream
 
-- **Routing is TanStack Router, wired code-based** (no route-tree codegen) — chosen for shared lineage with the already-accepted TanStack Query and type-safe routes + search-params-as-state, at the storefront's small route count ([ADR 015](../../decisions/015-vite-react-frontend-stack.md) amendment ¶2).
+- **Routing is TanStack Router, wired code-based** (no route-tree codegen) — chosen for shared lineage with the already-accepted TanStack Query and type-safe routes + search-params-as-state, at the storefront's small route count ([ADR 015](../../decisions/015-vite-react-frontend-stack.md) amendment ¶2). The route tree is composed in `client/src/router.tsx` (`createRootRoute` + `createRoute` + `createRouter`, with the `Register` module augmentation for typed `Link`s); screen slices add their routes there.
 - **Presentation-state guardrail** ([ADR 016](../../decisions/016-frontend-full-pipeline-ui-first-class.md)): an interaction that **reads** a domain fact is a view/query slice (modeled), one that **produces** a domain fact is a command slice (modeled); **pure presentation state** — modal open, pagination cursor, theme toggle, the cart-badge tween — is **not an event** and lives only in frontend code (and, where it matters to the journey, in [Narrative 005](../../narratives/005-customer-storefront.md)). Never mint a domain event for presentation state.
 
 ## Pipeline Integration
@@ -108,3 +110,4 @@ The frontend runs the **full SDD pipeline** like every backend slice ([ADR 016](
 - [Narrative 005](../../narratives/005-customer-storefront.md) — the screen-lens journey through W1–W4.
 - [pre-frontend endpoint audit](../../research/pre-frontend-endpoint-audit.md) — the read-model gaps and build order.
 - `src/CritterMart.Orders/Features/ViewMyCart.cs` — the slice 3.5 server side this skill's Convention 4 example consumes.
+- `client/` — the storefront SPA. Entry points: `src/config.ts` (Aspire-injected service URLs, Zod-validated), `src/api/client.ts` (shared fetch — header seam + boundary parse), `src/identity/useCurrentCustomer.tsx` (the ADR 009 seam), `src/router.tsx` (code-based router), `client/README.md` (run + layout). The Aspire wiring is in `src/CritterMart.AppHost/Program.cs` (`AddViteApp` + CORS injection).

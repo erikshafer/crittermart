@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode — Vite owns emit; tsc is type-check only (the `build` script runs `tsc --noEmit`). */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Strict (ADR 015 amendment — TypeScript ^6, strict). */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    /* The `@/*` alias mirrors vite.config.ts's resolve.alias. TS6 resolves `paths` relative to this
+       tsconfig, so no (now-deprecated) baseUrl is needed. */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* node — for vite.config.ts (node:url); vitest/jest-dom — test matchers; vite/client — env typings. */
+    "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

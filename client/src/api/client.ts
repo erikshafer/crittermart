@@ -1,0 +1,74 @@
+import type { ZodType } from "zod";
+
+import { useCurrentCustomer } from "@/identity/useCurrentCustomer";
+
+// The shared HTTP client for the three Wolverine.Http services. Two CritterMart conventions live here:
+//
+//  - **Convention 4 — the X-Customer-Id header.** Every request carries the current customer's identity
+//    ambiently in this header, sourced from the useCurrentCustomer seam (ADR 009). The header name is
+//    the single Polecat-promotion swap point; call sites never restate identity in URLs or query params.
+//
+//  - **Convention 2 — Zod at the wire boundary.** Every response body is `parse()`d through a Zod schema
+//    before the app trusts it. Three independently-deployed services (ADR 006, no BFF) are three
+//    contract surfaces that can drift; the boundary parse is the only place a drift surfaces — loud and
+//    located, never a silent `undefined` deep in a component.
+export const CUSTOMER_ID_HEADER = "X-Customer-Id";
+
+// A non-2xx response. `NotFoundError` is split out because `404` is frequently a *domain state*, not a
+// failure — e.g. `GET /carts/mine` 404s as "this customer has no open cart" (render an empty cart), and
+// a query can map that to data rather than an error boundary.
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export class NotFoundError extends ApiError {
+  constructor(url: string) {
+    super(`Resource at ${url} was not found.`, 404);
+    this.name = "NotFoundError";
+  }
+}
+
+export interface RequestContext {
+  /** The current customer's id — set on the X-Customer-Id header. Sourced from the identity seam. */
+  customerId: string;
+}
+
+// Fetch a JSON resource, set the identity header, and parse the body through `schema`. Pure (no React),
+// so query/mutation factories can call it and tests can drive it with a literal context + mocked fetch.
+// A `404` throws `NotFoundError` so callers can branch on the domain-empty case; any other non-2xx
+// throws `ApiError`.
+export async function fetchParsed<T>(
+  url: string,
+  schema: ZodType<T>,
+  ctx: RequestContext,
+): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      [CUSTOMER_ID_HEADER]: ctx.customerId,
+    },
+  });
+
+  if (response.status === 404) {
+    throw new NotFoundError(url);
+  }
+  if (!response.ok) {
+    throw new ApiError(`Request to ${url} failed with ${response.status}.`, response.status);
+  }
+
+  return schema.parse(await response.json());
+}
+
+// The React binding: builds the per-request context from the identity seam. Components and query hooks
+// call this to get the `RequestContext` they hand to `fetchParsed`, so identity always flows from the
+// one seam and never from a hardcoded value.
+export function useApiContext(): RequestContext {
+  const customerId = useCurrentCustomer();
+  return { customerId };
+}
