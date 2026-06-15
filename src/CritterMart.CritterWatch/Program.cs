@@ -20,10 +20,14 @@ var postgresConnection = builder.Configuration.GetConnectionString("critterwatch
 // silently falls back to the read-only Free tier.
 builder.AddCritterWatch(postgresConnection, opts =>
     {
-        // Same broker the services publish telemetry to. Dead-letter queueing is disabled for
-        // the console's own traffic — telemetry is fire-and-forget, not worth DLQ ceremony.
+        // Same broker the services publish telemetry to. Dead-letter queueing is left at the
+        // Wolverine default ON: the console and the monitored services BOTH declare the shared
+        // `critterwatch` queue, and RabbitMQ rejects a redeclare with inequivalent args. The
+        // services declare it with the default x-dead-letter-exchange, so the console must match
+        // or whichever side starts second dies with PRECONDITION_FAILED (a 406). Do NOT add
+        // .DisableDeadLetterQueueing() here — telemetry being fire-and-forget is not worth a
+        // queue-arg collision; the resulting wolverine-dead-letter-queue is harmless.
         opts.UseRabbitMq(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://localhost"))
-            .DisableDeadLetterQueueing()
             .AutoProvision();
 
         // The well-known queue every monitored service sends metrics/events to. Sequential —
