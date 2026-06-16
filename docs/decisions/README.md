@@ -52,6 +52,7 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [016](016-frontend-full-pipeline-ui-first-class.md) | Frontend Modeled Through the Full Pipeline — UI First-Class in the Event Model | Accepted |
 | [017](017-critterwatch-integrated.md) | CritterWatch Integrated — Out-of-Band Trial, Single-Node, nuget.org-Sourced | Accepted |
 | [018](018-frontend-three-services-cors-posture.md) | Frontend-to-Three-Services Dev-Server + CORS Posture | Accepted |
+| [019](019-wolverine-health-checks-exposed.md) | Wolverine Runtime Health Exposed via ASP.NET Health Checks | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 

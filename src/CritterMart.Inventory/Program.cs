@@ -4,6 +4,7 @@ using JasperFx.Events.Projections;
 using Marten;
 using Wolverine;
 using Wolverine.CritterWatch;
+using Wolverine.HealthChecks;
 using Wolverine.Http;
 using Wolverine.Marten;
 using Wolverine.RabbitMQ;
@@ -63,6 +64,16 @@ builder.Host.UseWolverine(opts =>
 
 builder.Services.AddWolverineHttp();
 
+// Expose the Wolverine runtime + listener health to ASP.NET health checks (ADR 019). The bus check
+// ("wolverine") reports whether the runtime started and is uncancelled; the listener check
+// ("wolverine-listeners") reflects listener state (accepting / too-busy / latched / stopped). This
+// is what CritterWatch's per-service "Health checks" panel reads — and it makes the console's
+// chaos-monkey listener latching surface as a health change. Registered after UseWolverine per the
+// WolverineFx.HealthChecks guidance.
+builder.Services.AddHealthChecks()
+    .AddWolverine()
+    .AddWolverineListeners();
+
 // Swagger UI over the (OpenAPI-described) Wolverine.Http endpoints — a demo/devex affordance.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -83,6 +94,11 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 
 app.MapWolverineEndpoints();
+
+// Map /health (all checks) and /alive (liveness-tagged). ServiceDefaults defines these but no
+// service called them before (ADR 019); dev-only by the standard Aspire posture. The Wolverine
+// checks registered above reach CritterWatch over its telemetry channel regardless of this HTTP map.
+app.MapDefaultEndpoints();
 
 app.Run();
 
