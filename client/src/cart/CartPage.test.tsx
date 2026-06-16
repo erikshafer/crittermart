@@ -158,4 +158,26 @@ describe("CartPage", () => {
     expect(url).toContain("/carts/customer-demo/items/crit-001");
     expect(init.method).toBe("DELETE");
   });
+
+  it("[ Place Order ] POSTs { customerId } to /orders and disables while placing (checkout fires PlaceOrder)", async () => {
+    // A never-settling POST keeps the mutation pending: usePlaceOrder's onSuccess navigate (to a route absent
+    // from this throwaway router) never fires, so the durable evidence is the command call + the pending state.
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>(() => {});
+      return Promise.resolve(new Response(JSON.stringify(openCart), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.click(screen.getByRole("button", { name: "Place Order" }));
+
+    await waitFor(() => expect(commandCall(fetchMock)).toBeDefined());
+    const [url, init] = commandCall(fetchMock)!;
+    expect(url).toMatch(/\/orders$/); // POST /orders — body-keyed, not the route-keyed /carts/{id}/...
+    expect(JSON.parse(init.body as string)).toEqual({ customerId: "customer-demo" });
+    // The button enters its pending state (no optimistic guess; it waits for the server).
+    expect(screen.getByRole("button", { name: "Placing…" })).toBeDisabled();
+  });
 });

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { RouteNotFound } from "@/components/RouteNotFound";
 import { BrowsePage } from "@/catalog/BrowsePage";
 import { CartPage } from "@/cart/CartPage";
+import { OrderConfirmationPage } from "@/orders/OrderConfirmationPage";
 
 // Code-based route tree (ADR 015 amendment — TanStack Router, wired code-based, no route-tree codegen).
 // Chosen for shared lineage with the already-accepted TanStack Query and for type-safe routes +
@@ -32,7 +33,21 @@ const cartRoute = createRoute({
   component: CartPage,
 });
 
-const routeTree = rootRoute.addChildren([browseRoute, cartRoute]);
+// W3 — Order Confirmation (Narrative 005 Moment 4). Reached by navigate() after [ Place Order ]'s POST /orders
+// succeeds. This thin route component reads the {orderId} path param and hands it to the (router-free, pure)
+// OrderConfirmationPage, which reads GET /orders/{orderId}. Referencing the route inside its own component is
+// the canonical code-based pattern — the closure resolves at render time, after the const is assigned. The
+// W4 tracking route (`/orders/$orderId`) is the next slice (locked decision 1 — this PR is W3 alone).
+const orderConfirmationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/orders/$orderId/confirmation",
+  component: function OrderConfirmationRoute() {
+    const { orderId } = orderConfirmationRoute.useParams();
+    return <OrderConfirmationPage orderId={orderId} />;
+  },
+});
+
+const routeTree = rootRoute.addChildren([browseRoute, cartRoute, orderConfirmationRoute]);
 
 export const router = createRouter({
   routeTree,
