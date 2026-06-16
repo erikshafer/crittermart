@@ -1,6 +1,6 @@
 using JasperFx.Events;
 
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // CartView — the cart's READ model (ADR 020): the public projection the storefront binds via
 // GET /carts/mine (and GET /carts/{cartId}). A DEDICATED inline projection from the cart's events,

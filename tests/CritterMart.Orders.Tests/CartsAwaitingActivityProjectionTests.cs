@@ -1,4 +1,4 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using JasperFx.Events;
 using Shouldly;
 using Xunit;

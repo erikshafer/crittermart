@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // Terminal-success event of a Cart stream (Workshop 001 § 4, slice 4.1). The Customer checked
 // out: the cart is now closed — CartView.IsOpen flips to false, which frees the partial-unique

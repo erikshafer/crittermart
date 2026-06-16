@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // An item was removed from the cart (Workshop 001 § 4, slice 3.2). SKU-scoped: cart lines are
 // keyed by SKU (one line per SKU since slices 3.2/3.3 resolved the merge-by-SKU question), so

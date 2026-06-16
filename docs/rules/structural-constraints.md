@@ -19,6 +19,7 @@ references:
   - docs/decisions/012-critter-stack-2026-upgrade.md
   - docs/decisions/014-published-language-contracts-project.md
   - docs/decisions/020-domain-write-models-read-views.md
+  - docs/decisions/021-verb-feature-folders.md
   - CLAUDE.md
 ---
 
@@ -103,8 +104,8 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - Aggregates are domain-named, `sealed`, immutable write models — no `*View`/`*Aggregate` technical suffix; state changes return a new instance via `this with { … }`. (ADR 020)
 - The raw aggregate is never serialized over HTTP; a public read is a separate, purpose-built `*View` read model projected from the same events, created only when a read needs one. (ADR 020)
 - The aggregate carries the write-side invariants (e.g. the open-cart partial-unique index); the read model carries only what its consumers query. (ADR 020)
-- Applied to Cart this round (`ShoppingCart` aggregate + `CartView` read model); `OrderStatusView` and `StockLevelView` still double as aggregate + read model pending their follow-up pilots. (ADR 020)
-- A `Type` named identically to its namespace's last segment collides (CS0118); resolve per area by the name that reads best — a compound aggregate name (`ShoppingCart` in `…Cart`) or a verb feature folder (`Ordering/` keeping the canonical `Order`) — not a blanket rule. (ADR 020)
+- Feature/slice folders are named for the **activity** (a verb/gerund — `Shopping/`, `Ordering/`); domain types inside keep canonical **noun** names (`Cart`, `Order`). A verb namespace never collides with a noun type, so an aggregate needs no qualifying suffix. (ADR 021)
+- Applied where a singular noun folder would otherwise collide with its aggregate, not as a blanket rule. This round: Cart's slice is `Shopping/` + the canonical `Cart` aggregate + `CartView` read model; Order follows with `Ordering/Order`; `OrderStatusView`/`StockLevelView` still double as aggregate + read model pending their pilots (`Stock`'s `StockLevel` ≠ `…Stock`, no folder change needed). (ADR 020, ADR 021)
 
 ## SDD pipeline discipline
 
@@ -140,4 +141,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.1    | 2026-05-28 | Added the **Build & code generation** section (Critter Stack 2026 line; Wolverine Dynamic codegen via `WolverineFx.RuntimeCompilation`; Marten source-gen; v9 defaults adopted), paired with ADR 012. |
 | v1.2    | 2026-05-31 | Added three **Cross-service messaging** rules for the published-language `CritterMart.Contracts` project (shared, both services reference it; not a service so no ADR 001 breach; owns wire messages only), paired with ADR 014 (slice 4.2's first cross-BC flow). |
 | v1.3    | 2026-06-02 | Added three **SDD pipeline discipline** rules from the `tidy: encode` bundle: the tidy ceremony rule (spec-content tidy → full prompt/retro pair; mechanical tidy → may run light), one-capability-per-aggregate OpenSpec granularity, and workshop frontmatter version tracking. Paired with the matching CLAUDE.md additions (§ Operating Disciplines, § 4a). |
-| v1.4    | 2026-06-16 | Added the **Aggregate and read-model naming** section (ADR 020): aggregates are domain-named immutable `sealed record` write models (no `*View`/`*Aggregate` suffix, `this with` evolution), the raw aggregate is never served, and a public read is a separate `*View` projection. Piloted on Cart (`ShoppingCart` aggregate + `CartView` read model; named to dodge the type↔namespace collision); Order/Stock pending. |
+| v1.4    | 2026-06-16 | Added the **Aggregate and read-model naming** section (ADR 020 + ADR 021): aggregates are domain-named immutable `sealed record` write models (no `*View`/`*Aggregate` suffix, `this with` evolution), the raw aggregate is never served, a public read is a separate `*View` projection, and slice folders are named for the **activity** (verb — `Shopping/`, `Ordering/`) so aggregates keep canonical noun names. Piloted on Cart (`Shopping/` folder + canonical `Cart` aggregate + `CartView` read model); Order/Stock pending. |

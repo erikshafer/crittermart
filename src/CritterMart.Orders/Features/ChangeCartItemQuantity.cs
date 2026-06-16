@@ -1,4 +1,4 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine.Http;
@@ -28,7 +28,7 @@ public static class ChangeCartItemQuantityEndpoint
         }
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
-        var open = await session.Query<ShoppingCart>()
+        var open = await session.Query<Cart>()
             .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
@@ -52,7 +52,7 @@ public static class ChangeCartItemQuantityEndpoint
 
         // Append the change; the inline Cart + CartView projections rewrite the line's quantity at
         // commit. The snapshotted name/price are untouched — only "how many" changes.
-        var stream = await session.Events.FetchForWriting<ShoppingCart>(open.Id);
+        var stream = await session.Events.FetchForWriting<Cart>(open.Id);
         stream.AppendOne(new CartItemQuantityChanged(sku, command.NewQuantity));
 
         return Results.NoContent();

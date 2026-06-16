@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // The scheduled self-message that gives every open cart an inactivity deadline (Workshop 001
 // slice 3.4, the second Bruun temporal automation; mirrors Order/OrderPaymentTimeout). AddToCart

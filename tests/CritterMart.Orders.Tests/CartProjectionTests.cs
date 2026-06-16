@@ -1,13 +1,13 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using JasperFx.Events;
 using Shouldly;
 using Xunit;
 
 namespace CritterMart.Orders.Tests;
 
-// Pure-function unit tests for the ShoppingCart aggregate fold (ADR 020 — the domain WRITE model).
-// ShoppingCart is a sealed, immutable record whose static Create/Apply methods ARE its self-aggregating
-// snapshot projection; each Apply returns a NEW ShoppingCart via `with`, so the fold is verified without a
+// Pure-function unit tests for the Cart aggregate fold (ADR 020 — the domain WRITE model).
+// Cart is a sealed, immutable record whose static Create/Apply methods ARE its self-aggregating
+// snapshot projection; each Apply returns a NEW Cart via `with`, so the fold is verified without a
 // database, mocks, or a container. Untagged, so they run in the CI `Category!=Integration` job. Activity
 // events arrive as
 // IEvent<T> wrappers (constructed with Event<T>) so their append timestamps fold into LastActivityAt.
@@ -28,7 +28,7 @@ public class CartProjectionTests
     [Fact]
     public void cart_created_opens_an_empty_cart_for_the_customer()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
 
         cart.Id.ShouldBe("cart-1");
         cart.CustomerId.ShouldBe("customer-X");
@@ -41,8 +41,8 @@ public class CartProjectionTests
     [Fact]
     public void adding_the_first_item_folds_into_a_single_line()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
 
         var line = cart.Lines.ShouldHaveSingleItem();
         line.Sku.ShouldBe("crit-001");
@@ -55,9 +55,9 @@ public class CartProjectionTests
     [Fact]
     public void adding_a_second_item_folds_into_a_second_line()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-002", 3, NebulaNewt), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(At(new CartItemAdded("crit-002", 3, NebulaNewt), T0), cart);
 
         cart.Lines.Count.ShouldBe(2);
         cart.Lines[0].ShouldBe(new CartLine("crit-001", 1, "Cosmic Critter Plush", 24.99m));
@@ -68,9 +68,9 @@ public class CartProjectionTests
     [Fact]
     public void adding_the_same_sku_again_merges_quantities_into_one_line()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 2, new ProductSnapshot("Cosmic Critter Plush", 29.99m)), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 2, new ProductSnapshot("Cosmic Critter Plush", 29.99m)), T0), cart);
 
         var line = cart.Lines.ShouldHaveSingleItem();
         line.Sku.ShouldBe("crit-001");
@@ -82,10 +82,10 @@ public class CartProjectionTests
     [Fact]
     public void removing_an_item_drops_its_line()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-002", 3, NebulaNewt), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemRemoved("crit-001"), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(At(new CartItemAdded("crit-002", 3, NebulaNewt), T0), cart);
+        cart = Cart.Apply(At(new CartItemRemoved("crit-001"), T0), cart);
 
         cart.Lines.ShouldHaveSingleItem().Sku.ShouldBe("crit-002");
     }
@@ -94,9 +94,9 @@ public class CartProjectionTests
     [Fact]
     public void removing_the_last_item_leaves_the_cart_open_and_empty()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemRemoved("crit-001"), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(At(new CartItemRemoved("crit-001"), T0), cart);
 
         cart.Lines.ShouldBeEmpty();
         cart.IsOpen.ShouldBeTrue();
@@ -106,9 +106,9 @@ public class CartProjectionTests
     [Fact]
     public void changing_quantity_updates_the_line_in_place()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(At(new CartItemQuantityChanged("crit-001", 3), T0), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(At(new CartItemQuantityChanged("crit-001", 3), T0), cart);
 
         var line = cart.Lines.ShouldHaveSingleItem();
         line.Quantity.ShouldBe(3);
@@ -121,10 +121,10 @@ public class CartProjectionTests
     [Fact]
     public void the_fold_tracks_the_newest_activity_timestamp()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0.AddMinutes(5)), cart);
-        cart = ShoppingCart.Apply(At(new CartItemQuantityChanged("crit-001", 3), T0.AddMinutes(20)), cart);
-        cart = ShoppingCart.Apply(At(new CartItemRemoved("crit-001"), T0.AddMinutes(45)), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0.AddMinutes(5)), cart);
+        cart = Cart.Apply(At(new CartItemQuantityChanged("crit-001", 3), T0.AddMinutes(20)), cart);
+        cart = Cart.Apply(At(new CartItemRemoved("crit-001"), T0.AddMinutes(45)), cart);
 
         cart.LastActivityAt.ShouldBe(T0.AddMinutes(45));
     }
@@ -134,9 +134,9 @@ public class CartProjectionTests
     [Fact]
     public void checking_out_closes_the_cart_but_keeps_its_lines()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(new CartCheckedOut("order-1"), cart);
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(new CartCheckedOut("order-1"), cart);
 
         cart.IsOpen.ShouldBeFalse();
         cart.Lines.ShouldHaveSingleItem().Sku.ShouldBe("crit-001");
@@ -146,9 +146,9 @@ public class CartProjectionTests
     [Fact]
     public void abandonment_closes_the_cart_but_keeps_its_lines()
     {
-        var cart = ShoppingCart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
-        cart = ShoppingCart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
-        cart = ShoppingCart.Apply(
+        var cart = Cart.Create(At(new CartCreated("cart-1", "customer-X"), T0));
+        cart = Cart.Apply(At(new CartItemAdded("crit-001", 1, CosmicCritterPlush), T0), cart);
+        cart = Cart.Apply(
             new CartAbandoned(CartAbandonReason.InactivityTimeout, [new CartLine("crit-001", 1, "Cosmic Critter Plush", 24.99m)], 24.99m),
             cart);
 

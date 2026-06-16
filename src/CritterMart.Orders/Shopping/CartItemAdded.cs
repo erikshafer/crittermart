@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // A line added to the cart — the Cart stream's second event kind (after CartCreated).
 // Carries the snapshotted name + price so the cart needs no Catalog read. Cart lines are

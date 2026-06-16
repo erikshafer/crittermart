@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // A single cart line — a SKU at its quantity, with the name + price snapshotted when the SKU was first
 // added (so the cart needs no Catalog read). A shared domain value object: the Cart aggregate and the

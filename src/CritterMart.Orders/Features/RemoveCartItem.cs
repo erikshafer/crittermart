@@ -1,4 +1,4 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine.Http;
@@ -16,7 +16,7 @@ public static class RemoveCartItemEndpoint
     {
         // Resolve the customer's open cart — the same indexed Cart query AddToCart and
         // PlaceOrder use. No open cart → nothing to edit.
-        var open = await session.Query<ShoppingCart>()
+        var open = await session.Query<Cart>()
             .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
@@ -41,7 +41,7 @@ public static class RemoveCartItemEndpoint
         // Append the removal fact; the inline Cart + CartView projections drop the line at commit.
         // Removing the last line leaves the cart open and empty (design.md decision 5) — the
         // CartEmpty guard in PlaceOrder protects checkout from here on.
-        var stream = await session.Events.FetchForWriting<ShoppingCart>(open.Id);
+        var stream = await session.Events.FetchForWriting<Cart>(open.Id);
         stream.AppendOne(new CartItemRemoved(sku));
 
         return Results.NoContent();

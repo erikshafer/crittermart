@@ -1,5 +1,5 @@
-using CritterMart.Orders.Cart;
 using CritterMart.Orders.Order;
+using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine;
@@ -33,7 +33,7 @@ public static class PlaceOrderEndpoint
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
         // open cart and is rejected here: the workshop's "cart already checked out" failure
         // path, handled for free by open-cart resolution (no separate guard needed).
-        var cart = await session.Query<ShoppingCart>()
+        var cart = await session.Query<Cart>()
             .Where(c => c.CustomerId == command.CustomerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
@@ -68,7 +68,7 @@ public static class PlaceOrderEndpoint
         session.Events.StartStream<OrderStatusView>(
             orderId, new OrderPlaced(orderId, command.CustomerId, items, total));
 
-        var cartStream = await session.Events.FetchForWriting<ShoppingCart>(cart.Id);
+        var cartStream = await session.Events.FetchForWriting<Cart>(cart.Id);
         cartStream.AppendOne(new CartCheckedOut(orderId));
 
         // Cascade the whole order's reservation request to Inventory over RabbitMQ (slice 4.2,

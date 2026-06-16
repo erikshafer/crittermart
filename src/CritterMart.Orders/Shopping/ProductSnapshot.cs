@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // The product fields the frontend composed from the Catalog at render time and carried
 // into AddToCart. The cart never reads the Catalog — this snapshot is authoritative

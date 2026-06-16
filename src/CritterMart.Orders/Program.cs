@@ -1,5 +1,5 @@
-using CritterMart.Orders.Cart;
 using CritterMart.Orders.Order;
+using CritterMart.Orders.Shopping;
 using JasperFx.Events;
 using JasperFx.Events.Projections;
 using Marten;
@@ -49,10 +49,10 @@ builder.Services.AddMarten(opts =>
         // Cart streams are keyed by a generated cartId (a string).
         opts.Events.StreamIdentity = StreamIdentity.AsString;
 
-        // The ShoppingCart aggregate — the domain WRITE model (ADR 020), a self-aggregating immutable
+        // The Cart aggregate — the domain WRITE model (ADR 020), a self-aggregating immutable
         // record materialized as an inline snapshot (ADR 008). It is the FetchForWriting/StartStream target
         // and is never served over HTTP. The open-cart invariant index (below) lives on it.
-        opts.Projections.Snapshot<ShoppingCart>(SnapshotLifecycle.Inline);
+        opts.Projections.Snapshot<Cart>(SnapshotLifecycle.Inline);
 
         // CartView — the cart's READ model (ADR 020): a DEDICATED inline projection the storefront binds,
         // decoupled from the Cart aggregate so the read path never touches the write model.
@@ -77,11 +77,11 @@ builder.Services.AddMarten(opts =>
         // talk's teaching beat, not a bug.
         opts.Projections.Add<CartAbandonmentReportProjection>(ProjectionLifecycle.Async);
 
-        // The open-cart invariant lives on the ShoppingCart AGGREGATE (ADR 020 — it is a write-side rule):
-        // a partial-unique index on ShoppingCart.CustomerId, scoped to open carts, enforces "one open cart
+        // The open-cart invariant lives on the Cart AGGREGATE (ADR 020 — it is a write-side rule):
+        // a partial-unique index on Cart.CustomerId, scoped to open carts, enforces "one open cart
         // per customer" at the DB. The write paths resolve the customer's open cart against this index; a
         // checked-out (4.1) or abandoned (3.4) cart has IsOpen=false and frees the customer to start a fresh one.
-        opts.Schema.For<ShoppingCart>().Index(x => x.CustomerId, idx =>
+        opts.Schema.For<Cart>().Index(x => x.CustomerId, idx =>
         {
             idx.IsUnique = true;
             idx.Predicate = "(data ->> 'IsOpen')::boolean = true";

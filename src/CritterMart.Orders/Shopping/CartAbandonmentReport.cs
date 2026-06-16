@@ -1,7 +1,7 @@
 using JasperFx.Events;
 using Marten.Events.Projections;
 
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // The round-one async projection teaser (ADR 008; Workshop 001 § 7): an analytics-grade daily
 // rollup of cart abandonment, fed by CartAbandoned events from EVERY Cart stream — one document
