@@ -1,6 +1,6 @@
 using Alba;
 using CritterMart.Orders.Features;
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +43,7 @@ public class PaymentTimeoutTests
         var orderId = Guid.NewGuid().ToString();
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
-        session.Events.StartStream<OrderStatusView>(
+        session.Events.StartStream<Order>(
             orderId, new OrderPlaced(orderId, customerId, [Plush], Total));
         await session.SaveChangesAsync();
         return orderId;
@@ -55,7 +55,7 @@ public class PaymentTimeoutTests
         var orderId = Guid.NewGuid().ToString();
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
-        session.Events.StartStream<OrderStatusView>(
+        session.Events.StartStream<Order>(
             orderId,
             new OrderPlaced(orderId, customerId, [Plush], Total),
             new StockReserved(orderId));

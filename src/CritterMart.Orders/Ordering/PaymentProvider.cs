@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // The in-process "call the payment provider" seam for slice 4.3. This is the Orders-internal
 // mirror of slice 4.2's cross-BC reserve hop: there, Inventory was the external party reached

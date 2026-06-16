@@ -1,4 +1,4 @@
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -34,7 +34,7 @@ public class StockReservationOutcomeTests
         var orderId = Guid.NewGuid().ToString();
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
-        session.Events.StartStream<OrderStatusView>(
+        session.Events.StartStream<Order>(
             orderId, new OrderPlaced(orderId, customerId, [Plush], Plush.Quantity * Plush.Price));
         await session.SaveChangesAsync();
         return orderId;

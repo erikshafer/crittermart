@@ -1,7 +1,7 @@
 using Marten;
 using Contracts = CritterMart.Contracts;
 
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // Inbound cross-BC outcome handlers (Workshop 001 slice 4.2). Inventory's reply lands here and
 // is recorded as a Klefter local commit on the Order's own stream. Both are idempotent via a
@@ -13,7 +13,7 @@ public static class StockReservedHandler
 {
     public static async Task<AuthorizePayment?> Handle(Contracts.StockReserved message, IDocumentSession session)
     {
-        var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
+        var stream = await session.Events.FetchForWriting<Order>(message.OrderId);
         if (stream.Aggregate?.Status != OrderStatus.AwaitingConfirmation)
         {
             return null; // terminal, already reserved, or unknown order — ignore (no cascade)
@@ -33,7 +33,7 @@ public static class StockReservationFailedHandler
 {
     public static async Task Handle(Contracts.StockReservationFailed message, IDocumentSession session)
     {
-        var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
+        var stream = await session.Events.FetchForWriting<Order>(message.OrderId);
         if (stream.Aggregate?.Status != OrderStatus.AwaitingConfirmation)
         {
             return; // terminal or already past the stock gate — ignore

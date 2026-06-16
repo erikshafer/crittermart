@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // The scheduled self-message that gives every placed order a deadline (Workshop 001 slice 4.7,
 // Bruun temporal automation; ADR 007). PlaceOrder cascades this message delayed by the configured

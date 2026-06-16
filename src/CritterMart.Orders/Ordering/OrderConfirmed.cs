@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // Terminal success event on the Order stream (Workshop 001 § 4, slice 4.4, ADR 007). The
 // aggregate-as-process-manager appends this once BOTH gates are closed — stock reserved AND

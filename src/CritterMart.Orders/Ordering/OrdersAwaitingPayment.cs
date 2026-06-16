@@ -1,7 +1,7 @@
 using JasperFx.Events;
 using Marten.Events.Aggregation;
 
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // The Bruun todo-list (Workshop 001 § 5 / § 7: OrdersAwaitingPayment*): one row per order that has
 // not yet reached a terminal state, readable at GET /orders/awaiting-payment. The row is created

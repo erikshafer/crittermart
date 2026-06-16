@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // A single line on a placed order — a cart line snapshotted onto the Order stream at checkout.
 // The cart's snapshot price is authoritative through the order; there is no re-pricing.

@@ -1,5 +1,5 @@
 using Alba;
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -40,7 +40,7 @@ public class PaymentAuthorizationTests
     {
         var orderId = Guid.NewGuid().ToString();
         await using var session = store.LightweightSession();
-        session.Events.StartStream<OrderStatusView>(
+        session.Events.StartStream<Order>(
             orderId, new OrderPlaced(orderId, customerId, [Plush], Total));
         await session.SaveChangesAsync();
         return orderId;
