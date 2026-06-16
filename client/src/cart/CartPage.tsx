@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { useApiContext } from "@/api/client";
+import { usePlaceOrder } from "@/orders/placeOrderMutation";
 
 import { cartQueryOptions } from "./cartQueries";
 import { useChangeCartItemQuantity, useRemoveCartItem } from "./cartMutations";
@@ -13,7 +14,8 @@ import type { CartLine } from "./cartSchema";
 // place. Each line carries a [-] N [+] quantity stepper (slice 3.3 `ChangeCartItemQuantity`) and an [x] remove
 // (slice 3.2 `RemoveCartItem`), each an OPTIMISTIC mutation (Convention 3): the row updates instantly, then
 // reconciles against the refetched CartView. The header badge and the Total derive from the same cart query,
-// so they update for free. [ Place Order ] (slice 4.1 → W3) is still its own slice, deliberately absent.
+// so they update for free. [ Place Order ] (slice 4.1) issues PlaceOrder and navigates to W3 confirmation —
+// the one cart command where optimism STOPS (usePlaceOrder is non-optimistic; @/orders/placeOrderMutation).
 
 // One $-formatter, built once at module load (cheaper than per-render, stable reference).
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -110,6 +112,9 @@ function CartRow({ line }: { line: CartLine }) {
 export function CartPage() {
   const ctx = useApiContext();
   const { data: cart, isPending, isError, refetch } = useQuery(cartQueryOptions(ctx));
+  // Non-optimistic checkout: on success it resets the cart and navigates to W3 (@/orders/placeOrderMutation).
+  // Lives here only as the button's wiring — the [ Place Order ] control renders in the populated-cart branch.
+  const placeOrder = usePlaceOrder();
 
   // Loading — the read is in flight. (No cached cart yet on a cold load.)
   if (isPending) {
@@ -208,6 +213,28 @@ export function CartPage() {
           </tr>
         </tfoot>
       </table>
+
+      {/* [ Place Order ] (slice 4.1 → W3). NON-optimistic (Convention 3's exception): the click fires
+          PlaceOrder, and only on the server's success does usePlaceOrder reset the cart + navigate to the
+          confirmation screen — no instant guess. The button only renders here, in the populated-cart branch,
+          so an empty cart (the early-return above) offers no checkout — the workshop's CartEmpty guard made
+          unreachable from the UI. A 409 (NoOpenCart, e.g. a stale duplicate submit) surfaces as the honest
+          alert below; the cart stays put (no navigate). */}
+      <div className="flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={() => placeOrder.mutate()}
+          disabled={placeOrder.isPending}
+          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          {placeOrder.isPending ? "Placing…" : "Place Order"}
+        </button>
+        {placeOrder.isError && (
+          <p role="alert" className="text-sm text-muted-foreground">
+            We couldn&apos;t place your order. Please try again.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
