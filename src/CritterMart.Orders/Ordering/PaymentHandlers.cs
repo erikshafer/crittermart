@@ -1,7 +1,7 @@
 using Marten;
 using Contracts = CritterMart.Contracts;
 
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // The payment gate, slices 4.3 (authorize) + 4.4 (confirm) + 4.6 (cancel on decline). This mirrors
 // slice 4.2's reserve flow, but the provider call is in-process: a request hop that calls the
@@ -37,7 +37,7 @@ public static class PaymentDecisionHandler
     public static async Task<(Contracts.CommitStock?, Contracts.ReleaseStock?)> Handle(
         PaymentDecision message, IDocumentSession session)
     {
-        var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
+        var stream = await session.Events.FetchForWriting<Order>(message.OrderId);
         if (stream.Aggregate?.Status != OrderStatus.StockReserved)
         {
             return (null, null);

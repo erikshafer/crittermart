@@ -1,4 +1,4 @@
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using JasperFx.Events;
 using JasperFx.Events.Projections;
@@ -58,9 +58,16 @@ builder.Services.AddMarten(opts =>
         // decoupled from the Cart aggregate so the read path never touches the write model.
         opts.Projections.Snapshot<CartView>(SnapshotLifecycle.Inline);
 
-        // OrderStatusView still doubles as aggregate + read model — the Order/Stock read/write split is the
-        // follow-up to this Cart pilot (ADR 020), not done here.
-        opts.Projections.Add<OrderStatusViewProjection>(ProjectionLifecycle.Inline);
+        // The Order aggregate — the domain WRITE model (ADR 020) and the PMvH process-manager state, a
+        // self-aggregating inline snapshot like Cart. It is the FetchForWriting/StartStream target on the
+        // order's write paths (PlaceOrder + the cross-BC outcome handlers) and is never served over HTTP.
+        opts.Projections.Snapshot<Order>(SnapshotLifecycle.Inline);
+
+        // OrderStatusView — the order's READ model (ADR 020): a DEDICATED inline projection W3/W4 bind via
+        // GET /orders/{orderId}, decoupled from the Order aggregate so the read path never touches the
+        // write model. Wire shape preserved (the ADR 020/021 Order rollout — this replaced the former
+        // OrderStatusViewProjection : SingleStreamProjection class with a self-aggregating record snapshot).
+        opts.Projections.Snapshot<OrderStatusView>(SnapshotLifecycle.Inline);
 
         // The Bruun todo-list (slice 4.7): a second inline projection over the same Order stream.
         // Instance-registered (not generic) because the projection carries the configured payment
@@ -143,8 +150,8 @@ builder.Services.AddHealthChecks()
 // The stubbed payment provider (slice 4.3). Round one stubs payment (vision.md non-goal), so the
 // default always approves; integration tests swap a declining IPaymentProvider to exercise the
 // failure branch. A real gateway integration would replace only this registration.
-builder.Services.AddSingleton<CritterMart.Orders.Order.IPaymentProvider,
-    CritterMart.Orders.Order.StubPaymentProvider>();
+builder.Services.AddSingleton<CritterMart.Orders.Ordering.IPaymentProvider,
+    CritterMart.Orders.Ordering.StubPaymentProvider>();
 
 // Swagger UI over the (OpenAPI-described) Wolverine.Http endpoints — a demo/devex affordance.
 builder.Services.AddEndpointsApiExplorer();

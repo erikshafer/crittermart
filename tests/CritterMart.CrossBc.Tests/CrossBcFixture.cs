@@ -1,7 +1,7 @@
 extern alias InventoryApp;
 
 using Alba;
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;

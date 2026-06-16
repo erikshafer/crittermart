@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // Klefter local commit on the Order stream (Workshop 001 § 4, slice 4.3 failure branch): Orders
 // records the stubbed provider's refusal as a first-class fact on the order's own stream. Like

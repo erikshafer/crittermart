@@ -1,7 +1,7 @@
 using Marten;
 using Contracts = CritterMart.Contracts;
 
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // The fired payment deadline (Workshop 001 slice 4.7, Bruun temporal automation). Scheduled by
 // PlaceOrder when the order was placed; delivered here when the deadline passes. This handler is
@@ -20,7 +20,7 @@ public static class PaymentTimeoutHandler
 {
     public static async Task<Contracts.ReleaseStock?> Handle(OrderPaymentTimeout message, IDocumentSession session)
     {
-        var stream = await session.Events.FetchForWriting<OrderStatusView>(message.OrderId);
+        var stream = await session.Events.FetchForWriting<Order>(message.OrderId);
 
         // Terminal-state guard: confirmed, already cancelled (including by a duplicate of this
         // very timeout), or unknown — append nothing, cascade nothing.

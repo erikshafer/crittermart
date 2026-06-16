@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Order;
+namespace CritterMart.Orders.Ordering;
 
 // Terminal event on the Order stream (Workshop 001 § 4, ADR 007): the order was cancelled.
 // Slice 4.5 emits it with reason "stock_unavailable" when stock could not be reserved; slice 4.6

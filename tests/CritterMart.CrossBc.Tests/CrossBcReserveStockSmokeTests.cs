@@ -1,7 +1,7 @@
 extern alias InventoryApp;
 using Alba;
 using CritterMart.Orders.Features;
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;

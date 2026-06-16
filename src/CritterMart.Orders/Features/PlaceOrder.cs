@@ -1,4 +1,4 @@
-using CritterMart.Orders.Order;
+using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -65,7 +65,7 @@ public static class PlaceOrderEndpoint
         // The multi-stream atomic write (slice 4.1's teaching beat): a new Order stream AND the
         // cart's terminal CartCheckedOut, committed together by AutoApplyTransactions in ONE
         // transaction. The inline OrderStatusView, Cart, and CartView projections all update.
-        session.Events.StartStream<OrderStatusView>(
+        session.Events.StartStream<Order>(
             orderId, new OrderPlaced(orderId, command.CustomerId, items, total));
 
         var cartStream = await session.Events.FetchForWriting<Cart>(cart.Id);
