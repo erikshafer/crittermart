@@ -3,9 +3,6 @@ using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine.Http;
 
-// Disambiguate the Cart aggregate TYPE from its same-named namespace (CS0118) — local alias only (ADR 020).
-using CartAggregate = CritterMart.Orders.Cart.Cart;
-
 namespace CritterMart.Orders.Features;
 
 // The Customer removes an item from their open cart (Workshop 001 slice 3.2). Both identifiers
@@ -19,7 +16,7 @@ public static class RemoveCartItemEndpoint
     {
         // Resolve the customer's open cart — the same indexed Cart query AddToCart and
         // PlaceOrder use. No open cart → nothing to edit.
-        var open = await session.Query<CartAggregate>()
+        var open = await session.Query<ShoppingCart>()
             .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
@@ -44,7 +41,7 @@ public static class RemoveCartItemEndpoint
         // Append the removal fact; the inline Cart + CartView projections drop the line at commit.
         // Removing the last line leaves the cart open and empty (design.md decision 5) — the
         // CartEmpty guard in PlaceOrder protects checkout from here on.
-        var stream = await session.Events.FetchForWriting<CartAggregate>(open.Id);
+        var stream = await session.Events.FetchForWriting<ShoppingCart>(open.Id);
         stream.AppendOne(new CartItemRemoved(sku));
 
         return Results.NoContent();
