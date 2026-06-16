@@ -1,8 +1,10 @@
 import { Link, Outlet } from "@tanstack/react-router";
 
-// The storefront's outer chrome — header + routed content. Deliberately thin at bootstrap: the cart
-// badge, nav, and footer arrive with the screen slices (W1–W4). The header link is the type-safe
-// TanStack Router `Link` (code-based router, src/router.tsx).
+import { CartBadge } from "@/cart/CartBadge";
+
+// The storefront's outer chrome — header + routed content. A pure layout component: it fetches nothing
+// itself (the cart badge owns its own query subscription, so only the badge re-renders on a count change).
+// The header links are the type-safe TanStack Router `Link` (code-based router, src/router.tsx).
 export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col">
@@ -11,7 +13,7 @@ export function AppShell() {
           <Link to="/" className="text-xl font-semibold tracking-tight">
             CritterMart
           </Link>
-          <span className="text-sm text-muted-foreground">storefront</span>
+          <CartBadge />
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">

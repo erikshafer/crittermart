@@ -3,6 +3,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 import { AppShell } from "@/components/AppShell";
 import { RouteNotFound } from "@/components/RouteNotFound";
 import { HomePage } from "@/routes/HomePage";
+import { CartPage } from "@/cart/CartPage";
 
 // Code-based route tree (ADR 015 amendment — TanStack Router, wired code-based, no route-tree codegen).
 // Chosen for shared lineage with the already-accepted TanStack Query and for type-safe routes +
@@ -21,7 +22,14 @@ const homeRoute = createRoute({
   component: HomePage,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute]);
+// W2 — Cart Review. The first modeled screen route; renders the customer's open cart from GET /carts/mine.
+const cartRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cart",
+  component: CartPage,
+});
+
+const routeTree = rootRoute.addChildren([homeRoute, cartRoute]);
 
 export const router = createRouter({
   routeTree,
