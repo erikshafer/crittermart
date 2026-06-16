@@ -65,6 +65,34 @@ export async function fetchParsed<T>(
   return schema.parse(await response.json());
 }
 
+// POST a command body, set the identity header, and parse the response body through `schema`. The
+// command-side counterpart of `fetchParsed`: same X-Customer-Id seam (Convention 4) and same boundary
+// parse (Convention 2 — a command's *response* is a wire surface that can drift too), plus a JSON body
+// and `Content-Type`. Pure (no React), so mutation factories can call it and tests can drive it with a
+// literal context + mocked fetch. Any non-2xx throws `ApiError` (a command has no domain-empty 404 case).
+export async function postCommand<T>(
+  url: string,
+  body: unknown,
+  ctx: RequestContext,
+  schema: ZodType<T>,
+): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      [CUSTOMER_ID_HEADER]: ctx.customerId,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Command to ${url} failed with ${response.status}.`, response.status);
+  }
+
+  return schema.parse(await response.json());
+}
+
 // The React binding: builds the per-request context from the identity seam. Components and query hooks
 // call this to get the `RequestContext` they hand to `fetchParsed`, so identity always flows from the
 // one seam and never from a hardcoded value.
