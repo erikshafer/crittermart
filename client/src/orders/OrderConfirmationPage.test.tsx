@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 
 import { OrderConfirmationPage } from "@/orders/OrderConfirmationPage";
 import { CurrentCustomerProvider } from "@/identity/useCurrentCustomer";
@@ -16,14 +24,32 @@ const placedOrder = {
   total: 103.98,
 };
 
-// OrderConfirmationPage is a PURE component (orderId is a prop — the route reads the param), so it needs only
-// the query + identity providers, no RouterProvider. retry:false so the error path doesn't stall the suite.
+// OrderConfirmationPage now renders a router <Link> ("Track this order" → W4), so it needs router context. A
+// throwaway memory-history router hosts the page at "/" and registers the W4 target (/orders/$orderId) so the
+// link resolves and a click navigates — the same pattern CartPage's empty-state test uses. retry:false so the
+// error path doesn't stall the suite.
 function renderConfirmation(orderId = "ord-7f3a") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const rootRoute = createRootRoute();
+  const confirmationRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: () => <OrderConfirmationPage orderId={orderId} />,
+  });
+  const trackingRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/orders/$orderId",
+    component: () => <div>Tracking screen</div>,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([confirmationRoute, trackingRoute]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+
   return render(
     <QueryClientProvider client={queryClient}>
       <CurrentCustomerProvider customerId="customer-demo">
-        <OrderConfirmationPage orderId={orderId} />
+        <RouterProvider router={router} />
       </CurrentCustomerProvider>
     </QueryClientProvider>,
   );
@@ -58,7 +84,7 @@ describe("OrderConfirmationPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn.t load your order/i);
   });
 
-  it("renders [ Track this order ] disabled — W4 tracking is the next slice (a deferred control, not a broken link)", async () => {
+  it("[ Track this order ] is now a live link to the W4 tracking route and navigates there (W4 landed)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(JSON.stringify(placedOrder), { status: 200 })),
@@ -67,6 +93,11 @@ describe("OrderConfirmationPage", () => {
     renderConfirmation();
     await screen.findByText("Order placed");
 
-    expect(screen.getByRole("button", { name: "Track this order" })).toBeDisabled();
+    // The deferred control of #62 is now a real <Link> resolving to the order-keyed W4 route.
+    const trackLink = screen.getByRole("link", { name: "Track this order" });
+    expect(trackLink).toHaveAttribute("href", "/orders/ord-7f3a");
+
+    await userEvent.click(trackLink);
+    expect(await screen.findByText("Tracking screen")).toBeInTheDocument();
   });
 });

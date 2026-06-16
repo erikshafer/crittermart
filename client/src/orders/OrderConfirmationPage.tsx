@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 
 import { useApiContext } from "@/api/client";
 
 import { orderQueryOptions } from "./orderQueries";
-import type { OrderStatus } from "./orderSchema";
+import { humanizeStatus } from "./orderStatusJourney";
 
 // W3 — Order Confirmation (workshop § 5.1; Narrative 005 Moment 4). The payoff of `[ Place Order ]`: after the
 // SPA POSTs `/orders` and navigates here, this screen reads `GET /orders/{orderId}` (`OrderStatusView`, the 3rd
@@ -20,14 +21,6 @@ import type { OrderStatus } from "./orderSchema";
 // (the view carries it), so Intl's 2-decimal rounding is exact enough here — unlike CartPage, this screen does
 // NOT recompute the total from lines in integer cents (the server already did the arithmetic).
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-
-// Render the wire status (e.g. `awaiting_confirmation`) as human text — underscores to spaces, first letter
-// capitalized: "Awaiting confirmation". The text is the AUTHORITATIVE conveyance of status (a11y: never
-// color-only — the dot beside it is decorative, aria-hidden).
-function humanizeStatus(status: OrderStatus): string {
-  const spaced = status.replace(/_/g, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
 
 export function OrderConfirmationPage({ orderId }: { orderId: string }) {
   const ctx = useApiContext();
@@ -93,19 +86,17 @@ export function OrderConfirmationPage({ orderId }: { orderId: string }) {
         </div>
       </dl>
 
-      <div className="space-y-2 text-center">
-        {/* [ Track this order ] → W4 (/orders/$orderId). W4 is the next slice (locked decision 1 — W3 alone),
-            so this is rendered DISABLED rather than as a link to a not-yet-registered route — a deferred,
-            honest control, not a broken navigation. It becomes a live <Link> when W4 lands. */}
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium opacity-50"
+      <div className="text-center">
+        {/* [ Track this order ] → W4 (/orders/$orderId). Now a live <Link> (W4 landed): the disabled,
+            deferred control of #62 becomes the entry point to the order-tracking screen that polls the same
+            OrderStatusView to convergence. The typed `to`/`params` resolve against the registered router. */}
+        <Link
+          to="/orders/$orderId"
+          params={{ orderId }}
+          className="inline-block w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Track this order
-        </button>
-        <p className="text-xs text-muted-foreground">Order tracking arrives in the next slice (W4).</p>
+        </Link>
       </div>
     </section>
   );

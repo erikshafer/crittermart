@@ -5,6 +5,7 @@ import { RouteNotFound } from "@/components/RouteNotFound";
 import { BrowsePage } from "@/catalog/BrowsePage";
 import { CartPage } from "@/cart/CartPage";
 import { OrderConfirmationPage } from "@/orders/OrderConfirmationPage";
+import { OrderStatusPage } from "@/orders/OrderStatusPage";
 
 // Code-based route tree (ADR 015 amendment — TanStack Router, wired code-based, no route-tree codegen).
 // Chosen for shared lineage with the already-accepted TanStack Query and for type-safe routes +
@@ -36,8 +37,7 @@ const cartRoute = createRoute({
 // W3 — Order Confirmation (Narrative 005 Moment 4). Reached by navigate() after [ Place Order ]'s POST /orders
 // succeeds. This thin route component reads the {orderId} path param and hands it to the (router-free, pure)
 // OrderConfirmationPage, which reads GET /orders/{orderId}. Referencing the route inside its own component is
-// the canonical code-based pattern — the closure resolves at render time, after the const is assigned. The
-// W4 tracking route (`/orders/$orderId`) is the next slice (locked decision 1 — this PR is W3 alone).
+// the canonical code-based pattern — the closure resolves at render time, after the const is assigned.
 const orderConfirmationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/orders/$orderId/confirmation",
@@ -47,7 +47,26 @@ const orderConfirmationRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([browseRoute, cartRoute, orderConfirmationRoute]);
+// W4 — Order Status / Tracking (Narrative 005 Moment 5). Reached by W3's now-live [ Track this order ] link.
+// The thin route component reads the {orderId} path param and hands it to the (router-free, pure)
+// OrderStatusPage, which reads GET /orders/{orderId} and polls it to convergence (refetchInterval, ADR 015
+// R5 — no socket). Sibling of the confirmation route under the same /orders/$orderId prefix; the matcher
+// resolves the more specific /confirmation path to W3, the bare param to W4.
+const orderTrackingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/orders/$orderId",
+  component: function OrderTrackingRoute() {
+    const { orderId } = orderTrackingRoute.useParams();
+    return <OrderStatusPage orderId={orderId} />;
+  },
+});
+
+const routeTree = rootRoute.addChildren([
+  browseRoute,
+  cartRoute,
+  orderConfirmationRoute,
+  orderTrackingRoute,
+]);
 
 export const router = createRouter({
   routeTree,
