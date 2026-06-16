@@ -4,14 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useApiContext } from "@/api/client";
 
 import { cartQueryOptions } from "./cartQueries";
+import { useChangeCartItemQuantity, useRemoveCartItem } from "./cartMutations";
 import type { CartLine } from "./cartSchema";
 
-// W2 — Cart Review (workshop § 5.1). The storefront's first real screen: it renders the customer's open cart
-// on a cold load by binding the slice-3.5 read `GET /carts/mine` (identity carried ambiently in the
-// X-Customer-Id header via the useCurrentCustomer seam — frontend SKILL Convention 4). This slice is
-// READ-ONLY: the wireframe's [-]/[+]/[x] edits (slices 3.2/3.3) and [ Place Order ] (slice 4.1) are their own
-// modeled command slices and land in the follow-on W2 PRs; quantity here is read-only text, the edit/checkout
-// controls deliberately absent rather than stubbed.
+// W2 — Cart Review (workshop § 5.1). The storefront's cart screen: it renders the customer's open cart on a
+// cold load by binding the slice-3.5 read `GET /carts/mine` (identity carried ambiently in the X-Customer-Id
+// header via the useCurrentCustomer seam — frontend SKILL Convention 4), and lets the customer edit it in
+// place. Each line carries a [-] N [+] quantity stepper (slice 3.3 `ChangeCartItemQuantity`) and an [x] remove
+// (slice 3.2 `RemoveCartItem`), each an OPTIMISTIC mutation (Convention 3): the row updates instantly, then
+// reconciles against the refetched CartView. The header badge and the Total derive from the same cart query,
+// so they update for free. [ Place Order ] (slice 4.1 → W3) is still its own slice, deliberately absent.
 
 // One $-formatter, built once at module load (cheaper than per-render, stable reference).
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -30,6 +32,79 @@ function formatCents(cents: number): string {
 
 function lineSubtotalCents(line: CartLine): number {
   return toCents(line.price) * line.quantity;
+}
+
+// Shared classes for the small square stepper/remove buttons — the neutral-token idiom from BrowsePage's
+// add-to-cart button (raw <button> + shadcn tokens; no shadcn primitive is installed). `disabled:` styles
+// give the at-minimum / in-flight states a visible, non-interactive look. `touch-manipulation` drops the
+// 300ms double-tap-zoom delay on these repeated-tap controls; `select-none` stops the −/× glyphs being
+// text-selected mid-tap. 32px square clears a comfortable touch target (web-interface-guidelines review).
+const iconButton =
+  "inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-base leading-none touch-manipulation select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 disabled:pointer-events-none";
+
+// One editable cart row. Each row owns its OWN mutation hooks (mirroring BrowsePage's per-card ProductCard),
+// so `isPending` is per-row — an in-flight edit disables only this row's controls, never freezing the table.
+// Disabling the whole row while any edit is in flight also closes the rapid-double-click window where a second
+// optimistic mutation could race the first's rollback. Both hooks target the shared cart key, so the badge and
+// Total update regardless of which row fired.
+function CartRow({ line }: { line: CartLine }) {
+  const changeQuantity = useChangeCartItemQuantity();
+  const removeItem = useRemoveCartItem();
+  const isPending = changeQuantity.isPending || removeItem.isPending;
+  const atMinimum = line.quantity <= 1;
+
+  return (
+    <tr className="border-b border-border">
+      <td className="py-3 pr-4 font-medium">{line.name}</td>
+      <td className="py-3 pr-4 font-mono text-muted-foreground">{line.sku}</td>
+      <td className="py-3 pr-4 text-right tabular-nums">{formatCents(toCents(line.price))}</td>
+      <td className="py-3 pr-4">
+        <div
+          className="flex items-center justify-end gap-2"
+          role="group"
+          aria-label={`Quantity for ${line.name}`}
+        >
+          <button
+            type="button"
+            // [-] is disabled at quantity 1: the backend rejects newQuantity <= 0 ("use remove for zero"),
+            // so reaching empty is only ever the explicit [x] (locked decision 2 — one control = one command).
+            onClick={() => changeQuantity.mutate({ sku: line.sku, newQuantity: line.quantity - 1 })}
+            disabled={isPending || atMinimum}
+            aria-label={`Decrease quantity of ${line.name}`}
+            className={`${iconButton} hover:bg-accent hover:text-accent-foreground`}
+          >
+            −
+          </button>
+          {/* `aria-live` announces the new quantity to a screen reader when the optimistic update lands;
+              `min-w-[2ch]` + `tabular-nums` reserve space so 1→2 digits never shifts the controls. */}
+          <span className="min-w-[2ch] text-center tabular-nums" aria-live="polite">
+            {line.quantity}
+          </span>
+          <button
+            type="button"
+            onClick={() => changeQuantity.mutate({ sku: line.sku, newQuantity: line.quantity + 1 })}
+            disabled={isPending}
+            aria-label={`Increase quantity of ${line.name}`}
+            className={`${iconButton} hover:bg-accent hover:text-accent-foreground`}
+          >
+            +
+          </button>
+        </div>
+      </td>
+      <td className="py-3 pr-4 text-right tabular-nums">{formatCents(lineSubtotalCents(line))}</td>
+      <td className="py-3 text-right">
+        <button
+          type="button"
+          onClick={() => removeItem.mutate({ sku: line.sku })}
+          disabled={isPending}
+          aria-label={`Remove ${line.name} from cart`}
+          className={`${iconButton} text-muted-foreground hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive`}
+        >
+          ×
+        </button>
+      </td>
+    </tr>
+  );
 }
 
 export function CartPage() {
@@ -92,7 +167,10 @@ export function CartPage() {
       <h1 className="text-3xl font-semibold tracking-tight">Your cart</h1>
 
       <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">Items in your cart, with unit price, quantity, and subtotal.</caption>
+        <caption className="sr-only">
+          Items in your cart, with unit price, quantity, and subtotal. Use the minus and plus buttons to change
+          a quantity, or the remove button to take an item out.
+        </caption>
         <thead>
           <tr className="border-b border-border text-left text-muted-foreground">
             <th scope="col" className="py-2 pr-4 font-medium">
@@ -107,20 +185,17 @@ export function CartPage() {
             <th scope="col" className="py-2 pr-4 text-right font-medium">
               Qty
             </th>
-            <th scope="col" className="py-2 text-right font-medium">
+            <th scope="col" className="py-2 pr-4 text-right font-medium">
               Subtotal
+            </th>
+            <th scope="col" className="py-2 text-right font-medium">
+              <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
         <tbody>
           {lines.map((line) => (
-            <tr key={line.sku} className="border-b border-border">
-              <td className="py-3 pr-4 font-medium">{line.name}</td>
-              <td className="py-3 pr-4 font-mono text-muted-foreground">{line.sku}</td>
-              <td className="py-3 pr-4 text-right tabular-nums">{formatCents(toCents(line.price))}</td>
-              <td className="py-3 pr-4 text-right tabular-nums">{line.quantity}</td>
-              <td className="py-3 text-right tabular-nums">{formatCents(lineSubtotalCents(line))}</td>
-            </tr>
+            <CartRow key={line.sku} line={line} />
           ))}
         </tbody>
         <tfoot>
@@ -128,7 +203,8 @@ export function CartPage() {
             <th scope="row" colSpan={4} className="py-3 pr-4 text-right font-semibold">
               Total
             </th>
-            <td className="py-3 text-right font-semibold tabular-nums">{formatCents(totalCents)}</td>
+            <td className="py-3 pr-4 text-right font-semibold tabular-nums">{formatCents(totalCents)}</td>
+            <td aria-hidden="true" />
           </tr>
         </tfoot>
       </table>
