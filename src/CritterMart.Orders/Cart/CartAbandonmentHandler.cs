@@ -25,7 +25,7 @@ public static class CartAbandonmentHandler
         CartActivityDeadline deadline,
         TimeProvider time)
     {
-        var stream = await session.Events.FetchForWriting<CartView>(message.CartId);
+        var stream = await session.Events.FetchForWriting<Cart>(message.CartId);
 
         // Terminal-state guard: checked out, already abandoned (including by a duplicate of this
         // very timeout), or unknown — append nothing, schedule nothing.

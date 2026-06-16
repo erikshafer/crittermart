@@ -4,6 +4,8 @@ using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine;
 using Wolverine.Http;
+// Disambiguate the Cart aggregate TYPE from its same-named namespace (CS0118) — local alias only (ADR 020).
+using CartAggregate = CritterMart.Orders.Cart.Cart;
 using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Orders.Features;
@@ -29,12 +31,12 @@ public static class PlaceOrderEndpoint
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
         PlaceOrder command, IDocumentSession session, PaymentDeadline deadline)
     {
-        // Resolve the customer's open cart — the same indexed CartView query AddToCart uses.
+        // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
         // open cart and is rejected here: the workshop's "cart already checked out" failure
         // path, handled for free by open-cart resolution (no separate guard needed).
-        var cart = await session.Query<CartView>()
-            .Where(v => v.CustomerId == command.CustomerId && v.IsOpen)
+        var cart = await session.Query<CartAggregate>()
+            .Where(c => c.CustomerId == command.CustomerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
         if (cart is null)
@@ -64,11 +66,11 @@ public static class PlaceOrderEndpoint
 
         // The multi-stream atomic write (slice 4.1's teaching beat): a new Order stream AND the
         // cart's terminal CartCheckedOut, committed together by AutoApplyTransactions in ONE
-        // transaction. The inline OrderStatusView + CartView projections both update.
+        // transaction. The inline OrderStatusView, Cart, and CartView projections all update.
         session.Events.StartStream<OrderStatusView>(
             orderId, new OrderPlaced(orderId, command.CustomerId, items, total));
 
-        var cartStream = await session.Events.FetchForWriting<CartView>(cart.Id);
+        var cartStream = await session.Events.FetchForWriting<CartAggregate>(cart.Id);
         cartStream.AppendOne(new CartCheckedOut(orderId));
 
         // Cascade the whole order's reservation request to Inventory over RabbitMQ (slice 4.2,

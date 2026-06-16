@@ -4,6 +4,11 @@ using Microsoft.AspNetCore.Http;
 using Wolverine;
 using Wolverine.Http;
 
+// Disambiguate the Cart aggregate TYPE from its same-named namespace (CS0118). The type is `Cart`
+// (ADR 020) — this is a local using-alias only, not a rename. A future Cart/ → Carts/ namespace
+// pluralization would remove the need (and pre-empt the same collision for Order); see retro 002.
+using CartAggregate = CritterMart.Orders.Cart.Cart;
+
 namespace CritterMart.Orders.Features;
 
 // The Customer adds an item to their cart (Workshop 001 slice 3.1). customerId comes from
@@ -27,9 +32,9 @@ public static class AddToCartEndpoint
     {
         // The Cart stream is keyed by cartId, but the command knows only the customer, so
         // resolve the customer's open cart first (design.md decision 2). The partial unique
-        // index on CartView.CustomerId (scoped to open carts) backstops a concurrent create.
-        var open = await session.Query<CartView>()
-            .Where(v => v.CustomerId == customerId && v.IsOpen)
+        // index on Cart.CustomerId (scoped to open carts) backstops a concurrent create.
+        var open = await session.Query<CartAggregate>()
+            .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
         string cartId;
@@ -42,7 +47,7 @@ public static class AddToCartEndpoint
             // and schedule the cart's inactivity deadline (slice 3.4). The schedule is durable
             // (UseDurableLocalQueues), so the deadline survives a service restart.
             cartId = Guid.NewGuid().ToString();
-            session.Events.StartStream<CartView>(cartId, new CartCreated(cartId, customerId), itemAdded);
+            session.Events.StartStream<CartAggregate>(cartId, new CartCreated(cartId, customerId), itemAdded);
             activityTimeout = new CartActivityTimeout(cartId).DelayedFor(deadline.Duration);
         }
         else
@@ -50,11 +55,11 @@ public static class AddToCartEndpoint
             // Subsequent add: append onto the same open cart. No new schedule — the pending
             // timeout re-aims itself off this event's timestamp when it fires (fire-and-check).
             cartId = open.Id;
-            var stream = await session.Events.FetchForWriting<CartView>(cartId);
+            var stream = await session.Events.FetchForWriting<CartAggregate>(cartId);
             stream.AppendOne(itemAdded);
         }
 
-        // AutoApplyTransactions commits; the inline CartView projection updates the lines.
+        // AutoApplyTransactions commits; the inline Cart aggregate + CartView read projection both update.
         return (Results.Created($"/carts/{cartId}", new AddToCartResponse(cartId)), activityTimeout);
     }
 }
