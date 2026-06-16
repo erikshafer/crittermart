@@ -1,4 +1,4 @@
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // Terminal-failure event of a Cart stream (Workshop 001 § 4, slice 3.4): the cart sat inactive
 // past the configured window and the Bruun temporal automation abandoned it. The cart is now

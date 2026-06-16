@@ -1,4 +1,4 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

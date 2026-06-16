@@ -1,7 +1,7 @@
 using JasperFx.Events;
 using Marten.Events.Aggregation;
 
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // The cart-side Bruun todo-list (Workshop 001 § 5 / § 7: CartsAwaitingActivity*): one row per
 // open cart, readable at GET /carts/awaiting-activity. The row is created when CartCreated folds,

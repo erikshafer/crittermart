@@ -53,6 +53,8 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [017](017-critterwatch-integrated.md) | CritterWatch Integrated — Out-of-Band Trial, Single-Node, nuget.org-Sourced | Accepted |
 | [018](018-frontend-three-services-cors-posture.md) | Frontend-to-Three-Services Dev-Server + CORS Posture | Accepted |
 | [019](019-wolverine-health-checks-exposed.md) | Wolverine Runtime Health Exposed via ASP.NET Health Checks | Accepted |
+| [020](020-domain-write-models-read-views.md) | Aggregates Are Domain-Named Immutable Write Models; Read Models Are Separate `*View` Projections | Accepted |
+| [021](021-verb-feature-folders.md) | Feature/Slice Folders Named for the Activity (Verb); Domain Types Keep Canonical Noun Names | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 

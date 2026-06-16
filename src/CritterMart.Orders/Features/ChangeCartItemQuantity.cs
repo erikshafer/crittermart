@@ -1,4 +1,4 @@
-using CritterMart.Orders.Cart;
+using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Wolverine.Http;
@@ -27,9 +27,9 @@ public static class ChangeCartItemQuantityEndpoint
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        // Resolve the customer's open cart — the same indexed CartView query AddToCart uses.
-        var open = await session.Query<CartView>()
-            .Where(v => v.CustomerId == customerId && v.IsOpen)
+        // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
+        var open = await session.Query<Cart>()
+            .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
         if (open is null)
@@ -50,9 +50,9 @@ public static class ChangeCartItemQuantityEndpoint
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        // Append the change; the inline CartView projection rewrites the line's quantity at
+        // Append the change; the inline Cart + CartView projections rewrite the line's quantity at
         // commit. The snapshotted name/price are untouched — only "how many" changes.
-        var stream = await session.Events.FetchForWriting<CartView>(open.Id);
+        var stream = await session.Events.FetchForWriting<Cart>(open.Id);
         stream.AppendOne(new CartItemQuantityChanged(sku, command.NewQuantity));
 
         return Results.NoContent();

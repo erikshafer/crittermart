@@ -1,7 +1,7 @@
 using Marten;
 using Wolverine;
 
-namespace CritterMart.Orders.Cart;
+namespace CritterMart.Orders.Shopping;
 
 // The fired inactivity deadline (Workshop 001 slice 3.4, the second Bruun temporal automation;
 // mirrors Order/PaymentTimeoutHandler). Scheduled by AddToCart when the cart was created;
@@ -25,7 +25,7 @@ public static class CartAbandonmentHandler
         CartActivityDeadline deadline,
         TimeProvider time)
     {
-        var stream = await session.Events.FetchForWriting<CartView>(message.CartId);
+        var stream = await session.Events.FetchForWriting<Cart>(message.CartId);
 
         // Terminal-state guard: checked out, already abandoned (including by a duplicate of this
         // very timeout), or unknown — append nothing, schedule nothing.
