@@ -2,7 +2,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 
 import { AppShell } from "@/components/AppShell";
 import { RouteNotFound } from "@/components/RouteNotFound";
-import { HomePage } from "@/routes/HomePage";
+import { BrowsePage } from "@/catalog/BrowsePage";
 import { CartPage } from "@/cart/CartPage";
 
 // Code-based route tree (ADR 015 amendment — TanStack Router, wired code-based, no route-tree codegen).
@@ -16,20 +16,23 @@ const rootRoute = createRootRoute({
   notFoundComponent: RouteNotFound,
 });
 
-const homeRoute = createRoute({
+// W1 — Browse / Listing. The storefront landing: the product grid + add-to-cart (Narrative 005 Moments 1–2).
+// This takes `/` — the customer lands ON the listing (the bootstrap HomePage wiring-check placeholder was
+// retired once a real landing screen existed; prompt 019 locked decision 2).
+const browseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomePage,
+  component: BrowsePage,
 });
 
-// W2 — Cart Review. The first modeled screen route; renders the customer's open cart from GET /carts/mine.
+// W2 — Cart Review. Renders the customer's open cart from GET /carts/mine.
 const cartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cart",
   component: CartPage,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, cartRoute]);
+const routeTree = rootRoute.addChildren([browseRoute, cartRoute]);
 
 export const router = createRouter({
   routeTree,
