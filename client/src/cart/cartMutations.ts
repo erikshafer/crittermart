@@ -1,17 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { postCommand, useApiContext } from "@/api/client";
+import { deleteCommand, postCommand, useApiContext } from "@/api/client";
 import { serviceUrls } from "@/config";
 
 import { cartKeys } from "./cartQueries";
 import type { CartLine, CartView } from "./cartSchema";
 
-// The cart's command layer — the storefront's FIRST mutation and FIRST optimistic-UI (frontend SKILL
-// Convention 3). Add-to-cart is *triggered from* the W1 catalog screen but *targets* the cart (its cache key,
-// its optimistic merge, its rollback are all CartView), so it lives with the cart feature — mirroring the
-// backend, where `AddToCart` is an Orders/Shopping concern, not Catalog. The W2 edit commands (3.2 remove,
-// 3.3 change-qty) and 4.1 place-order add their hooks here next, each copying this three-callback template.
+// The cart's command layer — the storefront's optimistic-UI mutations (frontend SKILL Convention 3). Each is
+// a *thin three-callback hook* paired with a *pure merge sibling* — the merge (the hard part: the optimistic
+// guess must follow the server's own rule so it reconciles cleanly instead of flickering) is extracted as a
+// pure, unit-tested function mirroring the Cart aggregate; the hook wires it into TanStack Query's
+// onMutate/onError/onSettled. Add-to-cart established the template (slice 3.1); the two W2 edits below
+// (3.2 remove, 3.3 change-qty) are its 2nd + 3rd realizations; 4.1 place-order adds its hook here next —
+// where optimism deliberately *stops* (a cross-BC outcome the SPA can't guess). All three cart commands here
+// target CartView (its cache key, its optimistic merge, its rollback), so they live with the cart feature —
+// mirroring the backend, where they are Orders/Shopping concerns, not Catalog.
 
 // The add-to-cart command body. Matches `AddToCart(string Sku, int Quantity, ProductSnapshot ProductSnapshot)`
 // exactly — System.Text.Json binds these camelCase keys case-insensitively. The field name **must** be
@@ -101,6 +105,116 @@ export function useAddToCart() {
 
     // onSettled — reconcile. Invalidate the cart key so the optimistic guess converges on the re-fetched
     // CartView: the read model, never the guess, is the source of truth (Convention 3).
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: cartKey });
+    },
+  });
+}
+
+// ── Remove from cart (slice 3.2) — the SPA's first DELETE ───────────────────────────────────────────────
+
+// The remove-item command. Both identifiers ride the route (DELETE /carts/{customerId}/items/{sku}), so the
+// command carries only the SKU — there is no request body, and the response is 204 (handled by deleteCommand).
+export interface RemoveCartItemCommand {
+  sku: string;
+}
+
+// Pure optimistic merge for remove — drops the SKU's line. Mirrors the Cart aggregate (RemoveCartItem.cs):
+// lines are SKU-keyed, so removal is an exact filter, and removing the *last* line leaves an empty-but-open
+// cart (the backend keeps it open — design.md decision 5), NOT null, so the screen renders empty rather than
+// vanishing. A null cart (nothing to remove from — never reached from a rendered row) is a no-op.
+export function removeLineFromCart(cart: CartView | null, sku: string): CartView | null {
+  if (!cart) return cart;
+  return { ...cart, lines: cart.lines.filter((l) => l.sku !== sku) };
+}
+
+// The remove-item mutation hook. Same route-keyed identity transport as useAddToCart (customerId from the seam
+// interpolated into the path; the X-Customer-Id header rides along) and the same three-callback optimistic
+// shape: the line disappears the instant [x] is tapped, then reconciles against the refetched CartView.
+export function useRemoveCartItem() {
+  const ctx = useApiContext();
+  const queryClient = useQueryClient();
+  const cartKey = cartKeys.mine(ctx.customerId);
+
+  return useMutation({
+    mutationFn: (command: RemoveCartItemCommand) =>
+      deleteCommand(`${serviceUrls.ordersUrl}/carts/${ctx.customerId}/items/${command.sku}`, ctx),
+
+    onMutate: async (command) => {
+      await queryClient.cancelQueries({ queryKey: cartKey });
+      const previous = queryClient.getQueryData<CartView | null>(cartKey);
+      queryClient.setQueryData<CartView | null>(cartKey, (current) =>
+        removeLineFromCart(current ?? null, command.sku),
+      );
+      return { previous };
+    },
+
+    onError: (_error, _command, context) => {
+      queryClient.setQueryData(cartKey, context?.previous);
+    },
+
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: cartKey });
+    },
+  });
+}
+
+// ── Change quantity (slice 3.3) ─────────────────────────────────────────────────────────────────────────
+
+// The change-quantity command. customerId + sku ride the route; the new ABSOLUTE quantity rides the body as
+// `{ newQuantity }` — matching `ChangeCartItemQuantity(int NewQuantity)`, which System.Text.Json binds
+// case-insensitively. Not a delta: the UI computes N±1 and sends the result. The backend rejects <= 0, but
+// the [-] stepper is disabled at quantity 1 (locked decision 2), so the SPA never sends a non-positive value.
+// Returns 204 (no body).
+export interface ChangeCartItemQuantityCommand {
+  sku: string;
+  newQuantity: number;
+}
+
+// Pure optimistic merge for change-quantity — rewrites the line's quantity to the ABSOLUTE new value, leaving
+// the snapshotted name/price untouched. Mirrors the Cart aggregate (ChangeCartItemQuantity.cs): only "how
+// many" changes; a quantity change never re-prices. A SKU not in the cart, or a null cart, is a no-op (the
+// control is only rendered for an existing line).
+export function setLineQuantity(
+  cart: CartView | null,
+  sku: string,
+  newQuantity: number,
+): CartView | null {
+  if (!cart) return cart;
+  return {
+    ...cart,
+    lines: cart.lines.map((l) => (l.sku === sku ? { ...l, quantity: newQuantity } : l)),
+  };
+}
+
+// The change-quantity mutation hook. Same route-keyed transport + three-callback optimistic shape; the body is
+// `{ newQuantity }` and the 204 response means `postCommand` is called WITHOUT a schema (nothing to parse).
+export function useChangeCartItemQuantity() {
+  const ctx = useApiContext();
+  const queryClient = useQueryClient();
+  const cartKey = cartKeys.mine(ctx.customerId);
+
+  return useMutation({
+    mutationFn: (command: ChangeCartItemQuantityCommand) =>
+      postCommand(
+        `${serviceUrls.ordersUrl}/carts/${ctx.customerId}/items/${command.sku}/quantity`,
+        { newQuantity: command.newQuantity },
+        ctx,
+      ),
+
+    onMutate: async (command) => {
+      await queryClient.cancelQueries({ queryKey: cartKey });
+      const previous = queryClient.getQueryData<CartView | null>(cartKey);
+      queryClient.setQueryData<CartView | null>(cartKey, (current) =>
+        setLineQuantity(current ?? null, command.sku, command.newQuantity),
+      );
+      return { previous };
+    },
+
+    onError: (_error, _command, context) => {
+      queryClient.setQueryData(cartKey, context?.previous);
+    },
+
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: cartKey });
     },

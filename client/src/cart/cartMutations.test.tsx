@@ -3,7 +3,14 @@ import type { ReactNode } from "react";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { addLineToCart, useAddToCart } from "@/cart/cartMutations";
+import {
+  addLineToCart,
+  removeLineFromCart,
+  setLineQuantity,
+  useAddToCart,
+  useChangeCartItemQuantity,
+  useRemoveCartItem,
+} from "@/cart/cartMutations";
 import { cartKeys } from "@/cart/cartQueries";
 import type { CartView } from "@/cart/cartSchema";
 import { CurrentCustomerProvider } from "@/identity/useCurrentCustomer";
@@ -131,5 +138,174 @@ describe("useAddToCart", () => {
     expect(init.method).toBe("POST");
     const body = JSON.parse(init.body as string);
     expect(body.productSnapshot).toEqual({ name: "Nebula Newt", price: 18.0 }); // the exact field name the backend binds
+  });
+});
+
+// A two-line cart for the remove/change-qty merges (oneLineCart has only crit-001).
+const twoLineCart: CartView = {
+  ...oneLineCart,
+  lines: [
+    { sku: "crit-001", quantity: 2, name: "Cosmic Critter Plush", price: 24.99 },
+    { sku: "crit-002", quantity: 3, name: "Nebula Newt", price: 18.0 },
+  ],
+};
+
+// ── The pure remove merge — drops the SKU's line, leaves an empty-but-open cart at zero. ──
+describe("removeLineFromCart", () => {
+  it("drops the targeted line and keeps the rest", () => {
+    const cart = removeLineFromCart(twoLineCart, "crit-001");
+
+    expect(cart?.lines.map((l) => l.sku)).toEqual(["crit-002"]);
+  });
+
+  it("leaves an empty-but-open cart when the last line is removed (NOT null)", () => {
+    const cart = removeLineFromCart(oneLineCart, "crit-001");
+
+    expect(cart).not.toBeNull();
+    expect(cart?.isOpen).toBe(true);
+    expect(cart?.lines).toEqual([]);
+  });
+
+  it("is a no-op on a null cart", () => {
+    expect(removeLineFromCart(null, "crit-001")).toBeNull();
+  });
+});
+
+// ── The pure change-quantity merge — absolute rewrite, never re-prices. ──
+describe("setLineQuantity", () => {
+  it("rewrites the line's quantity to the ABSOLUTE new value (not a delta)", () => {
+    const cart = setLineQuantity(oneLineCart, "crit-001", 5); // from 2 → 5, not 2 + 5
+
+    expect(cart?.lines[0].quantity).toBe(5);
+  });
+
+  it("never re-prices and leaves the snapshot name untouched", () => {
+    const cart = setLineQuantity(oneLineCart, "crit-001", 5);
+
+    expect(cart?.lines[0].price).toBe(24.99);
+    expect(cart?.lines[0].name).toBe("Cosmic Critter Plush");
+  });
+
+  it("leaves other lines untouched", () => {
+    const cart = setLineQuantity(twoLineCart, "crit-001", 5);
+
+    expect(cart?.lines.find((l) => l.sku === "crit-002")?.quantity).toBe(3);
+  });
+
+  it("is a no-op on a null cart", () => {
+    expect(setLineQuantity(null, "crit-001", 5)).toBeNull();
+  });
+});
+
+// ── The remove hook — optimistic drop, rollback, route-keyed DELETE. ──
+describe("useRemoveCartItem", () => {
+  it("optimistically removes the line from the cached cart before the server answers", async () => {
+    const queryClient = freshClient();
+    const cartKey = cartKeys.mine(CUSTOMER);
+    queryClient.setQueryData(cartKey, twoLineCart);
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper: makeWrapper(queryClient) });
+    act(() => {
+      result.current.mutate({ sku: "crit-001" });
+    });
+
+    await waitFor(() => {
+      const cart = queryClient.getQueryData<CartView>(cartKey);
+      expect(cart?.lines.map((l) => l.sku)).toEqual(["crit-002"]);
+    });
+  });
+
+  it("rolls the optimistic removal back to the snapshot when the command fails", async () => {
+    const queryClient = freshClient();
+    const cartKey = cartKeys.mine(CUSTOMER);
+    queryClient.setQueryData(cartKey, twoLineCart);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 409 })));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper: makeWrapper(queryClient) });
+    act(() => {
+      result.current.mutate({ sku: "crit-001" });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(queryClient.getQueryData<CartView>(cartKey)?.lines).toHaveLength(2); // both lines restored
+  });
+
+  it("DELETEs the route-keyed URL (customerId + sku in the path)", async () => {
+    const queryClient = freshClient();
+    queryClient.setQueryData(cartKeys.mine(CUSTOMER), twoLineCart);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper: makeWrapper(queryClient) });
+    act(() => {
+      result.current.mutate({ sku: "crit-001" });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/carts/${CUSTOMER}/items/crit-001`);
+    expect(init.method).toBe("DELETE");
+  });
+});
+
+// ── The change-quantity hook — optimistic absolute set, rollback, route-keyed POST with { newQuantity }. ──
+describe("useChangeCartItemQuantity", () => {
+  it("optimistically sets the line's quantity before the server answers", async () => {
+    const queryClient = freshClient();
+    const cartKey = cartKeys.mine(CUSTOMER);
+    queryClient.setQueryData(cartKey, oneLineCart); // crit-001 @ qty 2
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+
+    const { result } = renderHook(() => useChangeCartItemQuantity(), {
+      wrapper: makeWrapper(queryClient),
+    });
+    act(() => {
+      result.current.mutate({ sku: "crit-001", newQuantity: 5 });
+    });
+
+    await waitFor(() => {
+      const cart = queryClient.getQueryData<CartView>(cartKey);
+      expect(cart?.lines[0].quantity).toBe(5); // absolute, not 2 + 5
+    });
+  });
+
+  it("rolls the optimistic quantity back to the snapshot when the command fails", async () => {
+    const queryClient = freshClient();
+    const cartKey = cartKeys.mine(CUSTOMER);
+    queryClient.setQueryData(cartKey, oneLineCart);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 409 })));
+
+    const { result } = renderHook(() => useChangeCartItemQuantity(), {
+      wrapper: makeWrapper(queryClient),
+    });
+    act(() => {
+      result.current.mutate({ sku: "crit-001", newQuantity: 5 });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(queryClient.getQueryData<CartView>(cartKey)?.lines[0].quantity).toBe(2); // restored
+  });
+
+  it("POSTs the route-keyed URL with a `{ newQuantity }` body (no response schema — 204)", async () => {
+    const queryClient = freshClient();
+    queryClient.setQueryData(cartKeys.mine(CUSTOMER), oneLineCart);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useChangeCartItemQuantity(), {
+      wrapper: makeWrapper(queryClient),
+    });
+    act(() => {
+      result.current.mutate({ sku: "crit-001", newQuantity: 5 });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/carts/${CUSTOMER}/items/crit-001/quantity`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ newQuantity: 5 });
   });
 });

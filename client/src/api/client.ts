@@ -65,17 +65,30 @@ export async function fetchParsed<T>(
   return schema.parse(await response.json());
 }
 
-// POST a command body, set the identity header, and parse the response body through `schema`. The
-// command-side counterpart of `fetchParsed`: same X-Customer-Id seam (Convention 4) and same boundary
-// parse (Convention 2 — a command's *response* is a wire surface that can drift too), plus a JSON body
-// and `Content-Type`. Pure (no React), so mutation factories can call it and tests can drive it with a
-// literal context + mocked fetch. Any non-2xx throws `ApiError` (a command has no domain-empty 404 case).
-export async function postCommand<T>(
+// POST a command body, set the identity header, and (when the command answers with one) parse the
+// response body through `schema`. The command-side counterpart of `fetchParsed`: same X-Customer-Id seam
+// (Convention 4) and same boundary parse (Convention 2 — a command's *response* is a wire surface that can
+// drift too), plus a JSON body and `Content-Type`. Pure (no React), so mutation factories can call it and
+// tests can drive it with a literal context + mocked fetch. Any non-2xx throws `ApiError` (a command has
+// no domain-empty 404 case).
+//
+// `schema` is **optional**, and the overloads make the return type follow it: a command that returns a body
+// (W1 `AddToCart` → 201 `{ cartId }`) passes a schema and gets the parsed `T`; a command that returns
+// `204 No Content` (slice 3.3 change-qty) omits it and gets `void`. Omitting it also skips the `.json()`
+// call — reading a body off a 204 throws "Unexpected end of JSON input", so the no-schema path must not.
+export function postCommand<T>(
   url: string,
   body: unknown,
   ctx: RequestContext,
   schema: ZodType<T>,
-): Promise<T> {
+): Promise<T>;
+export function postCommand(url: string, body: unknown, ctx: RequestContext): Promise<void>;
+export async function postCommand<T>(
+  url: string,
+  body: unknown,
+  ctx: RequestContext,
+  schema?: ZodType<T>,
+): Promise<T | void> {
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -90,7 +103,26 @@ export async function postCommand<T>(
     throw new ApiError(`Command to ${url} failed with ${response.status}.`, response.status);
   }
 
+  // 204 No Content (no schema): the command succeeded with no body to parse — do NOT call `.json()`.
+  if (!schema) return;
   return schema.parse(await response.json());
+}
+
+// DELETE a route-keyed resource, setting the identity header. The SPA's first DELETE (slice 3.2 remove —
+// both identifiers ride the route, there is no body either way). Like `postCommand` with no schema, the
+// contract is `204 No Content`, so there is nothing to parse; a non-2xx throws `ApiError`. Pure (no React).
+export async function deleteCommand(url: string, ctx: RequestContext): Promise<void> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      [CUSTOMER_ID_HEADER]: ctx.customerId,
+    },
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Command to ${url} failed with ${response.status}.`, response.status);
+  }
 }
 
 // The React binding: builds the per-request context from the identity seam. Components and query hooks
