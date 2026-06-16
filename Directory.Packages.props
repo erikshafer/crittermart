@@ -22,10 +22,10 @@
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.HealthChecks" Version="6.8.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.8.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.8.0" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.8.0" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.10.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.10.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.10.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.10.0" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial; same Critter Stack 2026 line) -->
   <ItemGroup>
