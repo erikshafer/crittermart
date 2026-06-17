@@ -125,6 +125,8 @@ dotnet run --project src/CritterMart.AppHost --launch-profile http
 
 The Aspire dashboard (default `http://localhost:15090`) surfaces OpenTelemetry traces across services; the cross-service Place Order trace fills in as the Order journey (4.x) lands. The canonical entry point for the design pipeline remains [`CLAUDE.md`](CLAUDE.md).
 
+For the full **boot → seed → drive an order → verify every surface (Swagger, Aspire dashboard, CritterWatch console, storefront SPA) → teardown** procedure — repeatable by a human or an AI agent — see the [Demo & Smoke-Test Runbook](docs/demo-runbook.md).
+
 ---
 
 ## Repository Structure
