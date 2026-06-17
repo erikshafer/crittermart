@@ -199,9 +199,14 @@ is the proof the message round-trip completed.
 
 ---
 
-## Step 5 — Drive the cancel saga (insufficient stock)
+## Step 5 — Drive the cancel saga (two live routes)
 
-The reliably-triggerable failure path live: order more than the available stock.
+Two of the three cancel routes are triggerable live. Both are the *same handler machinery* as the
+happy path, just reacting to a failure event — no special error path.
+
+### 5a — Insufficient stock (`stock_unavailable`)
+
+Order more than the available stock; the reservation refuses.
 
 ```powershell
 $cat="http://localhost:5101"; $inv="http://localhost:5102"; $ord="http://localhost:5103"
@@ -216,18 +221,56 @@ $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-Re
 "status=$($o.status) reason=$($o.cancelReason)"
 ```
 
-**Expected:** `status=cancelled reason=stock_unavailable`. Stock is **unchanged** (reservation is
-all-or-nothing, so a refusal reserved nothing → no compensating release needed). This is the same
-handler machinery as the happy path, just reacting to `StockReservationFailed`.
+**Expected:** `status=cancelled reason=stock_unavailable`. Stock is **unchanged** — reservation is
+all-or-nothing, so a refusal reserved nothing → **no** compensating release.
 
-> **The other two cancel routes are not casually triggerable live:**
-> - **Payment decline** (`payment_declined`, with a compensating `ReleaseStock` back to Inventory)
->   — `StubPaymentProvider` (`src/CritterMart.Orders/Ordering/PaymentProvider.cs`) **always
->   approves**; the decline branch is exercised only in tests by swapping a declining provider.
->   Showing it live would need a small config-gated declining toggle (not built — see
->   [§ Known gaps](#known-gaps)).
-> - **Payment timeout** (`payment_timeout`) — fires only after `Orders:PaymentTimeout` (default
->   **10 min**) elapses; demo-able only by shortening that config value.
+### 5b — Payment declined (`payment_declined`) — the compensation beat
+
+This is the richer route: stock **is** reserved, then payment declines, so the order cancels **and the
+reserved stock is released back** (a compensating `ReleaseStock` to Inventory). It is enabled by the
+**`Payment:DeclineOverAmount`** demo affordance (default **$100**, set by the AppHost — see the box
+below): order over the threshold → the stub declines.
+
+```powershell
+$cat="http://localhost:5101"; $inv="http://localhost:5102"; $ord="http://localhost:5103"
+function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
+$cust="demo-decline"; $sku="crit-deluxe"
+
+Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json -Body (J @{ sku=$sku; name="Deluxe Critter"; description="Premium."; price=24.99 })
+Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=100 })
+# 5 × $24.99 = $124.95, over the $100 threshold → payment will decline
+Invoke-RestMethod "$ord/carts/$cust/items" -Method Post -ContentType application/json -Body (J @{ sku=$sku; quantity=5; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
+$o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
+"status=$($o.status) reason=$($o.cancelReason)"
+"stock after: $(Invoke-RestMethod "$inv/stock/$sku" | ConvertTo-Json -Compress)"
+```
+
+**Expected:** `status=cancelled reason=payment_declined`, and stock returns to **available 100,
+reserved 0** — it was reserved at the stock gate, then **released back** when payment failed. That
+release (`reserved 5 → 0`) is the compensation the audience sees flow back to Inventory in the trace /
+CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
+
+> ### ⚙️ The `Payment:DeclineOverAmount` demo affordance — read this so it's never a surprise
+>
+> By default the stubbed payment provider **always approves** (round-one behavior). To make the
+> decline route demo-able live, the **AppHost** (`src/CritterMart.AppHost/Program.cs`) injects
+> `Payment__DeclineOverAmount = 100` into the Orders service, so the stub declines any order whose
+> **total exceeds $100**. This is the *only* thing that makes a decline happen at runtime — the whole
+> decline→cancel→release chain is real and was built/tested as slice 4.6.
+>
+> - **It is ON by default when you run via Aspire.** Orders over $100 **will** cancel with
+>   `payment_declined` — that is expected, not a bug.
+> - **Change it:** edit the `WithEnvironment("Payment__DeclineOverAmount", "100")` value in the AppHost.
+> - **Turn it OFF (restore "always approve"):** delete that one line in the AppHost, or set
+>   `Payment:DeclineOverAmount` to empty. **Do this after the talk** if you want production-faithful
+>   behavior back.
+> - Code: `PaymentDeclinePolicy` + `StubPaymentProvider` in
+>   `src/CritterMart.Orders/Ordering/PaymentProvider.cs`; registered in `src/CritterMart.Orders/Program.cs`.
+>
+> **The third cancel route — payment timeout (`payment_timeout`) — is still config-only and not
+> talk-friendly:** it fires only after `Orders:PaymentTimeout` (default **10 min**) elapses. Demo-able
+> by shortening that value, but the wait is dead air; prefer the instant decline (5b) on stage.
 
 ---
 
@@ -293,8 +336,12 @@ echo "$ORDER"   # -> {"orderId":"..."}
 - **No seed automation.** `src/CritterMart.Seeding` is an abandoned scaffold (no source, not in the
   solution or AppHost). Every boot needs the manual [Step 3](#step-3--seed-data-manual-re-run-every-boot) seed.
   A small seed step/console (or a `.http` file) is a natural follow-up.
-- **Payment decline / timeout not casually demo-able live** (see [Step 5](#step-5--drive-the-cancel-saga-insufficient-stock)).
-  A config-gated declining-payment toggle and/or a short `Orders:PaymentTimeout` would unlock those
-  beats.
+- **Payment decline is a DEMO AFFORDANCE, on by default** via `Payment:DeclineOverAmount` (= $100,
+  set in the AppHost) — orders over the threshold cancel with `payment_declined` (see
+  [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat)). **Remove that AppHost line
+  after the talk** to restore round-one "always approve."
+- **Payment timeout still config-only** — fires after `Orders:PaymentTimeout` (default 10 min); demo-able
+  only by shortening it, and the wait is dead air (prefer the decline beat live).
 - **Last verified:** 2026-06-17 on `main` @ `edab271` — full happy path + insufficient-stock cancel,
-  zero errors/DLQ, all four surfaces up. Re-verify against the current commit before relying on it.
+  zero errors/DLQ, all four surfaces up. The payment-decline affordance is unit-tested; re-verify the
+  full live decline→release once against the current commit before relying on it.

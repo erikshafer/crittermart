@@ -54,7 +54,18 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
-    .WaitFor(critterwatch);
+    .WaitFor(critterwatch)
+    // ───── DEMO AFFORDANCE — change before the talk / REMOVE after it ──────────────────────────────
+    // Makes the payment-DECLINE path (slice 4.6: OrderCancelled{payment_declined} + compensating
+    // ReleaseStock back to Inventory) triggerable LIVE: the stubbed payment provider declines any order
+    // whose total exceeds this threshold, and approves everything at/under it. So in one running stack,
+    // a small order confirms and a large order (total > $100) cancels and releases its reserved stock —
+    // no restart, no provider swap. This is the ONLY thing that makes a decline happen at runtime; the
+    // whole decline→cancel→release chain itself is real, built, and tested (slice 4.6).
+    //   • Change the threshold here to tune which orders decline.
+    //   • DELETE this one line to restore round-one "always approve" behavior after the demo.
+    //   • Full how-to + the order amounts to use: docs/demo-runbook.md § Step 5 / Payment decline.
+    .WithEnvironment("Payment__DeclineOverAmount", "100");
 
 // The round-two customer storefront SPA (ADR 015) — a Vite + React app launched as part of the Aspire
 // orchestration so one `dotnet run` boots the full stack with the frontend visible in the dashboard

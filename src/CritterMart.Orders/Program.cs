@@ -167,6 +167,16 @@ builder.Services.AddHealthChecks()
 // The stubbed payment provider (slice 4.3). Round one stubs payment (vision.md non-goal), so the
 // default always approves; integration tests swap a declining IPaymentProvider to exercise the
 // failure branch. A real gateway integration would replace only this registration.
+//
+// DEMO AFFORDANCE (Payment:DeclineOverAmount): when set, the stub declines any order whose total
+// exceeds the threshold, making the slice-4.6 payment-DECLINE path (cancel + compensating ReleaseStock)
+// triggerable in a LIVE demo without swapping providers. UNSET (the default here and in every test) →
+// approve everything, exactly as before. The demo value is injected by the AppHost
+// (src/CritterMart.AppHost/Program.cs); how to change/remove it is in docs/demo-runbook.md § Payment
+// decline. Mirrors the PaymentDeadline / CartActivityDeadline config-singleton pattern above.
+var declineOverAmount = builder.Configuration.GetValue<decimal?>("Payment:DeclineOverAmount");
+builder.Services.AddSingleton(new PaymentDeclinePolicy(declineOverAmount));
+
 builder.Services.AddSingleton<CritterMart.Orders.Ordering.IPaymentProvider,
     CritterMart.Orders.Ordering.StubPaymentProvider>();
 
