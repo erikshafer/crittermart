@@ -25,12 +25,34 @@ public interface IPaymentProvider
     public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command);
 }
 
-// Round-one stub: always approves, returning a synthetic "stub-…" auth code. The failure branch
-// (slice 4.3's decline path → PaymentAuthFailed, precondition for slice 4.6) is exercised in
-// tests by registering a declining IPaymentProvider in place of this one.
-public class StubPaymentProvider : IPaymentProvider
+// DEMO AFFORDANCE — the policy that lets the stub decline on demand. `DeclineOverAmount` is null by
+// default (and in tests): the stub then approves everything, exactly as round one always did. When the
+// AppHost sets `Payment:DeclineOverAmount` for the live demo (src/CritterMart.AppHost/Program.cs), the
+// stub declines any order whose total exceeds the threshold — so the slice-4.6 payment-DECLINE path
+// (cancel + compensating ReleaseStock back to Inventory) is triggerable live, without swapping providers
+// or restarting: a small order confirms, a large one cancels. This is config-gated *stub* behavior, NOT
+// a domain rule and NOT a magic value in the command payload (the policy the codebase deliberately chose
+// over payload magic — see PaymentAuthorizationTests' DecliningPaymentProvider). See docs/demo-runbook.md.
+public record PaymentDeclinePolicy(decimal? DeclineOverAmount);
+
+// Round-one stub: approves by default, returning a synthetic "stub-…" auth code. The failure branch
+// (slice 4.3's decline path → PaymentAuthFailed, precondition for slice 4.6) is exercised in tests by
+// registering a declining IPaymentProvider in place of this one, and — for the live demo — by the
+// PaymentDeclinePolicy threshold above. A real gateway integration would replace this registration.
+public class StubPaymentProvider(PaymentDeclinePolicy policy) : IPaymentProvider
 {
-    public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command) =>
-        Task.FromResult(new PaymentDecision(
+    public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command)
+    {
+        // Demo decline: total over the configured threshold → decline (precondition for the slice-4.6
+        // cancel-and-release). Unset threshold → this branch never runs → always approve.
+        if (policy.DeclineOverAmount is { } threshold && command.Amount > threshold)
+        {
+            return Task.FromResult(new PaymentDecision(
+                command.OrderId, Approved: false, AuthCode: null,
+                Reason: $"declined (demo): order total {command.Amount} exceeds threshold {threshold}"));
+        }
+
+        return Task.FromResult(new PaymentDecision(
             command.OrderId, Approved: true, AuthCode: $"stub-{Guid.NewGuid():N}", Reason: null));
+    }
 }
