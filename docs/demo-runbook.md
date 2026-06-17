@@ -308,6 +308,42 @@ CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 | **Storefront SPA** | `http://localhost:5273` | Browse → add to cart → checkout → track → **My Orders**. The human-facing payoff. |
 | **Metrics** | Aspire dashboard → **Metrics** → Orders/Inventory → meter `Marten` → `marten.event.append`, split by `event_type`. | A live histogram of the domain's event vocabulary. |
 
+> **⏱️ A `POST /orders` trace's Duration reads ~10 minutes — expected, not a hang.** Every placed order
+> schedules a durable `OrderPaymentTimeout` self-message `DelayedFor(Orders:PaymentTimeout)` (default
+> **10 min**, `src/CritterMart.Orders/Features/PlaceOrder.cs`). That deferred message inherits the
+> placement trace, so the trace stays "open" — and its **Duration** balloons to ~10 min — until the
+> deadline fires (it then no-ops, the order having long since settled). The order itself completes in
+> **tens of milliseconds**: a freshly-placed trace shows the clean ~50ms Orders→Inventory cascade *until*
+> its deadline elapses. **To screenshot the tight waterfall, open a trace within ~10 min of placing it.**
+> (A future slice could start a *new* linked trace for the deferred deadline so durations never inflate.)
+
+---
+
+## Live-traffic flourish — `demo-traffic.ps1`
+
+To paint **continuous live message flow** onto CritterWatch (Topology / Services) and the OTel dashboard —
+e.g. while you talk through the closing slides — run the traffic generator. It places orders against the
+real `/orders` endpoints in a loop (there is **no special "generate traffic" endpoint** in the app; every
+order runs the genuine cross-BC saga), so the monitoring surfaces light up with real traffic:
+
+```powershell
+# one burst (12 orders, a payment-decline every 5th):
+pwsh docs/demo-traffic.ps1
+
+# stream until Ctrl+C — the "set it running during the demo" mode:
+pwsh docs/demo-traffic.ps1 -Continuous
+
+# denser, happy-path only:
+pwsh docs/demo-traffic.ps1 -Count 30 -DelaySeconds 0.8 -DeclineEvery 0
+```
+
+Most orders are happy-path confirms (each consumes 1 unit of `crit-001`/`crit-deluxe`); every Nth
+(`-DeclineEvery`, default 5) is a >$100 order that trips the decline affordance, so the **compensating
+stock-release** branch shows too. Declines are stock-neutral (they release what they reserved), and the
+boot reseeds stock — so a fresh boot restores full stock. The script fires-and-forgets (no polling), so
+sagas run async in the background and the flow stays visible. Last run live-verified: a 15-order burst
+(3 declines) settled with `reserved 0` on every SKU — no leaked reservations.
+
 ---
 
 ## Step 7 — Teardown
@@ -367,8 +403,15 @@ echo "$ORDER"   # -> {"orderId":"..."}
   after the talk** to restore round-one "always approve."
 - **Payment timeout still config-only** — fires after `Orders:PaymentTimeout` (default 10 min); demo-able
   only by shortening it, and the wait is dead air (prefer the decline beat live).
-- **Last verified:** 2026-06-17 on `feat/seed-automation` — **auto-seed on boot confirmed**: the
-  `seeder` resource published all three products + stock (`crit-001`=100, `crit-rare`=1, `crit-deluxe`=100)
-  with zero manual seeding, and a happy-path order against the auto-seeded `crit-001` confirmed (stock
-  100→98, committed 0→2). Zero boot errors. The payment-decline affordance is unit-tested; re-verify the
-  full live decline→release once against the current commit before relying on it.
+- **Last verified:** 2026-06-17 on `192d2f0` (`main`) — **full live pass**. Clean boot, auto-seed of all
+  three SKUs, and all three saga routes driven live: happy → `confirmed`; insufficient → `cancelled ·
+  stock_unavailable` (stock untouched); and **decline → `cancelled · payment_declined` with the reserved
+  stock released back** — this closes the prior "re-verify decline→release against the current commit"
+  item (`reserved 5→0` confirmed). First **real-browser render** of the SPA (headless Chromium) across all
+  five routes — browse, cart, My Orders (both terminal states), and both track screens — with live
+  cross-origin data, confirming CORS and the `X-Customer-Id` identity seam in an actual browser. **OTel:**
+  the `POST /orders` trace stitches **two resources** (orders + inventory) across the RabbitMQ hop into one
+  ~50ms trace (see the trace-duration note in [Step 6](#step-6--verify-the-demo-surfaces)). **CritterWatch:**
+  **Trial** tier (license read; expires 7/10/2026) with catalog/inventory/orders all connected. A 15-order
+  `demo-traffic.ps1` burst (3 declines) settled with `reserved 0` on every SKU — no leaked reservations.
+  Zero boot errors.
