@@ -3,7 +3,7 @@ import { z } from "zod";
 // OrderStatusViewSchema — the THIRD per-read-model Zod schema (frontend SKILL Convention 2), and the third
 // service read surface (Orders' `OrderStatusView`, shared by W3 confirmation and the W4 tracking screen). It
 // is the SPA's hand-written copy of the `OrderStatusView` contract that Orders' `GET /orders/{orderId}`
-// returns (slice 4.1, src/CritterMart.Orders/Order/OrderStatusView.cs); NOT generated — when the service's
+// returns (slice 4.1, src/CritterMart.Orders/Ordering/OrderStatusView.cs); NOT generated — when the service's
 // response shape changes, this schema changes in the same PR that consumes the change.
 //
 // **Wire casing is camelCase.** Wolverine.Http serializes with System.Text.Json *web defaults* and Orders
@@ -18,7 +18,7 @@ import { z } from "zod";
 // `object-strict-vs-strip`).
 
 // The closed set of order statuses — the 5 `OrderStatus` constants the backend folds onto the view
-// (src/CritterMart.Orders/Order/OrderStatusView.cs:OrderStatus). Modeled as a `z.enum` (locked decision 3,
+// (src/CritterMart.Orders/Ordering/OrderStatusView.cs:OrderStatus). Modeled as a `z.enum` (locked decision 3,
 // zod `schema-use-enums`): an unexpected/typo'd status FAILS LOUD at the boundary rather than rendering
 // through to the screen — the Convention 2 spirit, with the teaching value that status is a known domain
 // enum. The cost is the schema couples to today's set: a new backend status is a schema bump here, which is
@@ -45,7 +45,7 @@ export const CancelReasonSchema = z.enum([
 
 // One order line — a SKU at the quantity and the name/price frozen onto the order when it was placed.
 // Structurally identical to `CartLineSchema`, but deliberately a SEPARATE schema: the backend mirrors this
-// (a distinct `OrderLine` record on the Order aggregate, src/CritterMart.Orders/Order/OrderPlaced.cs, not the
+// (a distinct `OrderLine` record on the Order aggregate, src/CritterMart.Orders/Ordering/OrderPlaced.cs, not the
 // Cart's `CartLine`), and the two are independent contract surfaces that can drift apart — sharing one schema
 // across the cart↔orders feature seam would couple them against Convention 2's premise. Counts and money are
 // inherently non-negative, so the schema says so.
