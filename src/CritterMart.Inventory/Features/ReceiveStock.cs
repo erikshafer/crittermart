@@ -16,9 +16,10 @@ public static class ReceiveStockEndpoint
         // Create-or-append: FetchForWriting handles both the first receipt (starts the
         // stream) and subsequent receipts (appends). [Aggregate] can't create a missing
         // stream and StartStream throws on an existing one — FetchForWriting does both.
-        var stream = await session.Events.FetchForWriting<StockLevelView>(sku);
+        var stream = await session.Events.FetchForWriting<StockLevel>(sku);
         stream.AppendOne(new StockReceived(sku, command.Quantity));
-        // AutoApplyTransactions commits; the inline StockLevelView projection updates available.
+        // AutoApplyTransactions commits; the inline StockLevel snapshot and the StockLevelView read
+        // projection both fold the StockReceived and update available.
     }
 }
 

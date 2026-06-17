@@ -14,7 +14,7 @@ public static class CommitStockHandler
     {
         foreach (var line in message.Lines)
         {
-            var stream = await session.Events.FetchForWriting<StockLevelView>(line.Sku);
+            var stream = await session.Events.FetchForWriting<StockLevel>(line.Sku);
 
             if (stream.Aggregate?.Reservations.Contains(message.OrderId) == true)
             {

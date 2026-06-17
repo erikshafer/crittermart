@@ -28,8 +28,16 @@ builder.Services.AddMarten(opts =>
         // Stock streams are keyed per SKU.
         opts.Events.StreamIdentity = StreamIdentity.AsString;
 
-        // Inline single-stream projection — the readable stock level (ADR 008; no async daemon).
-        opts.Projections.Add<StockLevelViewProjection>(ProjectionLifecycle.Inline);
+        // The StockLevel aggregate — a SKU's domain WRITE model (ADR 020), a self-aggregating immutable
+        // record materialized as an inline snapshot (ADR 008; no async daemon). It is the FetchForWriting
+        // target on the four stock write paths and is never served over HTTP.
+        opts.Projections.Snapshot<StockLevel>(SnapshotLifecycle.Inline);
+
+        // StockLevelView — a SKU's READ model (ADR 020): a DEDICATED inline projection served over
+        // GET /stock/{sku}, decoupled from the StockLevel aggregate so the read path never touches the
+        // write model. Wire shape preserved (the ADR 020 Stock rollout — this replaced the former
+        // StockLevelViewProjection : SingleStreamProjection class with a self-aggregating record snapshot).
+        opts.Projections.Snapshot<StockLevelView>(SnapshotLifecycle.Inline);
     })
     .IntegrateWithWolverine()
     .ApplyAllDatabaseChangesOnStartup();

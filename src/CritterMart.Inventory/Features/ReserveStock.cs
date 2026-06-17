@@ -17,12 +17,12 @@ public static class ReserveStockHandler
 {
     public static async Task<object> Handle(Contracts.ReserveStock message, IDocumentSession session)
     {
-        // Load each line's stream once: the StockLevelView aggregate carries available stock and
+        // Load each line's stream once: the StockLevel aggregate carries available stock and
         // the order ids already reserved, and the IEventStream is what we append the grant to.
-        var streams = new List<(Contracts.ReserveStockLine Line, IEventStream<StockLevelView> Stream)>();
+        var streams = new List<(Contracts.ReserveStockLine Line, IEventStream<StockLevel> Stream)>();
         foreach (var line in message.Lines)
         {
-            var stream = await session.Events.FetchForWriting<StockLevelView>(line.Sku);
+            var stream = await session.Events.FetchForWriting<StockLevel>(line.Sku);
             streams.Add((line, stream));
         }
 
