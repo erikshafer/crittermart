@@ -2,6 +2,7 @@ using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using JasperFx.Events;
 using JasperFx.Events.Projections;
+using JasperFx.OpenTelemetry;
 using Marten;
 using Wolverine;
 using Wolverine.CritterWatch;
@@ -97,6 +98,16 @@ builder.Services.AddMarten(opts =>
         // The read model resolves by customer too (GET /carts/mine) — a plain (non-unique) index serves
         // that query; uniqueness is the aggregate's invariant, not the read model's.
         opts.Schema.For<CartView>().Index(x => x.CustomerId);
+
+        // OpenTelemetry (ADR 005, completing chore/002's deferred half): verbose connection
+        // tracking emits a `marten.connection` span per connection AND tags every write op (the
+        // event appends) after a successful commit, so the appends show up inside the trace next
+        // to the HTTP/Wolverine spans. TrackEventCounters() exports the `marten.event.append`
+        // metric (tagged event_type). ServiceDefaults registers the matching "Marten" meter so the
+        // counter actually reaches the dashboard. Verbose is the teaching level — the demo wants
+        // the writes visible (a production setup would likely use TrackLevel.Normal).
+        opts.OpenTelemetry.TrackConnections = TrackLevel.Verbose;
+        opts.OpenTelemetry.TrackEventCounters();
     })
     .IntegrateWithWolverine()
     .ApplyAllDatabaseChangesOnStartup();
