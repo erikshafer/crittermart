@@ -21,7 +21,7 @@ public static class ReleaseStockHandler
     {
         foreach (var line in message.Lines)
         {
-            var stream = await session.Events.FetchForWriting<StockLevelView>(line.Sku);
+            var stream = await session.Events.FetchForWriting<StockLevel>(line.Sku);
 
             // Release only what this order holds. No reservation for the order on this SKU means
             // nothing to give back (already released, or never reserved) — skip the line.

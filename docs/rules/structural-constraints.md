@@ -1,5 +1,5 @@
 ---
-version: v1.4
+version: v1.6
 status: Active
 date: 2026-06-16
 references:
@@ -105,7 +105,7 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - The raw aggregate is never serialized over HTTP; a public read is a separate, purpose-built `*View` read model projected from the same events, created only when a read needs one. (ADR 020)
 - The aggregate carries the write-side invariants (e.g. the open-cart partial-unique index); the read model carries only what its consumers query. (ADR 020)
 - Feature/slice folders are named for the **activity** (a verb/gerund — `Shopping/`, `Ordering/`); domain types inside keep canonical **noun** names (`Cart`, `Order`). A verb namespace never collides with a noun type, so an aggregate needs no qualifying suffix. (ADR 021)
-- Applied where a singular noun folder would otherwise collide with its aggregate, not as a blanket rule. This round: Cart's slice is `Shopping/` + the canonical `Cart` aggregate + `CartView` read model; Order has followed with `Ordering/Order` + the `OrderStatusView` read model (implementations/022); only `StockLevelView` still doubles as aggregate + read model, pending the Stock pilot (`Stock`'s `StockLevel` ≠ `…Stock`, no folder change needed). (ADR 020, ADR 021)
+- Applied where a singular noun folder would otherwise collide with its aggregate, not as a blanket rule. This round, all three event-sourced aggregates are split: Cart's slice is `Shopping/` + the canonical `Cart` aggregate + `CartView` read model; Order's is `Ordering/Order` + the `OrderStatusView` read model (implementations/022); Stock's is `StockLevel` + the `StockLevelView` read model with no folder change (`StockLevel` ≠ `…Stock`, so no collision) (implementations/024). The ADR 020 rollout is complete. (ADR 020, ADR 021)
 
 ## SDD pipeline discipline
 
@@ -143,3 +143,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.3    | 2026-06-02 | Added three **SDD pipeline discipline** rules from the `tidy: encode` bundle: the tidy ceremony rule (spec-content tidy → full prompt/retro pair; mechanical tidy → may run light), one-capability-per-aggregate OpenSpec granularity, and workshop frontmatter version tracking. Paired with the matching CLAUDE.md additions (§ Operating Disciplines, § 4a). |
 | v1.4    | 2026-06-16 | Added the **Aggregate and read-model naming** section (ADR 020 + ADR 021): aggregates are domain-named immutable `sealed record` write models (no `*View`/`*Aggregate` suffix, `this with` evolution), the raw aggregate is never served, a public read is a separate `*View` projection, and slice folders are named for the **activity** (verb — `Shopping/`, `Ordering/`) so aggregates keep canonical noun names. Piloted on Cart (`Shopping/` folder + canonical `Cart` aggregate + `CartView` read model); Order/Stock pending. |
 | v1.5    | 2026-06-16 | **Order pilot landed** (implementations/022): the naming-rollout status ticks — Order split into the `Order` write aggregate (also the PMvH state) in an `Ordering/` verb folder + the `OrderStatusView` read model; only `StockLevelView` remains pending its pilot. No rule changed — the convention is unchanged; this records the rollout reaching Order. |
+| v1.6    | 2026-06-16 | **Stock pilot landed** (implementations/024): the naming-rollout status closes — Stock split into the `StockLevel` write aggregate (carrying the reserve/release/commit idempotency state: `Available` + `Reservations`) + the `StockLevelView` read model, with no folder change (`StockLevel` ≠ `…Stock`). All three round-one event-sourced aggregates are now split; the ADR 020 rollout is complete. No rule changed — this records the rollout reaching Stock (and catches the frontmatter `version` up from the v1.5 entry, which had bumped the table but not the header). |
