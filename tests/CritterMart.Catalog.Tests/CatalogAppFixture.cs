@@ -18,10 +18,10 @@ public class CatalogAppFixture : IAsyncLifetime
 
     public IAlbaHost Host { get; private set; } = null!;
 
-    // The storefront origin the frontend-bootstrap PR pins (Vite dev server on 5173). Injected into
+    // The storefront origin the frontend-bootstrap PR pins (Vite dev server on 5273). Injected into
     // config via the exact key the AppHost uses in production (Cors__AllowedOrigins__0) so the CORS
     // preflight test asserts the real config-driven allowlist, not the Development fallback.
-    public const string SpaOrigin = "http://localhost:5173";
+    public const string SpaOrigin = "http://localhost:5273";
 
     public async Task InitializeAsync()
     {

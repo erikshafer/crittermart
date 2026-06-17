@@ -40,7 +40,8 @@ should re-derive rather than trust blindly is flagged **[verify]**.
   boots without it.
 - **.NET 10 SDK** (see [README § Prerequisites](../README.md#prerequisites)).
 - Repo on the branch/commit you want to demo (the talk demos `main`).
-- Ports free: **5101, 5102, 5103** (services), **5173** (SPA), **15090** (Aspire dashboard). The
+- Ports free: **5101, 5102, 5103** (services), **5273** (SPA — pinned off Vite's `5173` default so it
+  coexists with sibling Vite apps like MmoReconnect/CritterBids), **15090** (Aspire dashboard). The
   CritterWatch console takes a **dynamic** port (see [§ URLs & ports](#urls--ports)).
 
 ---
@@ -48,7 +49,7 @@ should re-derive rather than trust blindly is flagged **[verify]**.
 ## Step 0 — Clean slate (do this before a talk)
 
 Orphaned processes from a previous boot lock build DLLs (`MSB3026` on the next build) and squat on
-`:5173`. `Stop-Process` on the CritterMart services does **not** reap the Vite dev server's `node`
+`:5273`. `Stop-Process` on the CritterMart services does **not** reap the Vite dev server's `node`
 workers, which accumulate across boots.
 
 ```powershell
@@ -124,7 +125,7 @@ If a service never comes healthy, tail the boot log for the failure (`fail:`, `e
 | **Catalog** service | `http://localhost:5101` | 5101 (fixed) | `/` → 302 → `/swagger` |
 | **Inventory** service | `http://localhost:5102` | 5102 (fixed) | `/` → 302 → `/swagger` |
 | **Orders** service | `http://localhost:5103` | 5103 (fixed) | `/` → 302 → `/swagger` |
-| **Storefront SPA** | `http://localhost:5173` | 5173 (fixed) | Vite dev server; the human-facing demo |
+| **Storefront SPA** | `http://localhost:5273` | 5273 (fixed) | Vite dev server; the human-facing demo. **5273, not Vite's 5173 default** — avoids colliding with sibling Vite apps (`strictPort:true`). |
 | **CritterWatch console** | via dashboard | **dynamic** | `WithExternalHttpEndpoints`, no pinned port — open it from the Aspire dashboard's `critterwatch-console` resource. |
 | **RabbitMQ management** | via dashboard | dynamic | Open from the Aspire dashboard's `rabbitmq` resource. |
 
@@ -238,7 +239,7 @@ handler machinery as the happy path, just reacting to `StockReservationFailed`.
 | **Swagger UI** | Open `http://localhost:5101`, `:5102`, `:5103` (root redirects to `/swagger`). Script: each `/swagger/index.html` returns **200**. | The Wolverine.Http endpoints with OpenAPI **inferred from handler signatures** — the "no controllers, no boilerplate" beat. |
 | **Aspire dashboard** | `http://localhost:15090/login?t=<token>` → **Traces** → the `POST /orders` row → span waterfall. | The cross-service trace: Orders → RabbitMQ → Inventory → back, with `marten.connection` spans. **Deep-dive + screenshot guide: [otel-trace-walkthrough.md](research/otel-trace-walkthrough.md).** |
 | **CritterWatch console** | Aspire dashboard → `critterwatch-console` resource → open its endpoint. | The Wolverine/Marten monitoring view — messages, handlers, queues, sagas, per-service health. The most on-theme "it's actually working" visual for a messaging talk. **[verify]** it shows the **Trial** tier, not "Development" (it runs with `ASPNETCORE_ENVIRONMENT=Production` so it reads the real license — set in the AppHost). |
-| **Storefront SPA** | `http://localhost:5173` | Browse → add to cart → checkout → track → **My Orders**. The human-facing payoff. |
+| **Storefront SPA** | `http://localhost:5273` | Browse → add to cart → checkout → track → **My Orders**. The human-facing payoff. |
 | **Metrics** | Aspire dashboard → **Metrics** → Orders/Inventory → meter `Marten` → `marten.event.append`, split by `event_type`. | A live histogram of the domain's event vocabulary. |
 
 ---
@@ -260,7 +261,7 @@ trace/metric screenshots **before** this step. Vite `node` workers may linger (s
 | Symptom | Cause / fix |
 |---|---|
 | `MSB3026` / locked DLL on build | Orphaned service host from a prior boot — run [Step 0](#step-0--clean-slate-do-this-before-a-talk). |
-| `:5173` already in use | Orphaned Vite `node` workers — sweep `node` (carefully) or reboot. |
+| `:5273` already in use | Orphaned Vite `node` workers — sweep `node` (carefully) or reboot. (A *sibling* Vite app on `5273` would be unusual — CritterMart deliberately moved here off the shared `5173`.) |
 | Nothing boots / container errors | Docker Desktop isn't running. |
 | Dashboard login fails | The `?t=` token is **per-boot** — copy the current one from the console/log, not an old URL. |
 | Order stuck at `awaiting_confirmation` | Inventory didn't reply — check it's healthy and RabbitMQ is up; check the boot log for broker errors. |
