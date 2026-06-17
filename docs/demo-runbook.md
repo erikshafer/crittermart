@@ -19,11 +19,12 @@ references:
 > storefront SPA. It is the written form of the smoke test, usable by a human before a talk or by
 > an AI coding agent verifying a change.
 >
-> **Bottom line:** one `dotnet run` + the seed + one `POST /orders` proves the entire
-> event-sourced, message-driven system — handlers, cross-BC RabbitMQ hops, projections, and the
-> compensation path — is working. Aspire's Postgres is **ephemeral** (fresh empty DB every boot),
-> so the seed must be re-run each boot. Seed *automation* does not exist yet (see
-> [§ Known gaps](#known-gaps)); this runbook seeds manually.
+> **Bottom line:** one `dotnet run` + one `POST /orders` proves the entire event-sourced,
+> message-driven system — handlers, cross-BC RabbitMQ hops, projections, and the compensation path —
+> is working. Aspire's Postgres is **ephemeral** (fresh empty DB every boot), so the demo data has to
+> be loaded each boot — but the **`seeder` Aspire resource now does that automatically on boot**
+> (see [§ Step 3](#step-3--seed-data-auto-on-boot-manual-fallback)), so the stack comes up demo-ready
+> with no manual seeding. The manual seed remains documented as a fallback/override.
 >
 > For the OpenTelemetry trace span-hierarchy + the metrics/screenshot guide, this runbook hands
 > off to [`docs/research/otel-trace-walkthrough.md`](research/otel-trace-walkthrough.md).
@@ -137,11 +138,33 @@ If a service never comes healthy, tail the boot log for the failure (`fail:`, `e
 
 ---
 
-## Step 3 — Seed data (manual; re-run every boot)
+## Step 3 — Seed data (auto on boot; manual fallback)
 
-The ephemeral DB starts empty. Seed a product (Catalog) and stock (Inventory). The order flow does
-not strictly need the Catalog row — the storefront snapshots name+price into the cart — but seeding
-it makes the SPA's browse page populate.
+**This usually happens automatically.** The Aspire stack includes a one-shot **`seeder`** resource
+(`src/CritterMart.Seeding`) that, once Catalog + Inventory are healthy, POSTs the canonical demo seed —
+three products + their stock — to the real `/products` and `/stock/{sku}/receipts` endpoints, then exits.
+So after [Step 2](#step-2--wait-for-healthy) the DB is already populated and the SPA browse page lists
+the products; **you normally do nothing here**. Watch the `seeder` resource in the Aspire dashboard (or
+its console log) — it logs `[seed] published …` lines and finishes. The seed is **idempotent** (a
+duplicate SKU returns 409 and is skipped), and the `seeder` is a leaf resource nothing waits on, so a
+seed hiccup shows red on the dashboard but never blocks the services or storefront.
+
+The canonical seed set (matches the three order routes below):
+
+| SKU | Name | Price | Stock | Used by |
+|---|---|---|---|---|
+| `crit-001` | Cosmic Critter Plush | $24.99 | 100 | [Step 4](#step-4--drive-an-order-happy-path) happy path |
+| `crit-rare` | Rare Critter | $49.99 | 1 | [Step 5a](#5a--insufficient-stock-stock_unavailable) insufficient-stock cancel |
+| `crit-deluxe` | Deluxe Critter | $24.99 | 100 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel |
+
+**Disable auto-seed** (to seed by hand, or to demo an empty store): set `SEEDING_ENABLED=false` on the
+`seeder` resource (e.g. add `.WithEnvironment("SEEDING_ENABLED","false")` in the AppHost, or export it),
+and the seeder logs that it skipped and exits without seeding.
+
+**Manual seed (fallback / extra data).** The commands below are what the seeder automates — run them
+yourself when auto-seed is disabled, or to add SKUs beyond the canonical set. The order flow does not
+strictly need the Catalog row (the storefront snapshots name+price into the cart), but seeding it makes
+the SPA's browse page populate.
 
 ```powershell
 $cat="http://localhost:5101"; $inv="http://localhost:5102"; $sku="crit-001"
@@ -308,7 +331,7 @@ trace/metric screenshots **before** this step. Vite `node` workers may linger (s
 | Nothing boots / container errors | Docker Desktop isn't running. |
 | Dashboard login fails | The `?t=` token is **per-boot** — copy the current one from the console/log, not an old URL. |
 | Order stuck at `awaiting_confirmation` | Inventory didn't reply — check it's healthy and RabbitMQ is up; check the boot log for broker errors. |
-| Empty catalog / "no stock" | The DB is ephemeral — re-run [Step 3](#step-3--seed-data-manual-re-run-every-boot) after every boot. |
+| Empty catalog / "no stock" | The `seeder` resource auto-populates on boot — check it finished OK in the Aspire dashboard (`[seed]` log lines). If auto-seed is off (`SEEDING_ENABLED=false`) or you need extra data, run the manual [Step 3](#step-3--seed-data-auto-on-boot-manual-fallback). |
 | CritterWatch shows "Development" tier | The console must run as `Production` to read the trial license (set in the AppHost via `WithEnvironment("ASPNETCORE_ENVIRONMENT","Production")`). |
 
 ---
@@ -334,15 +357,18 @@ echo "$ORDER"   # -> {"orderId":"..."}
 
 ## Known gaps
 
-- **No seed automation.** `src/CritterMart.Seeding` is an abandoned scaffold (no source, not in the
-  solution or AppHost). Every boot needs the manual [Step 3](#step-3--seed-data-manual-re-run-every-boot) seed.
-  A small seed step/console (or a `.http` file) is a natural follow-up.
+- **Seed automation — DONE.** `src/CritterMart.Seeding` is a one-shot console wired as the `seeder`
+  Aspire resource; it auto-seeds the canonical set on boot (see
+  [Step 3](#step-3--seed-data-auto-on-boot-manual-fallback)). Set `SEEDING_ENABLED=false` to disable and
+  seed by hand. (Seeds products + stock only; carts/orders are still driven live in the demo.)
 - **Payment decline is a DEMO AFFORDANCE, on by default** via `Payment:DeclineOverAmount` (= $100,
   set in the AppHost) — orders over the threshold cancel with `payment_declined` (see
   [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat)). **Remove that AppHost line
   after the talk** to restore round-one "always approve."
 - **Payment timeout still config-only** — fires after `Orders:PaymentTimeout` (default 10 min); demo-able
   only by shortening it, and the wait is dead air (prefer the decline beat live).
-- **Last verified:** 2026-06-17 on `main` @ `edab271` — full happy path + insufficient-stock cancel,
-  zero errors/DLQ, all four surfaces up. The payment-decline affordance is unit-tested; re-verify the
+- **Last verified:** 2026-06-17 on `feat/seed-automation` — **auto-seed on boot confirmed**: the
+  `seeder` resource published all three products + stock (`crit-001`=100, `crit-rare`=1, `crit-deluxe`=100)
+  with zero manual seeding, and a happy-path order against the auto-seeded `crit-001` confirmed (stock
+  100→98, committed 0→2). Zero boot errors. The payment-decline affordance is unit-tested; re-verify the
   full live decline→release once against the current commit before relying on it.
