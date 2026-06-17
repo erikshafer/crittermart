@@ -40,14 +40,36 @@ Library mechanics defer to the installed per-library skills.
 
 ## Layout
 
+The SPA is organized by **feature folder**, one per service surface the storefront binds — the frontend
+echo of the backend's vertical slices. Each feature folder colocates its page(s), its `queryOptions`
+factory (reads), its Zod schema (the wire boundary), and its mutations (writes), so a screen and the
+contract it depends on are reviewed together. Shared infrastructure (the fetch client, the identity seam,
+the config, the router, the app shell) sits at the root, outside any one feature.
+
 ```
 src/
   api/client.ts              shared fetch: X-Customer-Id header + Zod boundary parse + typed 404
   config.ts                  the three Aspire-injected service URLs (Zod-validated)
   identity/useCurrentCustomer.tsx   the ADR 009 identity seam (stubbed id today, Polecat claim later)
-  router.tsx                 code-based TanStack Router tree
-  components/                AppShell, RouteNotFound (+ shadcn ui/ as components land)
-  routes/                    page components (HomePage bootstrap placeholder; W1–W4 screens follow)
+  router.tsx                 code-based TanStack Router tree (the W1–W4 routes register here)
+  components/                AppShell (header + cart badge), RouteNotFound
   lib/utils.ts               cn() class-merge helper
   index.css                  Tailwind v4 + shadcn neutral theme tokens
+
+  catalog/                   W1 — Catalog (GET /products)
+    BrowsePage · catalogQueries · catalogSchema
+  cart/                      W2 — Cart (GET /carts/mine + edit commands)
+    CartPage · CartBadge · cartQueries · cartSchema · cartMutations (optimistic add/remove/change-qty)
+  orders/                    W3/W4 — Orders (POST /orders, GET /orders/{orderId})
+    OrderConfirmationPage (W3) · OrderStatusPage (W4) · orderQueries · orderSchema
+    placeOrderMutation (non-optimistic) · orderStatusJourney (the W4 poll/stepper brain, pure)
 ```
+
+Route map (code-based, wired in `router.tsx`):
+
+| Screen | Route | Page | Binds |
+| --- | --- | --- | --- |
+| W1 Browse | `/` | `catalog/BrowsePage` | `GET /products` + optimistic `AddToCart` |
+| W2 Cart | `/cart` | `cart/CartPage` | `GET /carts/mine` + remove / change-quantity / place |
+| W3 Confirmation | `/orders/$orderId/confirmation` | `orders/OrderConfirmationPage` | `GET /orders/{orderId}` (read-back after place) |
+| W4 Tracking | `/orders/$orderId` | `orders/OrderStatusPage` | `GET /orders/{orderId}` (polled to terminal status) |
