@@ -44,7 +44,16 @@ public static class Extensions
             .WithMetrics(metrics =>
             {
                 metrics.AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation();
+                    .AddHttpClientInstrumentation()
+                    // Critter Stack meters — the tracing pipeline below already registers the
+                    // matching ActivitySources, but metrics need their own meter registration or
+                    // the counters emit into a void. "Marten" carries marten.event.append (ADR 005's
+                    // TrackEventCounters); Wolverine's meter is "Wolverine:{ServiceName}" (NOT just
+                    // "Wolverine" — the meter name differs from the ActivitySource), so a wildcard
+                    // catches all three services (Wolverine:Catalog/Inventory/Orders) from this
+                    // shared ServiceDefaults without hardcoding a service name.
+                    .AddMeter("Marten")
+                    .AddMeter("Wolverine:*");
             })
             .WithTracing(tracing =>
             {
