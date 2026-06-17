@@ -15,7 +15,7 @@ Tailwind v4 (`@tailwindcss/vite`) · shadcn/ui · Vitest. Node ≥ 22. `latest`/
 
 ```bash
 npm install
-npm run dev       # Vite dev server on http://localhost:5173 (strict port)
+npm run dev       # Vite dev server on http://localhost:5273 (strict port; off Vite's 5173 default to avoid sibling-app clashes)
 npm run build     # tsc --noEmit + vite build
 npm run test      # vitest run
 ```

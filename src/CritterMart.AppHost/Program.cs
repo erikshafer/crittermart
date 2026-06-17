@@ -59,15 +59,17 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
 // The round-two customer storefront SPA (ADR 015) — a Vite + React app launched as part of the Aspire
 // orchestration so one `dotnet run` boots the full stack with the frontend visible in the dashboard
 // (ADR 004). It is a flat app at client/ (the single round-one SPA). The dev-server port is pinned to
-// 5173 so its origin is deterministic — that exact origin is injected into each service's CORS
+// 5273 so its origin is deterministic — that exact origin is injected into each service's CORS
 // allowlist just below, and it is the value ServiceDefaults.AddFrontendCors already falls back to.
+// 5273 (not Vite's default 5173) so the storefront coexists with sibling Vite apps that grab 5173
+// (e.g. MmoReconnect, CritterBids) — vite.config.ts pins the same value with strictPort:true.
 //
 // Each service's base URL is injected as a VITE_-prefixed env var (ADR 018 — no BFF, no proxy): Vite
 // exposes VITE_* on import.meta.env, which src/config.ts reads and Zod-validates. There is deliberately
 // no Vite proxy — the SPA issues genuine cross-origin requests in dev exactly as in the demo, so the
 // cross-network OpenTelemetry trace boundary is exercised continuously.
 var storefront = builder.AddViteApp("storefront", "../../client")
-    .WithHttpEndpoint(port: 5173, name: "http")
+    .WithHttpEndpoint(port: 5273, name: "http")
     .WithEnvironment("VITE_CATALOG_URL", catalog.GetEndpoint("http"))
     .WithEnvironment("VITE_INVENTORY_URL", inventory.GetEndpoint("http"))
     .WithEnvironment("VITE_ORDERS_URL", orders.GetEndpoint("http"))
@@ -80,7 +82,7 @@ var storefront = builder.AddViteApp("storefront", "../../client")
 // ServiceDefaults.AddFrontendCors; injecting the storefront's endpoint as Cors__AllowedOrigins__0 binds
 // to that string[] at index 0. The services are declared before the storefront and never WaitFor it, so
 // there is no startup cycle — only a lazily-resolved endpoint reference flowing the other way. The
-// pinned 5173 port means the origin is known regardless of resolution order.
+// pinned 5273 port means the origin is known regardless of resolution order.
 var storefrontOrigin = storefront.GetEndpoint("http");
 catalog.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
 inventory.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);

@@ -95,8 +95,9 @@ public static class Extensions
     // directly over HTTP with no BFF (ADR 006 / ADR 015), so every service must opt the browser
     // origin in or the cross-origin calls are blocked. Origins come from config ("Cors:AllowedOrigins",
     // an array); the AppHost injects the real frontend origin once AddViteApp lands. Until then,
-    // Development falls back to the conventional Vite dev-server origin so the storefront works on a
-    // plain `dotnet run`. Identity is a hardcoded id carried in the request body (ADR 009) — no
+    // Development falls back to the storefront's pinned dev-server origin (`:5273` — off Vite's default
+    // `:5173` to avoid colliding with sibling Vite apps; matches client/vite.config.ts) so the
+    // storefront works on a plain `dotnet run`. Identity is a hardcoded id carried in the request body (ADR 009) — no
     // cookies — so credentials are not allowed, which keeps AllowAnyHeader/AllowAnyMethod safe.
     public static TBuilder AddFrontendCors<TBuilder>(this TBuilder builder)
         where TBuilder : IHostApplicationBuilder
@@ -105,7 +106,7 @@ public static class Extensions
         if (origins is null or { Length: 0 })
         {
             origins = builder.Environment.IsDevelopment()
-                ? ["http://localhost:5173"]
+                ? ["http://localhost:5273"]
                 : [];
         }
 

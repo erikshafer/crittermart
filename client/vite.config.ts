@@ -15,9 +15,11 @@ import tailwindcss from "@tailwindcss/vite";
 // injected by Aspire's AddViteApp in orchestration, falling back to the launchSettings ports for a
 // standalone `npm run dev`.
 //
-// The dev server is pinned to 5173 so the origin is deterministic: the AppHost injects exactly this
+// The dev server is pinned to 5273 so the origin is deterministic: the AppHost injects exactly this
 // origin into each service's Cors:AllowedOrigins, and it is the value AddFrontendCors already falls
-// back to in Development.
+// back to in Development. 5273 (not Vite's default 5173) is deliberate — sibling Vite apps developed
+// alongside this one (e.g. MmoReconnect, CritterBids) take 5173, and with strictPort:true a clash
+// would fail the boot loudly; 5273 keeps CritterMart's storefront collision-free.
 export default defineConfig({
   base: "/",
   plugins: [
@@ -32,7 +34,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 5273,
     strictPort: true,
   },
   test: {
