@@ -78,9 +78,17 @@ export const OrderStatusViewSchema = z.object({
   cancelReason: CancelReasonSchema.nullable(),
 });
 
+// The "My Orders" list payload (`GET /orders/mine`) — a customer's orders, each a full `OrderStatusView`,
+// ordered newest-first by the server. The schema is the array of the SAME per-order contract W3/W4 bind
+// (Convention 2, reused wholesale): the list row and the detail screen share one shape, so a row links
+// straight into the W4 track screen with no second contract. An empty array is the no-orders domain state
+// (`200 []`), parsed like any other payload — not an error (the contrast with `GET /carts/mine`'s `404`).
+export const OrderListSchema = z.array(OrderStatusViewSchema);
+
 // `z.infer` over hand-typed interfaces (zod `type-use-z-infer`): the type and the runtime schema can never
 // drift apart, because the type IS the schema.
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 export type CancelReason = z.infer<typeof CancelReasonSchema>;
 export type OrderLine = z.infer<typeof OrderLineSchema>;
 export type OrderStatusView = z.infer<typeof OrderStatusViewSchema>;
+export type OrderList = z.infer<typeof OrderListSchema>;
