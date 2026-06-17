@@ -22,6 +22,8 @@ const placedOrder = {
     { sku: "crit-002", quantity: 3, name: "Nebula Newt", price: 18.0 },
   ],
   total: 103.98,
+  placedAt: "2026-06-16T14:02:00+00:00",
+  cancelReason: null,
 };
 
 // OrderConfirmationPage now renders a router <Link> ("Track this order" → W4), so it needs router context. A

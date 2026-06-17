@@ -3,8 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useApiContext } from "@/api/client";
 
 import { orderQueryOptions } from "./orderQueries";
-import type { OrderLine, OrderStatus } from "./orderSchema";
-import { deriveJourney, humanizeStatus, pollIntervalFor } from "./orderStatusJourney";
+import type { CancelReason, OrderLine, OrderStatus } from "./orderSchema";
+import {
+  deriveJourney,
+  formatPlacedAt,
+  humanizeCancelReason,
+  humanizeStatus,
+  pollIntervalFor,
+} from "./orderStatusJourney";
 
 // W4 — Order Status / Tracking (workshop § 5.1; Narrative 005 Moment 5). The payoff of W3's [ Track this
 // order ]: the same `OrderStatusView` the confirmation screen read, but entered BY id and **converging by
@@ -43,14 +49,23 @@ const STEP_STATE_LABEL = {
 // The lifecycle stepper, derived purely from the current status. A progress journey renders the four
 // waypoints with the current one emphasized; a cancelled order renders an honest terminal treatment (the
 // view carries no reason and no failure step, so we do not guess a position on the path).
-function StatusJourney({ status }: { status: OrderStatus }) {
-  const journey = deriveJourney(status);
+function StatusJourney({
+  status,
+  cancelReason,
+}: {
+  status: OrderStatus;
+  cancelReason: CancelReason | null;
+}) {
+  const journey = deriveJourney(status, cancelReason);
 
   if (journey.kind === "cancelled") {
     return (
-      <p className="text-sm text-muted-foreground">
-        This order was cancelled and will not be fulfilled.
-      </p>
+      <div className="space-y-1 text-sm text-muted-foreground">
+        <p>This order was cancelled and will not be fulfilled.</p>
+        {/* The specific reason, now bound (slice 025) — W4 names the failure instead of a bare "cancelled".
+            Guarded for the defensive null case (every real cancellation carries a reason). */}
+        {journey.reason && <p>Reason: {humanizeCancelReason(journey.reason)}</p>}
+      </div>
     );
   }
 
@@ -171,7 +186,9 @@ export function OrderStatusPage({ orderId }: { orderId: string }) {
         <p aria-live="polite" className="text-lg font-semibold">
           {humanizeStatus(order.status)}
         </p>
-        <StatusJourney status={order.status} />
+        <StatusJourney status={order.status} cancelReason={order.cancelReason} />
+        {/* The § 5.1 W4 "Placed … UTC" line — the order's placement time, now bound (slice 025). */}
+        <p className="text-sm text-muted-foreground">Placed {formatPlacedAt(order.placedAt)}</p>
       </div>
 
       {/* The receipt the W3 celebration omitted: per-line rows + the server-computed Total. */}

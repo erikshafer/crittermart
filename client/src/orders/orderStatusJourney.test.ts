@@ -7,11 +7,22 @@ import {
   pollIntervalFor,
   deriveJourney,
   humanizeStatus,
+  humanizeCancelReason,
+  formatPlacedAt,
 } from "@/orders/orderStatusJourney";
 
-// A minimal view at a given status — the only field the derivation reads.
+// A minimal view at a given status — the fields the poll/journey derivations read. placedAt + cancelReason
+// are modeled now (slice 025); the poll/stepper tests don't read them, but the type requires them.
 function viewAt(status: OrderStatus): OrderStatusView {
-  return { id: "ord-7f3a", customerId: "customer-demo", status, lines: [], total: 0 };
+  return {
+    id: "ord-7f3a",
+    customerId: "customer-demo",
+    status,
+    lines: [],
+    total: 0,
+    placedAt: "2026-06-16T14:02:00+00:00",
+    cancelReason: null,
+  };
 }
 
 describe("isTerminalStatus", () => {
@@ -77,11 +88,19 @@ describe("deriveJourney — the lifecycle stepper (locked decision 4)", () => {
     if (journey.kind !== "progress") throw new Error("expected progress");
     expect(journey.steps.map((s) => s.state)).toEqual(["done", "done", "done", "current"]);
   });
+});
 
-  it("at cancelled, the journey is its own terminal branch — not a position on the path", () => {
-    // The view carries no cancellation reason and no failure step, so we render a terminal treatment
-    // rather than guessing where on the lifecycle it stopped.
-    expect(deriveJourney("cancelled")).toEqual({ kind: "cancelled" });
+describe("deriveJourney — cancelled is a terminal branch carrying its reason (slice 025)", () => {
+  it("at cancelled WITH a reason, the journey is the terminal branch carrying that reason", () => {
+    // The view now carries the cancellation reason; we surface it rather than guessing a position on the path.
+    expect(deriveJourney("cancelled", "payment_declined")).toEqual({
+      kind: "cancelled",
+      reason: "payment_declined",
+    });
+  });
+
+  it("at cancelled with NO reason supplied, the reason defaults to null (the defensive case)", () => {
+    expect(deriveJourney("cancelled")).toEqual({ kind: "cancelled", reason: null });
   });
 });
 
@@ -92,5 +111,26 @@ describe("humanizeStatus", () => {
     expect(humanizeStatus("payment_authorized")).toBe("Payment authorized");
     expect(humanizeStatus("confirmed")).toBe("Confirmed");
     expect(humanizeStatus("cancelled")).toBe("Cancelled");
+  });
+});
+
+describe("humanizeCancelReason (slice 025)", () => {
+  it("maps each of the three OrderCancelled reasons to its copy", () => {
+    expect(humanizeCancelReason("stock_unavailable")).toMatch(/in stock/i);
+    expect(humanizeCancelReason("payment_declined")).toMatch(/declined/i);
+    expect(humanizeCancelReason("payment_timeout")).toMatch(/in time/i);
+  });
+});
+
+describe("formatPlacedAt (slice 025)", () => {
+  it("formats an ISO-8601 instant as a readable UTC timestamp (locale-format-independent parts)", () => {
+    const formatted = formatPlacedAt("2026-06-16T14:02:00+00:00");
+    expect(formatted).toContain("2026");
+    expect(formatted).toContain("14:02"); // 24-hour UTC, so the time matches the append metadata
+    expect(formatted).toContain("UTC");
+  });
+
+  it("returns the raw string rather than 'Invalid Date' when the input can't be parsed", () => {
+    expect(formatPlacedAt("not-a-date")).toBe("not-a-date");
   });
 });

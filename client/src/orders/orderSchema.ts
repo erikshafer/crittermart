@@ -1,15 +1,16 @@
 import { z } from "zod";
 
 // OrderStatusViewSchema — the THIRD per-read-model Zod schema (frontend SKILL Convention 2), and the third
-// service read surface (Orders' `OrderStatusView`, shared by W3 confirmation and the deferred W4 tracking). It
+// service read surface (Orders' `OrderStatusView`, shared by W3 confirmation and the W4 tracking screen). It
 // is the SPA's hand-written copy of the `OrderStatusView` contract that Orders' `GET /orders/{orderId}`
 // returns (slice 4.1, src/CritterMart.Orders/Order/OrderStatusView.cs); NOT generated — when the service's
 // response shape changes, this schema changes in the same PR that consumes the change.
 //
 // **Wire casing is camelCase.** Wolverine.Http serializes with System.Text.Json *web defaults* and Orders
 // applies no `PropertyNamingPolicy` override (same as CartView, confirmed in #58/#61), so the C# PascalCase
-// properties land camelCased on the wire: `id`, `customerId`, `status`, `lines`, `total`. `decimal Total`
-// and per-line `decimal Price` serialize as JSON **numbers** (not strings).
+// properties land camelCased on the wire: `id`, `customerId`, `status`, `lines`, `total`, and (slice 025)
+// `placedAt`, `cancelReason`. `decimal Total` and per-line `decimal Price` serialize as JSON **numbers** (not
+// strings); `DateTimeOffset PlacedAt` as an ISO-8601 string; `string? CancelReason` as a string-or-null.
 //
 // **Default `.strip()`, deliberately — not `.strict()`.** A field the SPA reads going missing or changing
 // type throws here, loud and located; a benign *additive* Orders field the SPA doesn't read is dropped, not
@@ -31,6 +32,17 @@ export const OrderStatusSchema = z.enum([
   "cancelled",
 ]);
 
+// The closed set of cancellation reasons `OrderCancelled` carries (src/CritterMart.Orders/Ordering/
+// OrderCancelled.cs:CancelReason). Like `OrderStatusSchema`, a `z.enum` so a reason the backend never sends
+// FAILS LOUD at the boundary rather than rendering through as mystery copy. On the wire it is null until the
+// order is cancelled, then one of these three — folded onto the view from `OrderCancelled.Reason` (slice 025),
+// the reason the write aggregate ignores but the read view surfaces so W4 can name the failure.
+export const CancelReasonSchema = z.enum([
+  "stock_unavailable",
+  "payment_declined",
+  "payment_timeout",
+]);
+
 // One order line — a SKU at the quantity and the name/price frozen onto the order when it was placed.
 // Structurally identical to `CartLineSchema`, but deliberately a SEPARATE schema: the backend mirrors this
 // (a distinct `OrderLine` record on the Order aggregate, src/CritterMart.Orders/Order/OrderPlaced.cs, not the
@@ -44,20 +56,31 @@ export const OrderLineSchema = z.object({
   price: z.number().nonnegative(),
 });
 
-// The order-status read model. W3 (and the deferred W4) consume `status`, `total`, and `lines`; `id` and
-// `customerId` are present-but-unused by the screen, yet still modeled so the boundary parse validates the
-// whole payload and catches drift in the unread fields too. Unlike `CartView`, **`total` is on the view** (a
-// server-computed JSON number), so the screen renders it directly — it does NOT recompute it from the lines.
+// The order-status read model. W3 consumes `status`, `total`, and `lines`; W4 also binds `placedAt` (the
+// order's placement time) and `cancelReason` (the per-reason cancel copy). `id` and `customerId` are
+// present-but-unused by the screens, yet still modeled so the boundary parse validates the whole payload and
+// catches drift in the unread fields too. Unlike `CartView`, **`total` is on the view** (a server-computed
+// JSON number), so the screen renders it directly — it does NOT recompute it from the lines.
 export const OrderStatusViewSchema = z.object({
   id: z.string(),
   customerId: z.string(),
   status: OrderStatusSchema,
   lines: z.array(OrderLineSchema),
   total: z.number().nonnegative(),
+  // The order's placement time — the genesis `OrderPlaced` event's append timestamp, surfaced from Marten
+  // event metadata (slice 025). An ISO-8601 instant from System.Text.Json's `DateTimeOffset`, rendered
+  // client-side by `formatPlacedAt`. `z.string()` over a strict `.datetime()` so a valid-but-unusual offset
+  // format is never falsely rejected at the boundary; type drift (a null or a number) still fails loud.
+  placedAt: z.string(),
+  // The cancellation reason — null until the order is cancelled, then one of the three `OrderCancelled`
+  // reasons (slice 025). A closed nullable enum mirroring `status`: a reason the backend never sends fails
+  // loud here rather than rendering through as mystery copy.
+  cancelReason: CancelReasonSchema.nullable(),
 });
 
 // `z.infer` over hand-typed interfaces (zod `type-use-z-infer`): the type and the runtime schema can never
 // drift apart, because the type IS the schema.
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
+export type CancelReason = z.infer<typeof CancelReasonSchema>;
 export type OrderLine = z.infer<typeof OrderLineSchema>;
 export type OrderStatusView = z.infer<typeof OrderStatusViewSchema>;
