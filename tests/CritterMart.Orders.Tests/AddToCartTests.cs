@@ -155,4 +155,55 @@ public class AddToCartTests
         view.ShouldNotBeNull();
         view.Lines.ShouldHaveSingleItem().Sku.ShouldBe("crit-001");
     }
+
+    // Boundary guard (change 026): a command with no product snapshot is malformed input. The cart never
+    // reads the Catalog, so the snapshot is a cart line's only source of product truth — an absent one has
+    // nothing to build a line from. The Validate guard rejects it with 400 BEFORE the handler runs, so no
+    // Cart stream is created and no event is appended. (Before the guard the null snapshot reached the
+    // CartLines.Add fold and surfaced as a 500 NRE.)
+    [Fact]
+    public async Task adding_an_item_without_a_product_snapshot_is_rejected_and_creates_no_cart()
+    {
+        await ResetOrdersAsync();
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Json(new AddToCart("crit-001", 1, null!)).ToUrl("/carts/customer-X/items");
+            _.StatusCodeShouldBe(400);
+        });
+
+        // The short-circuit appended nothing: the customer has no cart at all.
+        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
+        await using var session = store.LightweightSession();
+        var carts = await session.Query<CartView>().Where(v => v.CustomerId == "customer-X").ToListAsync();
+        carts.ShouldBeEmpty();
+    }
+
+    // The snapshot must be usable, not merely present: a blank product name can't title a cart line.
+    [Fact]
+    public async Task adding_an_item_with_a_blank_product_name_is_rejected()
+    {
+        await ResetOrdersAsync();
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("", 24.99m)))
+                .ToUrl("/carts/customer-X/items");
+            _.StatusCodeShouldBe(400);
+        });
+    }
+
+    // A negative snapshot price is nonsensical for a cart line and is refused at the boundary.
+    [Fact]
+    public async Task adding_an_item_with_a_negative_price_is_rejected()
+    {
+        await ResetOrdersAsync();
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("Cosmic Critter Plush", -1m)))
+                .ToUrl("/carts/customer-X/items");
+            _.StatusCodeShouldBe(400);
+        });
+    }
 }
