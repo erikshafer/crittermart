@@ -24,5 +24,5 @@
 
 ## 5. Deferred (out of this change)
 
-- [ ] 5.1 `openspec archive harden-add-to-cart-snapshot` (post-merge tidy — syncs the ADDED requirement into `openspec/specs/shopping-cart/spec.md`).
-- [ ] 5.2 Optional workshop § 6.1 slice 3.1 faithfulness note (malformed-input guard added beyond the modeled happy paths).
+- [x] 5.1 `openspec archive harden-add-to-cart-snapshot` (post-merge tidy — syncs the ADDED requirement into `openspec/specs/shopping-cart/spec.md`).
+- [x] 5.2 Optional workshop § 6.1 slice 3.1 faithfulness note (malformed-input guard added beyond the modeled happy paths).
