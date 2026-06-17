@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { OrderStatusViewSchema } from "@/orders/orderSchema";
+import { OrderListSchema, OrderStatusViewSchema } from "@/orders/orderSchema";
 
 // A representative live-wire payload: camelCase keys, `total` + line `price` JSON numbers, `status` one of the
 // five OrderStatus constants, `placedAt` an ISO-8601 instant, `cancelReason` null (an active order) — the
@@ -86,5 +86,28 @@ describe("OrderStatusViewSchema", () => {
   // otherwise surface as a broken display or NaN downstream.
   it("rejects drift in a read field — total as a string", () => {
     expect(() => OrderStatusViewSchema.parse({ ...wireOrder, total: "103.98" })).toThrow();
+  });
+});
+
+// The "My Orders" list payload (GET /orders/mine) — an array of the SAME per-order contract, reused wholesale.
+describe("OrderListSchema", () => {
+  it("parses an array of order views", () => {
+    const orders = OrderListSchema.parse([
+      wireOrder,
+      { ...wireOrder, id: "ord-9b22", status: "confirmed" },
+    ]);
+
+    expect(orders).toHaveLength(2);
+    expect(orders[1].status).toBe("confirmed");
+  });
+
+  // The no-orders domain state is a `200 []` — parsed, not an error (the contrast with the cart read's 404).
+  it("parses an empty list (the no-orders domain state)", () => {
+    expect(OrderListSchema.parse([])).toEqual([]);
+  });
+
+  // Per-element drift still fails loud at the boundary — a bad status in any row rejects the whole payload.
+  it("rejects the payload when any element drifts (a bad status in one row)", () => {
+    expect(() => OrderListSchema.parse([wireOrder, { ...wireOrder, status: "shipped" }])).toThrow();
   });
 });

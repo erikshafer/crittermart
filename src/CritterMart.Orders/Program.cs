@@ -99,6 +99,12 @@ builder.Services.AddMarten(opts =>
         // that query; uniqueness is the aggregate's invariant, not the read model's.
         opts.Schema.For<CartView>().Index(x => x.CustomerId);
 
+        // The order read model resolves by customer too (GET /orders/mine — the "My Orders" list, Gap #3).
+        // The mirror of the CartView index above: a plain (non-unique) index over OrderStatusView.CustomerId
+        // serves the customer-keyed list query. NOT unique — a customer has many orders (unlike the cart's
+        // one-open-cart invariant, which is the write-side partial-unique index on the Cart aggregate above).
+        opts.Schema.For<OrderStatusView>().Index(x => x.CustomerId);
+
         // OpenTelemetry (ADR 005, completing chore/002's deferred half): verbose connection
         // tracking emits a `marten.connection` span per connection AND tags every write op (the
         // event appends) after a successful commit, so the appends show up inside the trace next

@@ -13,7 +13,15 @@ export function AppShell() {
           <Link to="/" className="text-xl font-semibold tracking-tight">
             CritterMart
           </Link>
-          <CartBadge />
+          <nav className="flex items-center gap-6">
+            <Link
+              to="/orders"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              My Orders
+            </Link>
+            <CartBadge />
+          </nav>
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">

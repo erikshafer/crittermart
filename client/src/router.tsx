@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { RouteNotFound } from "@/components/RouteNotFound";
 import { BrowsePage } from "@/catalog/BrowsePage";
 import { CartPage } from "@/cart/CartPage";
+import { MyOrdersPage } from "@/orders/MyOrdersPage";
 import { OrderConfirmationPage } from "@/orders/OrderConfirmationPage";
 import { OrderStatusPage } from "@/orders/OrderStatusPage";
 
@@ -32,6 +33,16 @@ const cartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cart",
   component: CartPage,
+});
+
+// "My Orders" list (Narrative 005 Moment 6; workshop § 5.1 Gap #3). Reads GET /orders/mine (customer-keyed)
+// and lists the customer's orders newest-first, each row linking into the W4 track screen. A literal /orders
+// segment, distinct from the /orders/$orderId param routes below — the matcher resolves the bare path here and
+// /orders/<id> to W4/W3.
+const myOrdersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/orders",
+  component: MyOrdersPage,
 });
 
 // W3 — Order Confirmation (Narrative 005 Moment 4). Reached by navigate() after [ Place Order ]'s POST /orders
@@ -64,6 +75,7 @@ const orderTrackingRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   browseRoute,
   cartRoute,
+  myOrdersRoute,
   orderConfirmationRoute,
   orderTrackingRoute,
 ]);
