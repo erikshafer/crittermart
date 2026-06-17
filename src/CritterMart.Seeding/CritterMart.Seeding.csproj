@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Demo seed automation (ADR 004 orchestration; closes demo-runbook Known Gap #1).
+    A one-shot console wired as an Aspire resource: on boot it POSTs the canonical seed
+    (products + stock) to the real Catalog/Inventory HTTP endpoints, then exits.
+
+    Deliberately ZERO package references: HttpClient and System.Net.Http.Json both live in
+    the shared framework, so the seeder stays a tiny, dependency-free client. It also takes
+    no project reference on any service — it only needs two base URLs (injected by the
+    AppHost, mirroring the SPA's VITE_*_URL pattern; ADR 018) — which keeps the
+    "services don't reference each other" structural constraint intact.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+</Project>

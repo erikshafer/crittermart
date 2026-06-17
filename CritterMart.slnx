@@ -11,6 +11,7 @@
     <Project Path="src/CritterMart.CritterWatch/CritterMart.CritterWatch.csproj" />
     <Project Path="src/CritterMart.Inventory/CritterMart.Inventory.csproj" />
     <Project Path="src/CritterMart.Orders/CritterMart.Orders.csproj" />
+    <Project Path="src/CritterMart.Seeding/CritterMart.Seeding.csproj" />
     <Project Path="src/CritterMart.ServiceDefaults/CritterMart.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">
