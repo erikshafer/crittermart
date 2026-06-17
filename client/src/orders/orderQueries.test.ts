@@ -11,6 +11,8 @@ const wireOrder = {
   status: "awaiting_confirmation",
   lines: [{ sku: "crit-001", quantity: 2, name: "Cosmic Critter Plush", price: 24.99 }],
   total: 49.98,
+  placedAt: "2026-06-16T14:02:00+00:00",
+  cancelReason: null,
 };
 
 afterEach(() => {

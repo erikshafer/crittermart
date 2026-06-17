@@ -4,10 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { OrderStatusPage } from "@/orders/OrderStatusPage";
-import type { OrderStatus } from "@/orders/orderSchema";
+import type { CancelReason, OrderStatus } from "@/orders/orderSchema";
 import { CurrentCustomerProvider } from "@/identity/useCurrentCustomer";
 
-function orderAt(status: OrderStatus, total = 103.98) {
+function orderAt(status: OrderStatus, total = 103.98, cancelReason: CancelReason | null = null) {
   return {
     id: "ord-7f3a",
     customerId: "customer-demo",
@@ -17,6 +17,8 @@ function orderAt(status: OrderStatus, total = 103.98) {
       { sku: "crit-002", quantity: 3, name: "Nebula Newt", price: 18.0 },
     ],
     total,
+    placedAt: "2026-06-16T14:02:00+00:00",
+    cancelReason,
   };
 }
 
@@ -60,6 +62,23 @@ describe("OrderStatusPage", () => {
     expect(screen.getByText("$999.99")).toBeInTheDocument();
   });
 
+  // The § 5.1 W4 "Placed … UTC" line, now bound (slice 025). placedAt is 2026-06-16T14:02:00+00:00; assert the
+  // load-bearing, locale-format-independent parts (the label, the year, the 24-hour UTC time).
+  it("renders the placement time (the 'Placed … UTC' line)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(orderAt("confirmed")), { status: 200 })),
+    );
+
+    renderStatusPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    const placed = screen.getByText(/^Placed\b/);
+    expect(placed).toHaveTextContent("2026");
+    expect(placed).toHaveTextContent("14:02");
+    expect(placed).toHaveTextContent("UTC");
+  });
+
   it.each([
     ["awaiting_confirmation", "Awaiting confirmation"],
     ["stock_reserved", "Stock reserved"],
@@ -83,17 +102,20 @@ describe("OrderStatusPage", () => {
     },
   );
 
-  it("at cancelled, shows an honest terminal treatment — no stepper position, no fabricated reason", async () => {
+  it("at cancelled, names the specific reason and shows an honest terminal treatment (no stepper position)", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(JSON.stringify(orderAt("cancelled")), { status: 200 })),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(orderAt("cancelled", 103.98, "payment_declined")), { status: 200 }),
+      ),
     );
 
     renderStatusPage();
 
     expect(await screen.findByText(/cancelled and will not be fulfilled/i)).toBeInTheDocument();
-    // No lifecycle step is marked current — we don't claim to know where it failed (the view carries no
-    // cancellation reason or failure step).
+    // The specific reason is now bound (slice 025) — W4 names the failure instead of a generic "Cancelled".
+    expect(screen.getByText(/payment was declined/i)).toBeInTheDocument();
+    // Still no lifecycle step is marked current — we don't claim to know WHERE on the path it failed.
     expect(screen.queryByRole("listitem", { current: "step" })).not.toBeInTheDocument();
   });
 
