@@ -308,14 +308,19 @@ CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 | **Storefront SPA** | `http://localhost:5273` | Browse → add to cart → checkout → track → **My Orders**. The human-facing payoff. |
 | **Metrics** | Aspire dashboard → **Metrics** → Orders/Inventory → meter `Marten` → `marten.event.append`, split by `event_type`. | A live histogram of the domain's event vocabulary. |
 
-> **⏱️ A `POST /orders` trace's Duration reads ~10 minutes — expected, not a hang.** Every placed order
-> schedules a durable `OrderPaymentTimeout` self-message `DelayedFor(Orders:PaymentTimeout)` (default
-> **10 min**, `src/CritterMart.Orders/Features/PlaceOrder.cs`). That deferred message inherits the
-> placement trace, so the trace stays "open" — and its **Duration** balloons to ~10 min — until the
-> deadline fires (it then no-ops, the order having long since settled). The order itself completes in
-> **tens of milliseconds**: a freshly-placed trace shows the clean ~50ms Orders→Inventory cascade *until*
-> its deadline elapses. **To screenshot the tight waterfall, open a trace within ~10 min of placing it.**
-> (A future slice could start a *new* linked trace for the deferred deadline so durations never inflate.)
+> **⏱️ A `POST /orders` trace's waterfall stays tight (~tens of milliseconds) — screenshot it anytime.**
+> Every placed order schedules a durable `OrderPaymentTimeout` self-message
+> `DelayedFor(Orders:PaymentTimeout)` (default **10 min**, `src/CritterMart.Orders/Features/PlaceOrder.cs`).
+> Wolverine stamps the placement request's trace context onto that delayed envelope, so *by default* the
+> fired timeout's span would parent back **into** the placement trace and balloon its **Duration** to the
+> whole 10-minute window. The `PaymentTimeoutHandler` (and its cart sibling `CartAbandonmentHandler`) now
+> prevent that: `[WolverineLogging(telemetryEnabled: false)]` suppresses Wolverine's parented span and the
+> handler opens its own **span-linked root trace** instead
+> (`src/CritterMart.Orders/Observability/TemporalAutomationTracing.cs`). So the placement waterfall reads
+> the clean ~50 ms Orders→Inventory cascade no matter when you open it, and the fired deadline shows up as
+> its **own** `order.payment.timeout` (or `cart.activity.timeout`) trace, a span *link* away from the
+> request that armed it — the OpenTelemetry idiom for deferred follow-up work. (Realized in the
+> deferred-timeout linked-traces change; see `docs/retrospectives/implementations/031-*`.)
 
 ---
 

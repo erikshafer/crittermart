@@ -1,4 +1,7 @@
+using CritterMart.Orders.Observability;
 using Marten;
+using Wolverine;
+using Wolverine.Attributes;
 using Contracts = CritterMart.Contracts;
 
 namespace CritterMart.Orders.Ordering;
@@ -18,8 +21,17 @@ namespace CritterMart.Orders.Ordering;
 // without leaking a reservation. The contract and the Inventory handler are slice 4.6's, unchanged.
 public static class PaymentTimeoutHandler
 {
-    public static async Task<Contracts.ReleaseStock?> Handle(OrderPaymentTimeout message, IDocumentSession session)
+    // Telemetry suppressed so Wolverine does not parent this deadline-fired timeout into the
+    // original placement trace (which would inflate that trace's duration to the whole payment
+    // window). The handler opens its own span-linked root trace instead — see
+    // TemporalAutomationTracing for the why.
+    [WolverineLogging(telemetryEnabled: false)]
+    public static async Task<Contracts.ReleaseStock?> Handle(
+        OrderPaymentTimeout message, IDocumentSession session, Envelope envelope)
     {
+        using var activity = TemporalAutomationTracing.StartLinkedRoot("order.payment.timeout", envelope);
+        activity?.SetTag("crittermart.order.id", message.OrderId);
+
         var stream = await session.Events.FetchForWriting<Order>(message.OrderId);
 
         // Terminal-state guard: confirmed, already cancelled (including by a duplicate of this
@@ -27,12 +39,14 @@ public static class PaymentTimeoutHandler
         if (stream.Aggregate is null
             || stream.Aggregate.Status is OrderStatus.Confirmed or OrderStatus.Cancelled)
         {
+            activity?.SetTag("crittermart.timeout.outcome", "noop");
             return null;
         }
 
         // Non-terminal at the deadline (awaiting_confirmation or stock_reserved): the order never
         // settled, so the deadline ends it.
         stream.AppendOne(new OrderCancelled(message.OrderId, CancelReason.PaymentTimeout));
+        activity?.SetTag("crittermart.timeout.outcome", "cancelled");
 
         // Always release. ReleaseStock has no Orders-local handler, so conventional routing
         // carries it to Inventory over the broker — the same path 4.6's decline-cancel uses.
