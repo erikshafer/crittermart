@@ -1,6 +1,7 @@
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 using Wolverine.Http;
 
@@ -15,6 +16,51 @@ public record AddToCartResponse(string CartId);
 
 public static class AddToCartEndpoint
 {
+    // Boundary guard (validation-boundary): the cart never reads the Catalog, so the ProductSnapshot the
+    // storefront composed (ProductSnapshot.cs) is the cart line's ONLY source of product truth. A command
+    // that carries no usable snapshot has nothing to build a line from — that is malformed *input*, not a
+    // domain-state conflict (contrast ChangeCartItemQuantity's CartItemNotPresent). Wolverine runs Validate
+    // before Post and short-circuits on a populated ProblemDetails, so a malformed command never reaches the
+    // handler and never appends an event — and an appended event can't be un-appended. Before this guard a
+    // null snapshot survived into CartItemAdded and only surfaced as a 500 NRE deep in the shared
+    // CartLines.Add fold (CartLine.cs:19). Mirrors PublishProduct's ValidateAsync ProblemDetails guard;
+    // synchronous because a snapshot-shape check needs no I/O. The 400 + application/problem+json is
+    // auto-reflected into the endpoint's OpenAPI metadata by Wolverine.
+    public static ProblemDetails Validate(AddToCart command)
+    {
+        if (command.ProductSnapshot is null)
+        {
+            return new ProblemDetails
+            {
+                Title = "MissingProductSnapshot",
+                Detail = "AddToCart requires a productSnapshot — the name and price the storefront composed from the Catalog.",
+                Status = StatusCodes.Status400BadRequest
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProductSnapshot.Name))
+        {
+            return new ProblemDetails
+            {
+                Title = "MissingProductName",
+                Detail = "The productSnapshot must carry a non-empty product name.",
+                Status = StatusCodes.Status400BadRequest
+            };
+        }
+
+        if (command.ProductSnapshot.Price < 0)
+        {
+            return new ProblemDetails
+            {
+                Title = "NegativeProductPrice",
+                Detail = $"The productSnapshot price must be non-negative; got {command.ProductSnapshot.Price}.",
+                Status = StatusCodes.Status400BadRequest
+            };
+        }
+
+        return WolverineContinue.NoProblems;
+    }
+
     // Returns the HTTP response AND a cascaded output: a SCHEDULED CartActivityTimeout self-message
     // (slice 3.4), set only when this add CREATES the cart — the Bruun temporal automation's
     // starting gun on the cart side, mirroring how PlaceOrder schedules OrderPaymentTimeout. Under
