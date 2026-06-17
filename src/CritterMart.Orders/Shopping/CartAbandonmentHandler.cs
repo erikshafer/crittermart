@@ -1,5 +1,7 @@
+using CritterMart.Orders.Observability;
 using Marten;
 using Wolverine;
+using Wolverine.Attributes;
 
 namespace CritterMart.Orders.Shopping;
 
@@ -19,18 +21,28 @@ namespace CritterMart.Orders.Shopping;
 // flight per open cart at any moment.
 public static class CartAbandonmentHandler
 {
+    // Telemetry suppressed so Wolverine does not parent this fired inactivity timeout into the
+    // original add-to-cart trace (which would inflate that trace's duration to the whole 2-hour
+    // window). The handler opens its own span-linked root trace instead — see
+    // TemporalAutomationTracing for the why.
+    [WolverineLogging(telemetryEnabled: false)]
     public static async Task<DeliveryMessage<CartActivityTimeout>?> Handle(
         CartActivityTimeout message,
         IDocumentSession session,
         CartActivityDeadline deadline,
-        TimeProvider time)
+        TimeProvider time,
+        Envelope envelope)
     {
+        using var activity = TemporalAutomationTracing.StartLinkedRoot("cart.activity.timeout", envelope);
+        activity?.SetTag("crittermart.cart.id", message.CartId);
+
         var stream = await session.Events.FetchForWriting<Cart>(message.CartId);
 
         // Terminal-state guard: checked out, already abandoned (including by a duplicate of this
         // very timeout), or unknown — append nothing, schedule nothing.
         if (stream.Aggregate is null || !stream.Aggregate.IsOpen)
         {
+            activity?.SetTag("crittermart.timeout.outcome", "noop");
             return null;
         }
 
@@ -41,6 +53,7 @@ public static class CartAbandonmentHandler
         if (dueAt > now)
         {
             // Activity intervened since this timeout was scheduled — re-aim at the true deadline.
+            activity?.SetTag("crittermart.timeout.outcome", "rescheduled");
             return new CartActivityTimeout(message.CartId).DelayedFor(dueAt - now);
         }
 
@@ -50,6 +63,7 @@ public static class CartAbandonmentHandler
         var lines = stream.Aggregate.Lines.ToList();
         var totalValue = lines.Sum(l => l.Quantity * l.Price);
         stream.AppendOne(new CartAbandoned(CartAbandonReason.InactivityTimeout, lines, totalValue));
+        activity?.SetTag("crittermart.timeout.outcome", "abandoned");
 
         return null;
     }
