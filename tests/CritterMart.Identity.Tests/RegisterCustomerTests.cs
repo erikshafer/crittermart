@@ -4,6 +4,7 @@ using CritterMart.Identity.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using Wolverine.Tracking;
 using Xunit;
@@ -113,6 +114,37 @@ public class RegisterCustomerTests
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var count = await db.Customers.CountAsync(c => c.Email == "ada@example.com");
         count.ShouldBe(1);
+    }
+
+    // Proves the DATABASE unique index backstop INDEPENDENTLY of the ValidateAsync app guard, by
+    // inserting a second row with the same email DIRECTLY through the DbContext — bypassing the HTTP
+    // guard entirely. The unique index must reject it with a Postgres unique_violation (23505). This is
+    // the race backstop the application-level check can't give (two concurrent registrations both passing
+    // the guard before either commits). It also guards a real gap: Weasel's EF-managed migrations do NOT
+    // create EF `HasIndex` indexes, so the index is applied as startup DDL (Program.cs) — if that ever
+    // regresses, this test fails because the second insert would silently succeed.
+    [Fact]
+    public async Task the_email_unique_index_rejects_a_duplicate_inserted_directly()
+    {
+        await ResetAsync();
+
+        async Task InsertAsync(string displayName)
+        {
+            using var scope = _fixture.Host.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+            db.Customers.Add(new Customer
+            {
+                Id = Guid.NewGuid().ToString(),
+                Email = "race@example.com",
+                DisplayName = displayName,
+                RegisteredAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await InsertAsync("first writer");
+        var ex = await Should.ThrowAsync<DbUpdateException>(() => InsertAsync("racing writer"));
+        ex.InnerException.ShouldBeOfType<PostgresException>().SqlState.ShouldBe("23505");
     }
 
     // The transactional-outbox half: RegisterCustomer cascades CustomerRegistered, which Wolverine

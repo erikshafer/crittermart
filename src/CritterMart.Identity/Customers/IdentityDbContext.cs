@@ -33,13 +33,14 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
             e.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(200).IsRequired();
             e.Property(x => x.RegisteredAt).HasColumnName("registered_at");
 
-            // Email is the registry's natural key — a customer is unique by (normalized) email, NOT by the
-            // server-minted opaque id. RegisterCustomer.ValidateAsync returns the friendly 409, but this
-            // unique index is the TRUE backstop: it closes the check-then-insert race the app-level check
-            // can't (two concurrent registrations both passing the check before either commits). The stored
-            // email is already trimmed + lowercased, so the index enforces case-insensitive uniqueness.
-            // Catalog needs no analogue — a product's SKU IS its Marten document id, so the PK enforces it free.
-            e.HasIndex(x => x.Email).IsUnique();
+            // NOTE: the unique index on `email` (the registry's natural key — a customer is unique by
+            // normalized email, NOT by the server-minted opaque id) is deliberately NOT declared here as
+            // `e.HasIndex(...).IsUnique()`. Wolverine's UseEntityFrameworkCoreWolverineManagedMigrations
+            // drives Weasel, which migrates tables, columns, primary keys, and foreign keys from the EF
+            // model — but NOT secondary indexes (verified against the Wolverine EF-Core migration docs and
+            // a live schema check). An EF `HasIndex` here would be silently dropped, giving a false sense of
+            // a backstop that isn't in the database. The index is therefore applied as idempotent startup
+            // DDL in Program.cs (see EnsureEmailUniqueIndex) — the single place it actually takes effect.
         });
     }
 }
