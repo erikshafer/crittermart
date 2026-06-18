@@ -44,7 +44,7 @@ The full slice list (17 round-one slices across the four BCs) lives in [`docs/wo
 
 ## Architecture
 
-CritterMart deploys as **three separate .NET 10 services** — Catalog, Inventory, and Orders — plus a stubbed Identity context. Cross-service communication is Wolverine over RabbitMQ; there is no synchronous service-to-service HTTP. Persistence is a shared PostgreSQL database with schema-per-service, accessed through Marten. .NET Aspire orchestrates the services, broker, and database locally, with OpenTelemetry tracing visible in the Aspire dashboard.
+CritterMart deploys as **four .NET 10 services** — Catalog, Inventory, Orders, and Identity. Cross-service communication is Wolverine over RabbitMQ; there is no synchronous service-to-service HTTP. Persistence is a shared PostgreSQL database with schema-per-service, accessed through Marten. .NET Aspire orchestrates the services, broker, and database locally, with OpenTelemetry tracing visible in the Aspire dashboard.
 
 ### Bounded Contexts
 
@@ -53,9 +53,9 @@ CritterMart deploys as **three separate .NET 10 services** — Catalog, Inventor
 | **Catalog** | Products, prices, descriptions | Marten document store | Implemented — slices 1.1–1.3 (publish, browse, change price) |
 | **Inventory** | Stock per SKU, reservations, commitments | Event-sourced (Marten) | Implemented — slices 2.1 receive, 2.2 reserve, 4.2 cross-BC reserve (responds to Orders' `ReserveStock` over RabbitMQ, all-or-nothing per order), 2.3 release on cancellation (responds to Orders' `ReleaseStock`, per-SKU idempotent), 2.4 commit reserved stock on order confirmation (responds to Orders' `CommitStock`, per-SKU idempotent; invariant `Available + Reserved + Committed = ΣReceived`) |
 | **Orders** | Cart, Order (process manager), payment timeout, cart abandonment | Event-sourced (Marten) | Implemented — **both aggregates complete**. Order lifecycle: 4.1 placement, 4.2 / 4.5 cross-BC stock reservation + cancel-on-stock-failure, 4.3 / 4.4 stubbed payment authorization + confirmation (confirmation cascades `CommitStock` to Inventory via slice 2.4), 4.6 cancel-on-payment-decline, 4.7 cancel-on-payment-timeout with the `OrdersAwaitingPayment` Bruun todo-list. Cart lifecycle: 3.1 add-to-cart, 3.2 / 3.3 cart edits (remove item, change quantity — SKU-keyed lines), 3.4 abandonment on inactivity (fire-and-check temporal automation, `CartsAwaitingActivity` todo-list, and the `CartAbandonmentReport` async-projection teaser — rebuild-on-demand, no daemon) |
-| **Identity** *(stubbed)* | Customer identifier | Hardcoded in frontend (round one) | Stubbed by design; deployed-service promotion queued in [vision.md § Long road](docs/vision.md) |
+| **Identity** | Customer registry | EF Core + Npgsql (schema `identity`) | Implemented — slices 5.1 (register customer, email-uniqueness guard), 5.2 (resolve by email); publishes `CustomerRegistered` over RabbitMQ (slices 5.3/5.4 — Orders consumes and maintains a local customer view); Open-Host Service (`GET /customers/{id}`, storefront-facing) + Published Language (`CustomerRegistered` in `CritterMart.Contracts`). Data store, not an auth provider — no Polecat ([ADR 009](docs/decisions/009-polecat-deferred-for-round-one.md)); `X-Customer-Id` header still carries a hardcoded id from the frontend |
 
-Catalog has no BC-level integration with Inventory or Orders in round one — product fields cross only via the frontend, which snapshots them into Cart commands at add-to-cart time. The Orders ↔ Inventory relationship is **Customer-Supplier** (Inventory is the supplier, Orders the customer). Identity's relationship to the three deployed services is **Conformist** with no active wire integration. See [`docs/context-map/README.md`](docs/context-map/README.md) for the full topology, integration relationships table, and round-one stubs.
+Catalog has no BC-level integration with Inventory or Orders in round one — product fields cross only via the frontend, which snapshots them into Cart commands at add-to-cart time. The Orders ↔ Inventory relationship is **Customer-Supplier** (Inventory is the supplier, Orders the customer). Identity is an **Open-Host Service + Published Language** — it exposes a storefront-facing read API (`GET /customers/{id}`) and publishes `CustomerRegistered` over RabbitMQ; Orders consumes it and maintains a local customer view (slices 5.3/5.4). Authentication remains stubbed (`X-Customer-Id` header hardcoded in the frontend; no Polecat). See [`docs/context-map/README.md`](docs/context-map/README.md) for the full topology, integration relationships table, and round-one stubs.
 
 ---
 
@@ -65,7 +65,7 @@ Catalog has no BC-level integration with Inventory or Orders in round one — pr
 |---|---|
 | Runtime | C# 14 / .NET 10 |
 | Messaging | [Wolverine](https://wolverine.netlify.app/) 6+ over RabbitMQ |
-| Persistence | [Marten](https://martendb.io/) 9+ on PostgreSQL (shared database, schema-per-service) |
+| Persistence | [Marten](https://martendb.io/) 9+ on PostgreSQL (Catalog, Inventory, Orders); EF Core + Npgsql (Identity) — shared database, schema-per-service |
 | HTTP | Wolverine.Http (per service; no BFF for round one) |
 | Testing | [Alba](https://jasperfx.github.io/alba/) (integration), xUnit + Shouldly (unit) |
 | Orchestration | [.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/) |
@@ -95,11 +95,12 @@ The pipeline itself doubles as the talk's section on what AI-assisted .NET devel
 
 ## Getting Started
 
-> **Status note.** CritterMart's **round-one modeled implementation set is complete** — every slice in [Workshop 001](docs/workshops/001-crittermart-event-model.md) has shipped. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` holds three Wolverine services (Catalog, Inventory, Orders), the `CritterMart.AppHost` Aspire orchestrator, `CritterMart.ServiceDefaults`, and `CritterMart.Contracts` (the cross-BC published language). Catalog (1.1–1.3) and Inventory (2.1–2.4) are in; the Orders BC's **Order lifecycle is complete** (4.1 place-order, 4.2/4.5 cross-BC stock reservation + cancel-on-stock-failure — the project's first live RabbitMQ traffic — 4.3/4.4 stubbed payment authorization + confirmation cascading `CommitStock` to Inventory (slice 2.4), 4.6 cancel-on-payment-decline with cross-BC stock release, and 4.7 cancel-on-payment-timeout — the project's first temporal automation; every placed order reaches `confirmed` or `cancelled`); and the **Cart lifecycle is complete** (3.1 add-to-cart, 3.2/3.3 cart edits with SKU-keyed lines, and 3.4 abandonment on inactivity — fire-and-check temporal automation plus the `CartAbandonmentReport` async-projection teaser, rebuild-on-demand with no daemon per ADR 008; every cart reaches `CartCheckedOut` or `CartAbandoned`). What comes next — frontend, talk storyboard assets, round-two modeling — is a vision-level decision, not a remaining slice. The instructions below reflect the working local-development workflow.
+> **Status note.** CritterMart's **round-one modeled implementation set is complete** — every slice in [Workshop 001](docs/workshops/001-crittermart-event-model.md) has shipped. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` holds four services (Catalog, Inventory, and Orders on Wolverine + Marten; Identity on Wolverine + EF Core — the one non-event-sourced BC), the `CritterMart.AppHost` Aspire orchestrator, `CritterMart.ServiceDefaults`, `CritterMart.Contracts` (the cross-BC published language), and `CritterMart.Seeding` (demo auto-seeder). Catalog (1.1–1.3) and Inventory (2.1–2.4) are in; the Orders BC's **Order lifecycle is complete** (4.1 place-order, 4.2/4.5 cross-BC stock reservation + cancel-on-stock-failure — the project's first live RabbitMQ traffic — 4.3/4.4 stubbed payment authorization + confirmation cascading `CommitStock` to Inventory (slice 2.4), 4.6 cancel-on-payment-decline with cross-BC stock release, and 4.7 cancel-on-payment-timeout — the project's first temporal automation; every placed order reaches `confirmed` or `cancelled`); and the **Cart lifecycle is complete** (3.1 add-to-cart, 3.2/3.3 cart edits with SKU-keyed lines, and 3.4 abandonment on inactivity — fire-and-check temporal automation plus the `CartAbandonmentReport` async-projection teaser, rebuild-on-demand with no daemon per ADR 008; every cart reaches `CartCheckedOut` or `CartAbandoned`). What comes next — frontend, talk storyboard assets, round-two modeling — is a vision-level decision, not a remaining slice. The instructions below reflect the working local-development workflow.
 
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Node.js 22+](https://nodejs.org/) — Aspire launches the Vite dev server (storefront SPA) automatically; no separate `npm run dev` needed
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or an equivalent OCI runtime) — Aspire orchestrates PostgreSQL and RabbitMQ as containers
 - An IDE with C# tooling (JetBrains Rider, Visual Studio, or VS Code with the C# Dev Kit)
 
@@ -117,15 +118,25 @@ Both skill collections install globally (to `~/.claude/skills/` and a universal 
 
 ### Run locally
 
-.NET Aspire boots PostgreSQL, RabbitMQ, and the services together:
+.NET Aspire boots PostgreSQL, RabbitMQ, all four services, the auto-seeder, and the Vite dev server together:
 
 ```bash
 dotnet run --project src/CritterMart.AppHost --launch-profile http
 ```
 
-The Aspire dashboard (default `http://localhost:15090`) surfaces OpenTelemetry traces across services; the cross-service Place Order trace fills in as the Order journey (4.x) lands. The canonical entry point for the design pipeline remains [`CLAUDE.md`](CLAUDE.md).
+Key URLs once the stack is healthy:
 
-For the full **boot → seed → drive an order → verify every surface (Swagger, Aspire dashboard, CritterWatch console, storefront SPA) → teardown** procedure — repeatable by a human or an AI agent — see the [Demo & Smoke-Test Runbook](docs/demo-runbook.md).
+| Surface | URL |
+|---|---|
+| Aspire dashboard (traces, logs, resources) | `http://localhost:15090/login?t=<token>` — token printed in the console on each boot |
+| Storefront SPA | `http://localhost:5273` |
+| Catalog API / Swagger | `http://localhost:5101` |
+| Inventory API / Swagger | `http://localhost:5102` |
+| Orders API / Swagger | `http://localhost:5103` |
+| Identity API / Swagger | `http://localhost:5105` |
+| CritterWatch console | dynamic — open from the Aspire dashboard's `critterwatch-console` resource |
+
+For the full **boot → seed → drive an order → verify every surface (Swagger, Aspire dashboard, CritterWatch console, storefront SPA) → teardown** procedure — repeatable by a human or an AI agent — see the [Demo & Smoke-Test Runbook](docs/demo-runbook.md). The canonical entry point for the design pipeline remains [`CLAUDE.md`](CLAUDE.md).
 
 ---
 
@@ -147,7 +158,7 @@ CritterMart/
 ├── openspec/                   # OpenSpec workspace (peer to docs/) — CLI-managed
 │   ├── changes/                # Per-slice changes (proposal.md + SHALL specs); archive/ holds shipped changes
 │   └── specs/                  # Main specs, synced from a change on archive
-├── src/                        # Catalog, Inventory, Orders services + AppHost + ServiceDefaults + Contracts (cross-BC published language)
+├── src/                        # Catalog, Inventory, Orders, Identity services + AppHost + ServiceDefaults + Contracts (cross-BC published language) + Seeding (demo auto-seeder)
 ├── tests/                      # Per-service test projects + CrossBc.Tests (two-host cross-BC smoke)
 ├── CLAUDE.md                   # AI development entry point and pipeline overview
 ├── LICENSE                     # MIT
@@ -207,7 +218,7 @@ Strong operating disciplines hold the pipeline together: **one prompt = one sess
 - No backoffice or admin UI
 - No real payment integration (payment is stubbed inside Orders)
 - No returns, no promotions, no shipping rate calculations, no real-time storefront updates
-- No Polecat for round one; Identity is stubbed (customer ID hardcoded in the frontend)
+- No Polecat for round one; customer authentication is stubbed (`X-Customer-Id` header hardcoded in the frontend) — the Identity registry service is real but carries no authN/authZ
 - No live coding in the demo
 
 Many of the cuts are explicit candidates for future rounds, tracked in [`docs/vision.md`](docs/vision.md) § Long road and [`docs/context-map/README.md`](docs/context-map/README.md) § Long road.
