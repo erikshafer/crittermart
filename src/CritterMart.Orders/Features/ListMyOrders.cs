@@ -1,3 +1,4 @@
+using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -46,6 +47,12 @@ public static class ListMyOrdersEndpoint
             .OrderByDescending(v => v.PlacedAt)
             .ToListAsync();
 
-        return Results.Ok(orders);
+        // Enrich with customer display name (slice 5.3): one LocalCustomerView load for the whole list
+        // (all orders share the same customerId from the header — one scan, not N). Degrades to null
+        // when the local model is absent (PL eventually consistent). No call to Identity.
+        var customer = await session.LoadAsync<LocalCustomerView>(customerId);
+        var enriched = orders.Select(o => EnrichedOrderView.From(o, customer?.DisplayName)).ToList();
+
+        return Results.Ok(enriched);
     }
 }

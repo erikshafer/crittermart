@@ -27,7 +27,8 @@ if (!string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
 
 var catalogUrl = Environment.GetEnvironmentVariable("CATALOG_URL") ?? "http://localhost:5101";
 var inventoryUrl = Environment.GetEnvironmentVariable("INVENTORY_URL") ?? "http://localhost:5102";
-Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}");
+var identityUrl = Environment.GetEnvironmentVariable("IDENTITY_URL") ?? "http://localhost:5105";
+Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}, Identity={identityUrl}");
 
 // The canonical demo set. These three SKUs back the three runbook order routes:
 //   crit-001    happy path                (Step 4)
@@ -42,6 +43,7 @@ SeedItem[] seed =
 
 using var catalog = new HttpClient { BaseAddress = new Uri(catalogUrl), Timeout = requestTimeout };
 using var inventory = new HttpClient { BaseAddress = new Uri(inventoryUrl), Timeout = requestTimeout };
+using var identity = new HttpClient { BaseAddress = new Uri(identityUrl), Timeout = requestTimeout };
 
 var failures = 0;
 foreach (var item in seed)
@@ -82,9 +84,39 @@ foreach (var item in seed)
     }
 }
 
+// Register the demo customer with a deterministic id that matches the SPA's X-Customer-Id stub
+// ("customer-demo" in client/src/identity/useCurrentCustomer.tsx). Passing the explicit id lets
+// Identity use it verbatim (RegisterCustomer.Id? field, slice 5.4 — the seeder's id becomes the
+// LocalCustomerView key in Orders once CustomerRegistered is delivered via RabbitMQ). Idempotent:
+// a duplicate email → 409 CustomerAlreadyRegistered → skip, mirroring the product seed pattern.
+DemoCustomer[] customers =
+[
+    new("customer-demo", "demo@crittermart.com", "Demo Customer"),
+];
+
+foreach (var c in customers)
+{
+    using var register = await PostJsonAsync(identity, "/customers",
+        new { id = c.Id, email = c.Email, displayName = c.DisplayName });
+
+    switch (register.StatusCode)
+    {
+        case HttpStatusCode.Created:
+            Log($"registered customer {c.Id} \"{c.DisplayName}\" ({c.Email})");
+            break;
+        case HttpStatusCode.Conflict:
+            Log($"customer {c.Id} already registered — skipping (idempotent).");
+            break;
+        default:
+            Log($"FAILED to register customer {c.Id} -> HTTP {(int)register.StatusCode}");
+            failures++;
+            break;
+    }
+}
+
 if (failures == 0)
 {
-    Log($"Seed complete: {seed.Length} product(s) ensured.");
+    Log($"Seed complete: {seed.Length} product(s) + {customers.Length} customer(s) ensured.");
     return 0;
 }
 
@@ -126,3 +158,6 @@ static void Log(string message) => Console.WriteLine($"[seed] {message}");
 
 // One product + its opening stock quantity.
 internal sealed record SeedItem(string Sku, string Name, string Description, decimal Price, int Quantity);
+
+// A demo customer with a deterministic id matching the SPA's useCurrentCustomer stub.
+internal sealed record DemoCustomer(string Id, string Email, string DisplayName);

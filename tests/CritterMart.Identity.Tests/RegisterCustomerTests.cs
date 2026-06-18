@@ -1,4 +1,5 @@
 using Alba;
+using CritterMart.Contracts;
 using CritterMart.Identity.Customers;
 using CritterMart.Identity.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -145,6 +146,27 @@ public class RegisterCustomerTests
         await InsertAsync("first writer");
         var ex = await Should.ThrowAsync<DbUpdateException>(() => InsertAsync("racing writer"));
         ex.InnerException.ShouldBeOfType<PostgresException>().SqlState.ShouldBe("23505");
+    }
+
+    // Seeder affordance (slice 5.4): when the caller supplies an explicit Id the server uses it verbatim,
+    // so the seeder can register "customer-demo" with the deterministic id the SPA's X-Customer-Id stub
+    // hardcodes. The response body and Location header must both reflect the caller-supplied id.
+    [Fact]
+    public async Task registering_with_an_explicit_id_uses_that_id()
+    {
+        await ResetAsync();
+
+        var result = await _fixture.Host.Scenario(s =>
+        {
+            s.Post.Json(new RegisterCustomer("seeder@example.com", "Seeder Demo", "explicit-cust-id"))
+                .ToUrl("/customers");
+            s.StatusCodeShouldBe(201);
+        });
+
+        var body = result.ReadAsJson<RegisterCustomerResponse>();
+        body.ShouldNotBeNull();
+        body.Id.ShouldBe("explicit-cust-id");
+        result.Context.Response.Headers["Location"].ToString().ShouldBe("/customers/explicit-cust-id");
     }
 
     // The transactional-outbox half: RegisterCustomer cascades CustomerRegistered, which Wolverine

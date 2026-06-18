@@ -80,14 +80,13 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     //   • Full how-to + the order amounts to use: docs/demo-runbook.md § Step 5 / Payment decline.
     .WithEnvironment("Payment__DeclineOverAmount", "100");
 
-// Identity (round-two EF-Core SPIKE) — the ONE service that is NOT event-sourced: a deliberately
-// boring EF Core customer registry on the shared Postgres, proving Wolverine's handler model is
-// persistence-agnostic (same wiring as the Marten services, a DbContext instead of an
-// IDocumentSession). It is a DATA STORE per ADR 009, NOT an auth provider (no Polecat). It has no
-// cross-BC message flows — its CustomerRegistered cascades to the EF Core outbox and publishes over
-// RabbitMQ unconsumed — so nothing WithReference()s it and the SPA gets no Identity URL. Wired like
-// the others (crittermart + rabbitmq + CritterWatch) so it appears as a 4th node on the dashboard.
-builder.AddProject<Projects.CritterMart_Identity>("identity")
+// Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
+// registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic
+// (same wiring as the Marten services, a DbContext instead of an IDocumentSession). DATA STORE
+// per ADR 009, NOT an auth provider (no Polecat). CustomerRegistered now has a consumer in Orders
+// (slice 5.4), so the exchange is no longer unconsumed. The seeder calls POST /customers so it
+// WaitFor identity and receives IDENTITY_URL — the same injection pattern as CATALOG_URL / INVENTORY_URL.
+var identity = builder.AddProject<Projects.CritterMart_Identity>("identity")
     .WithReference(crittermart)
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
@@ -106,8 +105,10 @@ builder.AddProject<Projects.CritterMart_Identity>("identity")
 builder.AddProject<Projects.CritterMart_Seeding>("seeder")
     .WithEnvironment("CATALOG_URL", catalog.GetEndpoint("http"))
     .WithEnvironment("INVENTORY_URL", inventory.GetEndpoint("http"))
+    .WithEnvironment("IDENTITY_URL", identity.GetEndpoint("http"))
     .WaitFor(catalog)
-    .WaitFor(inventory);
+    .WaitFor(inventory)
+    .WaitFor(identity);
 
 // The round-two customer storefront SPA (ADR 015) — a Vite + React app launched as part of the Aspire
 // orchestration so one `dotnet run` boots the full stack with the frontend visible in the dashboard
