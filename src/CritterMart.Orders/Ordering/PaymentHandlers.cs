@@ -17,8 +17,15 @@ namespace CritterMart.Orders.Ordering;
 // cascading message; it has a local handler below, so it is processed in-process.
 public static class AuthorizePaymentHandler
 {
-    public static async Task<PaymentDecision> Handle(AuthorizePayment message, IPaymentProvider provider) =>
-        await provider.AuthorizeAsync(message);
+    public static async Task<PaymentDecision> Handle(
+        AuthorizePayment message, IPaymentProvider provider, PaymentAuthDelay delay)
+    {
+        // DEMO AFFORDANCE: configurable pause so the stock_reserved → payment_authorized transition
+        // is visible at speaking pace. Zero in tests and default config; set via Payment:AuthDelay.
+        if (delay.Duration > TimeSpan.Zero)
+            await Task.Delay(delay.Duration);
+        return await provider.AuthorizeAsync(message);
+    }
 }
 
 // Hop 2 of the payment gate: translate the provider's transient decision into a durable Klefter

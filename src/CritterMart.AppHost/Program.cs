@@ -78,7 +78,9 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     //   • Change the threshold here to tune which orders decline.
     //   • DELETE this one line to restore round-one "always approve" behavior after the demo.
     //   • Full how-to + the order amounts to use: docs/demo-runbook.md § Step 5 / Payment decline.
-    .WithEnvironment("Payment__DeclineOverAmount", "100");
+    .WithEnvironment("Payment__DeclineOverAmount", "200")
+    // Slow the stock_reserved → confirmed transition to demo pace (~20 s). Tune or remove for prod.
+    .WithEnvironment("Payment__AuthDelay", "00:00:20");
 
 // Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
 // registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic
