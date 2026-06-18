@@ -50,8 +50,8 @@ describe("fetchMyCart", () => {
 });
 
 describe("selectCartLineCount", () => {
-  it("counts distinct cart lines (the badge's Cart (N))", () => {
-    expect(selectCartLineCount(openCart as CartView)).toBe(2);
+  it("sums quantities across all lines (2 + 3 = 5 for the badge's Cart (N))", () => {
+    expect(selectCartLineCount(openCart as CartView)).toBe(5);
   });
 
   it("is 0 when there is no open cart", () => {

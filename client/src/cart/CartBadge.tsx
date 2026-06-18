@@ -5,7 +5,7 @@ import { useApiContext } from "@/api/client";
 
 import { cartLineCountQueryOptions } from "./cartQueries";
 
-// The header cart badge — "Cart (N)", where N is the distinct line count of the customer's open cart. It lives
+// The header cart badge — "Cart (N)", where N is the total item count (sum of quantities) across all cart lines. It lives
 // in the app chrome (AppShell renders it on every route) but owns its own query subscription so only the badge
 // re-renders when the count changes, not the whole shell — the count is `select`-derived (cartQueries.ts), so
 // the subscription wakes only on a count change. Sharing the cart query key, it rides the same single

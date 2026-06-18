@@ -44,12 +44,12 @@ export function cartQueryOptions(ctx: RequestContext) {
   });
 }
 
-// Stable, module-scope selector for the header badge: it needs ONLY the distinct line count, so deriving it
+// Stable, module-scope selector for the header badge: it needs ONLY the total item count, so deriving it
 // via `select` re-renders the badge only when the count changes, not on every cart-field change (tanstack
-// `perf-select-transform`). A SKU is exactly one line (re-adds merge by SKU), so the line count is the
-// "Cart (N)" the wireframe shows; `null` (no open cart) → 0.
+// `perf-select-transform`). Sums `quantity` across all lines so "Cart (N)" reflects the true item count
+// (e.g. 2× plush + 3× newt → 5), not the number of distinct SKUs; `null` (no open cart) → 0.
 export function selectCartLineCount(cart: CartView | null): number {
-  return cart?.lines.length ?? 0;
+  return cart?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0;
 }
 
 // The same cart query projected to just the badge count — same `queryKey`, so it shares the cache entry and

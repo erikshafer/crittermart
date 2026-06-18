@@ -69,19 +69,20 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
     .WaitFor(critterwatch)
-    // ───── DEMO AFFORDANCE — change before the talk / REMOVE after it ──────────────────────────────
-    // Makes the payment-DECLINE path (slice 4.6: OrderCancelled{payment_declined} + compensating
-    // ReleaseStock back to Inventory) triggerable LIVE: the stubbed payment provider declines any order
-    // whose total exceeds this threshold, and approves everything at/under it. So in one running stack,
-    // a small order confirms and a large order (total > $100) cancels and releases its reserved stock —
-    // no restart, no provider swap. This is the ONLY thing that makes a decline happen at runtime; the
-    // whole decline→cancel→release chain itself is real, built, and tested (slice 4.6).
-    //   • Change the threshold here to tune which orders decline.
-    //   • DELETE this one line to restore round-one "always approve" behavior after the demo.
-    //   • Full how-to + the order amounts to use: docs/demo-runbook.md § Step 5 / Payment decline.
+    // ───── DEMO AFFORDANCES — all three knobs in one place ─────────────────────────────────────────
+    // Payment__DeclineOverAmount: the stubbed provider declines any order whose total exceeds this
+    // threshold and approves everything at/under it — makes the slice-4.6 decline→cancel→release
+    // path triggerable live without swapping providers or restarting. DELETE after the demo to restore
+    // "always approve." Full how-to: docs/demo-runbook.md § Step 5 / Payment decline.
     .WithEnvironment("Payment__DeclineOverAmount", "200")
-    // Slow the stock_reserved → confirmed transition to demo pace (~20 s). Tune or remove for prod.
-    .WithEnvironment("Payment__AuthDelay", "00:00:20");
+    // Payment__AuthDelay: artificial pause inside the stub before it returns a decision, so the
+    // stock_reserved → payment_authorized → confirmed steps are visible at speaking pace.
+    // Default (when unset): TimeSpan.Zero (instant). Tune or remove for prod. See PaymentProvider.cs.
+    .WithEnvironment("Payment__AuthDelay", "00:00:20")
+    // Orders__PaymentTimeout: how long a placed order may sit non-terminal before the scheduled
+    // OrderPaymentTimeout self-message fires and cancels it (Bruun temporal automation, slice 4.7).
+    // Default (when unset): 10 minutes (PaymentDeadline.Default in OrderPaymentTimeout.cs).
+    .WithEnvironment("Orders__PaymentTimeout", "00:10:00");
 
 // Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
 // registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic
@@ -98,14 +99,11 @@ var identity = builder.AddProject<Projects.CritterMart_Identity>("identity")
 
 // Demo seed automation (closes demo-runbook Known Gap #1). A one-shot console wired as an Aspire
 // resource: once Catalog + Inventory are healthy it POSTs the canonical seed (the three demo products
-// + their stock) to those services' HTTP endpoints, then exits — so a single `dotnet run` yields a
-// demo-ready stack with no manual runbook Step-3 seeding (Aspire's Postgres is ephemeral, wiped each
-// boot). It is a LEAF node: nothing WaitFor()s the seeder, so a seed hiccup shows red on the dashboard
-// but never blocks the services or the storefront. The two service base URLs are injected exactly the
-// way the SPA gets its VITE_*_URL values below (ADR 018 — explicit URLs; no service discovery needed
-// for a one-shot tool). The seed is idempotent (duplicate SKU → 409 → skip). Set SEEDING_ENABLED=false
-// to disable auto-seed and fall back to the manual runbook Step 3.
-builder.AddProject<Projects.CritterMart_Seeding>("seeder")
+// + their stock) to those services' HTTP endpoints, verifies all products are queryable, then exits.
+// The storefront WaitForCompletion(seeder) so the browser never opens on an empty catalog. The two
+// service base URLs are injected exactly the way the SPA gets its VITE_*_URL values (ADR 018).
+// The seed is idempotent (duplicate SKU → 409 → skip). Set SEEDING_ENABLED=false to disable.
+var seeder = builder.AddProject<Projects.CritterMart_Seeding>("seeder")
     .WithEnvironment("CATALOG_URL", catalog.GetEndpoint("http"))
     .WithEnvironment("INVENTORY_URL", inventory.GetEndpoint("http"))
     .WithEnvironment("IDENTITY_URL", identity.GetEndpoint("http"))
@@ -132,7 +130,11 @@ var storefront = builder.AddViteApp("storefront", "../../client")
     .WithEnvironment("VITE_ORDERS_URL", orders.GetEndpoint("http"))
     .WaitFor(catalog)
     .WaitFor(inventory)
-    .WaitFor(orders);
+    .WaitFor(orders)
+    // Hold the Vite dev server until the seeder has exited — products are in the catalog before
+    // any browser tab can open. WaitForCompletion waits for process exit (any exit code), so a
+    // seed hiccup still shows red on the dashboard but the storefront starts regardless.
+    .WaitForCompletion(seeder);
 
 // CORS-origin injection (ADR 018 — symmetric with the URL injection above; the AppHost is the single
 // source of truth for the cross-origin wiring). Each service reads Cors:AllowedOrigins via

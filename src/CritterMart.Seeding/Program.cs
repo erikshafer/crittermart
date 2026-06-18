@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 // CritterMart demo seeder — closes demo-runbook Known Gap #1.
 //
@@ -32,12 +33,12 @@ Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}, Identity={iden
 
 // The canonical demo set. These three SKUs back the three runbook order routes:
 //   crit-001    happy path                (Step 4)
-//   crit-rare   insufficient-stock cancel (Step 5a — only 1 in stock)
-//   crit-deluxe payment-decline cancel    (Step 5b — 5 × $24.99 = $124.95 > the $100 demo threshold)
+//   crit-rare   insufficient-stock cancel (Step 5a — only 3 in stock; order 4+ to trigger)
+//   crit-deluxe payment-decline cancel    (Step 5b — 9 × $24.99 = $224.91 > the $200 demo threshold)
 SeedItem[] seed =
 [
     new("crit-001",    "Cosmic Critter Plush", "A plush from the cosmos.", 24.99m, 100),
-    new("crit-rare",   "Rare Critter",         "Limited.",                 49.99m, 1),
+    new("crit-rare",   "Rare Critter",         "Limited.",                 49.99m, 3),
     new("crit-deluxe", "Deluxe Critter",       "Premium.",                 24.99m, 100),
 ];
 
@@ -116,12 +117,22 @@ foreach (var c in customers)
 
 if (failures == 0)
 {
+    // Verify all seeded products are actually queryable before exiting. Inline Marten projections
+    // are written in the same transaction as the event, so visibility should be immediate — this
+    // verification closes the gap between "201 received" and "readable via GET /products", and
+    // ensures the storefront (which WaitForCompletion this process) opens on a full catalog.
+    Log("Verifying catalog is queryable...");
+    if (!await VerifyCatalogAsync(catalog, seed.Select(s => s.Sku).ToHashSet()))
+    {
+        Log($"Catalog verification timed out after {maxAttempts} attempt(s).");
+        return 1;
+    }
+
     Log($"Seed complete: {seed.Length} product(s) + {customers.Length} customer(s) ensured.");
     return 0;
 }
 
-// Non-zero so the failure shows red on the Aspire dashboard. The storefront does not WaitFor the
-// seeder, so a seed hiccup is visible but never blocks the rest of the stack from coming up.
+// Non-zero so the failure shows red on the Aspire dashboard.
 Log($"Seed finished with {failures} failure(s).");
 return 1;
 
@@ -153,6 +164,33 @@ async Task<HttpResponseMessage> PostJsonAsync(HttpClient client, string path, ob
     }
 }
 
+// GET /products and confirm every expected SKU is in the response. Retries to account for any
+// last-millisecond lag between the 201 acknowledgement and the document being visible to a query.
+async Task<bool> VerifyCatalogAsync(HttpClient client, ISet<string> expectedSkus)
+{
+    var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            var items = await client.GetFromJsonAsync<ProductView[]>("/products", jsonOptions);
+            var found = (items ?? []).Select(p => p.Sku).ToHashSet();
+            if (expectedSkus.All(found.Contains))
+            {
+                Log($"  Catalog verified: all {expectedSkus.Count} product(s) queryable.");
+                return true;
+            }
+            Log($"  Catalog: {found.Count}/{expectedSkus.Count} product(s) visible; retry {attempt}/{maxAttempts} in {retryDelay.TotalSeconds:0.#}s");
+        }
+        catch (Exception ex)
+        {
+            Log($"  Catalog verify error ({ex.GetType().Name}); retry {attempt}/{maxAttempts} in {retryDelay.TotalSeconds:0.#}s");
+        }
+        await Task.Delay(retryDelay);
+    }
+    return false;
+}
+
 // Aspire captures stdout, so the seeder's progress shows in the dashboard's `seeder` console log.
 static void Log(string message) => Console.WriteLine($"[seed] {message}");
 
@@ -161,3 +199,6 @@ internal sealed record SeedItem(string Sku, string Name, string Description, dec
 
 // A demo customer with a deterministic id matching the SPA's useCurrentCustomer stub.
 internal sealed record DemoCustomer(string Id, string Email, string DisplayName);
+
+// Minimal shape for deserialising GET /products responses during catalog verification.
+internal sealed record ProductView(string Sku);
