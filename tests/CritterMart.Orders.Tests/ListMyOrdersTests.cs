@@ -50,7 +50,8 @@ public class ListMyOrdersTests
 
         var result = await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder(customerId)).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", customerId);
             _.StatusCodeShouldBe(201);
         });
 

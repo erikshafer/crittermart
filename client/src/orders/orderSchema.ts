@@ -76,6 +76,10 @@ export const OrderStatusViewSchema = z.object({
   // reasons (slice 025). A closed nullable enum mirroring `status`: a reason the backend never sends fails
   // loud here rather than rendering through as mystery copy.
   cancelReason: CancelReasonSchema.nullable(),
+  // The customer's display name, resolved from LocalCustomerView at read time (slice 5.3). Absent when the
+  // local model hasn't arrived yet — an eventual-consistency gap, not an error. Strip-mode drops it silently
+  // when missing; present it is a string or null.
+  customerName: z.string().nullable().optional(),
 });
 
 // The "My Orders" list payload (`GET /orders/mine`) — a customer's orders, each a full `OrderStatusView`,

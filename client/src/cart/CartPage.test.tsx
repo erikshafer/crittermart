@@ -159,7 +159,7 @@ describe("CartPage", () => {
     expect(init.method).toBe("DELETE");
   });
 
-  it("[ Place Order ] POSTs { customerId } to /orders and disables while placing (checkout fires PlaceOrder)", async () => {
+  it("[ Place Order ] POSTs an empty body to /orders with X-Customer-Id header and disables while placing (checkout fires PlaceOrder)", async () => {
     // A never-settling POST keeps the mutation pending: usePlaceOrder's onSuccess navigate (to a route absent
     // from this throwaway router) never fires, so the durable evidence is the command call + the pending state.
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
@@ -175,8 +175,8 @@ describe("CartPage", () => {
 
     await waitFor(() => expect(commandCall(fetchMock)).toBeDefined());
     const [url, init] = commandCall(fetchMock)!;
-    expect(url).toMatch(/\/orders$/); // POST /orders — body-keyed, not the route-keyed /carts/{id}/...
-    expect(JSON.parse(init.body as string)).toEqual({ customerId: "customer-demo" });
+    expect(url).toMatch(/\/orders$/); // POST /orders — header-keyed, not route-keyed like /carts/{id}/...
+    expect(JSON.parse(init.body as string)).toEqual({});
     // The button enters its pending state (no optimistic guess; it waits for the server).
     expect(screen.getByRole("button", { name: "Placing…" })).toBeDisabled();
   });
