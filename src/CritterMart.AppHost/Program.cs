@@ -1,16 +1,29 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Group CritterMart's containers under a single "crittermart" row in Docker Desktop's Containers
+// view — the way the sibling Critter Stack apps (critterbids, critterwatch) already group. Docker
+// Desktop renders any container carrying the com.docker.compose.project label as a collapsible
+// "project" parent row; it is a UI convention, not a docker-compose dependency. Aspire's DCP
+// launches these containers (not docker-compose), so without the label they float loose/ungrouped.
+// Only Postgres + RabbitMQ are containers here — the three services and the seeder are dotnet
+// processes and the storefront is a node process, so they never appear in Docker Desktop's
+// container list. WithContainerRuntimeArgs passes the --label straight through to the runtime.
+// Mirrors CritterBids' AppHost (same Aspire 13.4.3).
+const string dockerProject = "crittermart";
+
 // Shared PostgreSQL with one database; each service uses its own schema (ADR 002).
 // Naming the database "crittermart" makes WithReference inject ConnectionStrings__crittermart,
 // which both services already read via GetConnectionString("crittermart").
-var postgres = builder.AddPostgres("postgres");
+var postgres = builder.AddPostgres("postgres")
+    .WithContainerRuntimeArgs("--label", $"com.docker.compose.project={dockerProject}");
 var crittermart = postgres.AddDatabase("crittermart");
 
 // RabbitMQ for cross-service messaging (ADR 003). The first cross-BC message flows in
 // slice 4.2 (Reserve stock): Orders cascades ReserveStock to Inventory and the
 // StockReserved / StockReservationFailed reply returns — so both services WithReference it.
 // WaitFor lets AutoProvision declare exchanges/queues reliably against a healthy broker.
-var rabbitmq = builder.AddRabbitMQ("rabbitmq");
+var rabbitmq = builder.AddRabbitMQ("rabbitmq")
+    .WithContainerRuntimeArgs("--label", $"com.docker.compose.project={dockerProject}");
 
 // CritterWatch monitoring console (out-of-band trial). It keeps its own event store in a
 // dedicated database on the shared Postgres container — separate from the crittermart demo
