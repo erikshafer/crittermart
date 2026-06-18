@@ -182,7 +182,8 @@ public class PaymentTimeoutTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(Plush.Sku, Plush.Quantity, CosmicCritterPlush))
-                .ToUrl("/carts/customer-V/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "customer-V");
             _.StatusCodeShouldBe(201);
         });
         var placed = await _fixture.Host.Scenario(_ =>

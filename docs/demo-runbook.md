@@ -188,7 +188,7 @@ Invoke-RestMethod "$inv/stock/$sku"
 |---|---|---|
 | `/products` (Catalog) | POST | `{ sku, name, description, price }` |
 | `/stock/{sku}/receipts` (Inventory) | POST | `{ quantity }` |
-| `/carts/{customerId}/items` (Orders) | POST | `{ sku, quantity, productSnapshot: { name, price } }` |
+| `/carts/mine/items` (Orders) | POST | `{ sku, quantity, productSnapshot: { name, price } }` + header `X-Customer-Id` |
 | `/orders` (Orders) | POST | `{ customerId }` → returns `{ orderId }` |
 
 ---
@@ -200,7 +200,7 @@ $ord="http://localhost:5103"; $cust="demo-buyer"; $sku="crit-001"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 
 # Add to cart (productSnapshot is the cart's only product truth — the cart never reads Catalog)
-Invoke-RestMethod "$ord/carts/$cust/items" -Method Post -ContentType application/json `
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } `
   -Body (J @{ sku=$sku; quantity=2; productSnapshot=@{ name="Cosmic Critter Plush"; price=24.99 } })
 
 # Place the order — this ONE call cascades the whole cross-BC saga
@@ -239,7 +239,7 @@ $cust="demo-fail"; $sku="crit-rare"
 
 Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json -Body (J @{ sku=$sku; name="Rare Critter"; description="Limited."; price=49.99 })
 Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=1 })
-Invoke-RestMethod "$ord/carts/$cust/items" -Method Post -ContentType application/json -Body (J @{ sku=$sku; quantity=3; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=3; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
 $id = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
 $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
@@ -263,7 +263,7 @@ $cust="demo-decline"; $sku="crit-deluxe"
 Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json -Body (J @{ sku=$sku; name="Deluxe Critter"; description="Premium."; price=24.99 })
 Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=100 })
 # 5 × $24.99 = $124.95, over the $100 threshold → payment will decline
-Invoke-RestMethod "$ord/carts/$cust/items" -Method Post -ContentType application/json -Body (J @{ sku=$sku; quantity=5; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=5; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
 $id = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
 $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
@@ -387,7 +387,7 @@ CUST=demo-buyer; SKU=crit-001
 curl -s -X POST $CAT/products -H 'content-type: application/json' \
   -d '{"sku":"crit-001","name":"Cosmic Critter Plush","description":"A plush from the cosmos.","price":24.99}'
 curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":100}'
-curl -s -X POST $ORD/carts/$CUST/items -H 'content-type: application/json' \
+curl -s -X POST $ORD/carts/mine/items -H 'content-type: application/json' -H "X-Customer-Id: $CUST" \
   -d '{"sku":"crit-001","quantity":2,"productSnapshot":{"name":"Cosmic Critter Plush","price":24.99}}'
 ORDER=$(curl -s -X POST $ORD/orders -H 'content-type: application/json' -d '{"customerId":"demo-buyer"}')
 echo "$ORDER"   # -> {"orderId":"..."}

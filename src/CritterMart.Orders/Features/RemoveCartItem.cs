@@ -1,19 +1,29 @@
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
-// The Customer removes an item from their open cart (Workshop 001 slice 3.2). Both identifiers
-// ride the route — there is no request body, which makes this the project's first DELETE
-// endpoint. As with AddToCart, the customer edits *their* cart; resolving which Cart stream
-// that is, is the server's business (design.md decision 3).
+// The Customer removes an item from their open cart (Workshop 001 slice 3.2). Identity arrives via
+// the X-Customer-Id header (ADR 009 seam — harmonized with the cart read); the {sku} rides the
+// route and there is no request body, which makes this the project's first DELETE endpoint. As with
+// AddToCart, the customer edits *their* cart; resolving which Cart stream that is, is the server's
+// business (design.md decision 3).
 public static class RemoveCartItemEndpoint
 {
-    [WolverineDelete("/carts/{customerId}/items/{sku}")]
-    public static async Task<IResult> Delete(string customerId, string sku, IDocumentSession session)
+    [WolverineDelete("/carts/mine/items/{sku}")]
+    public static async Task<IResult> Delete(
+        [FromHeader(Name = "X-Customer-Id")] string? customerId, string sku, IDocumentSession session)
     {
+        // Identity rides in the X-Customer-Id header (ADR 009 seam); a missing/blank header is a
+        // malformed request → 400, mirroring ViewMyCart and the cart's other commands.
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return Results.BadRequest("X-Customer-Id header is required.");
+        }
+
         // Resolve the customer's open cart — the same indexed Cart query AddToCart and
         // PlaceOrder use. No open cart → nothing to edit.
         var open = await session.Query<Cart>()

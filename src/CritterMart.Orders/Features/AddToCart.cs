@@ -7,8 +7,9 @@ using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
-// The Customer adds an item to their cart (Workshop 001 slice 3.1). customerId comes from
-// the route; the product name + price are snapshotted on the command (no Catalog read).
+// The Customer adds an item to their cart (Workshop 001 slice 3.1). Identity arrives via the
+// X-Customer-Id header (ADR 009 seam — harmonized with the cart read GET /carts/mine); the product
+// name + price are snapshotted on the command (no Catalog read).
 public record AddToCart(string Sku, int Quantity, ProductSnapshot ProductSnapshot);
 
 // The cartId handed back so the caller can read the cart at GET /carts/{cartId}.
@@ -67,10 +68,20 @@ public static class AddToCartEndpoint
     // fire-and-check (design.md Decision 1) one scheduled timeout per cart suffices: subsequent
     // adds and edits just append events whose timestamps ARE the activity record the fired timeout
     // checks — so they cascade null, which Wolverine skips.
-    [WolverinePost("/carts/{customerId}/items")]
+    [WolverinePost("/carts/mine/items")]
     public static async Task<(IResult, DeliveryMessage<CartActivityTimeout>?)> Post(
-        string customerId, AddToCart command, IDocumentSession session, CartActivityDeadline deadline)
+        [FromHeader(Name = "X-Customer-Id")] string? customerId,
+        AddToCart command, IDocumentSession session, CartActivityDeadline deadline)
     {
+        // Identity rides in the X-Customer-Id header — the ADR 009 useCurrentCustomer seam, the same
+        // transport the cart READ (GET /carts/mine) already uses. A missing/blank header is a malformed
+        // request (no identity to resolve a cart) → 400, mirroring ViewMyCart. The header is the round-one
+        // stand-in for the authenticated claim Polecat will provide; the route no longer carries identity.
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return (Results.BadRequest("X-Customer-Id header is required."), null);
+        }
+
         // The Cart stream is keyed by cartId, but the command knows only the customer, so
         // resolve the customer's open cart first (design.md decision 2). The partial unique
         // index on Cart.CustomerId (scoped to open carts) backstops a concurrent create.

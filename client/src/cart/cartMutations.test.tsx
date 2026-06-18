@@ -119,7 +119,7 @@ describe("useAddToCart", () => {
     expect(queryClient.getQueryData<CartView>(cartKey)?.lines).toHaveLength(1);
   });
 
-  it("POSTs to the route-keyed URL with a `productSnapshot` body (not `snapshot`)", async () => {
+  it("POSTs to the header-keyed URL (/carts/mine) with the X-Customer-Id header and a `productSnapshot` body", async () => {
     const queryClient = freshClient();
     const fetchMock = vi
       .fn()
@@ -134,8 +134,10 @@ describe("useAddToCart", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain(`/carts/${CUSTOMER}/items`); // route-keyed (locked decision 1), NOT /carts/mine
+    expect(url).toContain("/carts/mine/items"); // header-keyed (change 032), NOT /carts/{customerId}
+    expect(url).not.toContain(CUSTOMER); // identity rides the header, never the path
     expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
     const body = JSON.parse(init.body as string);
     expect(body.productSnapshot).toEqual({ name: "Nebula Newt", price: 18.0 }); // the exact field name the backend binds
   });
@@ -231,7 +233,7 @@ describe("useRemoveCartItem", () => {
     expect(queryClient.getQueryData<CartView>(cartKey)?.lines).toHaveLength(2); // both lines restored
   });
 
-  it("DELETEs the route-keyed URL (customerId + sku in the path)", async () => {
+  it("DELETEs the header-keyed URL (/carts/mine, sku in the path, identity in the header)", async () => {
     const queryClient = freshClient();
     queryClient.setQueryData(cartKeys.mine(CUSTOMER), twoLineCart);
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
@@ -245,8 +247,10 @@ describe("useRemoveCartItem", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain(`/carts/${CUSTOMER}/items/crit-001`);
+    expect(url).toContain("/carts/mine/items/crit-001"); // header-keyed (change 032); only {sku} on the path
+    expect(url).not.toContain(CUSTOMER);
     expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
   });
 });
 
@@ -288,7 +292,7 @@ describe("useChangeCartItemQuantity", () => {
     expect(queryClient.getQueryData<CartView>(cartKey)?.lines[0].quantity).toBe(2); // restored
   });
 
-  it("POSTs the route-keyed URL with a `{ newQuantity }` body (no response schema — 204)", async () => {
+  it("POSTs the header-keyed URL (/carts/mine, sku in the path) with a `{ newQuantity }` body (no response schema — 204)", async () => {
     const queryClient = freshClient();
     queryClient.setQueryData(cartKeys.mine(CUSTOMER), oneLineCart);
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
@@ -304,8 +308,10 @@ describe("useChangeCartItemQuantity", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain(`/carts/${CUSTOMER}/items/crit-001/quantity`);
+    expect(url).toContain("/carts/mine/items/crit-001/quantity"); // header-keyed (change 032); only {sku} on the path
+    expect(url).not.toContain(CUSTOMER);
     expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
     expect(JSON.parse(init.body as string)).toEqual({ newQuantity: 5 });
   });
 });

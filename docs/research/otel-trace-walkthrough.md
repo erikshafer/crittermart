@@ -62,8 +62,8 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:5101/products" -ContentTyp
 # 2. Inventory (:5102) — receive stock
 Invoke-RestMethod -Method Post -Uri "http://localhost:5102/stock/$sku/receipts" -ContentType application/json `
   -Body '{"quantity":100}'
-# 3. Orders (:5103) — add to cart (productSnapshot is the cart's only product truth)
-Invoke-RestMethod -Method Post -Uri "http://localhost:5103/carts/$cust/items" -ContentType application/json `
+# 3. Orders (:5103) — add to cart (identity via X-Customer-Id header; productSnapshot is the cart's only product truth)
+Invoke-RestMethod -Method Post -Uri "http://localhost:5103/carts/mine/items" -ContentType application/json -Headers @{ "X-Customer-Id" = $cust } `
   -Body '{"sku":"OTEL-DEMO-001","quantity":2,"productSnapshot":{"name":"Telemetry Tortoise","price":42.50}}'
 # 4. Orders (:5103) — place the order; this one call cascades the whole saga
 Invoke-RestMethod -Method Post -Uri "http://localhost:5103/orders" -ContentType application/json `

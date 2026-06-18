@@ -59,11 +59,11 @@ export function addLineToCart(cart: CartView | null, line: CartLine, customerId:
   return { ...base, lines };
 }
 
-// The add-to-cart mutation hook. Identity transport (locked decision 1, prompt 019): the command is
-// **route-keyed** — customerId from the useCurrentCustomer seam is interpolated into the path
-// (`POST /carts/{customerId}/items`); the X-Customer-Id header rides along (the shared client always sets it)
-// but the route is authoritative server-side. This diverges from the header-keyed cart READ (`/carts/mine`) —
-// a divergence logged as a future harmonization tidy, not fixed in this screen-only slice.
+// The add-to-cart mutation hook. Identity transport (harmonized in change 032): the command is
+// **header-keyed** — `POST /carts/mine/items`, with the customer resolved from the X-Customer-Id header
+// the shared client always sets (from the useCurrentCustomer seam). The route no longer carries identity,
+// matching the cart READ (`/carts/mine`); the Polecat promotion swaps the header for a claim with call sites
+// unchanged. (`ctx.customerId` is still used for the client-side cache key, not the URL.)
 export function useAddToCart() {
   const ctx = useApiContext();
   const queryClient = useQueryClient();
@@ -72,7 +72,7 @@ export function useAddToCart() {
   return useMutation({
     mutationFn: (command: AddToCartCommand) =>
       postCommand(
-        `${serviceUrls.ordersUrl}/carts/${ctx.customerId}/items`,
+        `${serviceUrls.ordersUrl}/carts/mine/items`,
         command,
         ctx,
         AddToCartResponseSchema,
@@ -113,8 +113,9 @@ export function useAddToCart() {
 
 // ── Remove from cart (slice 3.2) — the SPA's first DELETE ───────────────────────────────────────────────
 
-// The remove-item command. Both identifiers ride the route (DELETE /carts/{customerId}/items/{sku}), so the
-// command carries only the SKU — there is no request body, and the response is 204 (handled by deleteCommand).
+// The remove-item command. Identity rides the X-Customer-Id header and the SKU rides the route
+// (DELETE /carts/mine/items/{sku}), so the command carries only the SKU — there is no request body, and the
+// response is 204 (handled by deleteCommand).
 export interface RemoveCartItemCommand {
   sku: string;
 }
@@ -128,8 +129,8 @@ export function removeLineFromCart(cart: CartView | null, sku: string): CartView
   return { ...cart, lines: cart.lines.filter((l) => l.sku !== sku) };
 }
 
-// The remove-item mutation hook. Same route-keyed identity transport as useAddToCart (customerId from the seam
-// interpolated into the path; the X-Customer-Id header rides along) and the same three-callback optimistic
+// The remove-item mutation hook. Same header-keyed identity transport as useAddToCart (the X-Customer-Id
+// header set by the shared client; only the {sku} rides the path) and the same three-callback optimistic
 // shape: the line disappears the instant [x] is tapped, then reconciles against the refetched CartView.
 export function useRemoveCartItem() {
   const ctx = useApiContext();
@@ -138,7 +139,7 @@ export function useRemoveCartItem() {
 
   return useMutation({
     mutationFn: (command: RemoveCartItemCommand) =>
-      deleteCommand(`${serviceUrls.ordersUrl}/carts/${ctx.customerId}/items/${command.sku}`, ctx),
+      deleteCommand(`${serviceUrls.ordersUrl}/carts/mine/items/${command.sku}`, ctx),
 
     onMutate: async (command) => {
       await queryClient.cancelQueries({ queryKey: cartKey });
@@ -161,11 +162,11 @@ export function useRemoveCartItem() {
 
 // ── Change quantity (slice 3.3) ─────────────────────────────────────────────────────────────────────────
 
-// The change-quantity command. customerId + sku ride the route; the new ABSOLUTE quantity rides the body as
-// `{ newQuantity }` — matching `ChangeCartItemQuantity(int NewQuantity)`, which System.Text.Json binds
-// case-insensitively. Not a delta: the UI computes N±1 and sends the result. The backend rejects <= 0, but
-// the [-] stepper is disabled at quantity 1 (locked decision 2), so the SPA never sends a non-positive value.
-// Returns 204 (no body).
+// The change-quantity command. The {sku} rides the route and identity the X-Customer-Id header; the new
+// ABSOLUTE quantity rides the body as `{ newQuantity }` — matching `ChangeCartItemQuantity(int NewQuantity)`,
+// which System.Text.Json binds case-insensitively. Not a delta: the UI computes N±1 and sends the result.
+// The backend rejects <= 0, but the [-] stepper is disabled at quantity 1 (locked decision 2), so the SPA
+// never sends a non-positive value. Returns 204 (no body).
 export interface ChangeCartItemQuantityCommand {
   sku: string;
   newQuantity: number;
@@ -187,8 +188,9 @@ export function setLineQuantity(
   };
 }
 
-// The change-quantity mutation hook. Same route-keyed transport + three-callback optimistic shape; the body is
-// `{ newQuantity }` and the 204 response means `postCommand` is called WITHOUT a schema (nothing to parse).
+// The change-quantity mutation hook. Same header-keyed transport (X-Customer-Id; only {sku} on the path) +
+// three-callback optimistic shape; the body is `{ newQuantity }` and the 204 response means `postCommand` is
+// called WITHOUT a schema (nothing to parse).
 export function useChangeCartItemQuantity() {
   const ctx = useApiContext();
   const queryClient = useQueryClient();
@@ -197,7 +199,7 @@ export function useChangeCartItemQuantity() {
   return useMutation({
     mutationFn: (command: ChangeCartItemQuantityCommand) =>
       postCommand(
-        `${serviceUrls.ordersUrl}/carts/${ctx.customerId}/items/${command.sku}/quantity`,
+        `${serviceUrls.ordersUrl}/carts/mine/items/${command.sku}/quantity`,
         { newQuantity: command.newQuantity },
         ctx,
       ),

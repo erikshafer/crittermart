@@ -1,22 +1,32 @@
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
 // The Customer changes the quantity of an item in their open cart (Workshop 001 slice 3.3).
-// customerId + sku ride the route; the new absolute quantity rides the body. The route shape
-// mirrors Catalog's change-price (POST /products/{sku}/price) — a command-shaped POST to the
-// thing being changed (design.md decision 3).
+// Identity arrives via the X-Customer-Id header (ADR 009 seam — harmonized with the cart read);
+// the {sku} stays on the route and the new absolute quantity rides the body. The {sku}-on-the-route
+// + body shape still mirrors Catalog's change-price (POST /products/{sku}/price) — a command-shaped
+// POST to the thing being changed (design.md decision 3).
 public record ChangeCartItemQuantity(int NewQuantity);
 
 public static class ChangeCartItemQuantityEndpoint
 {
-    [WolverinePost("/carts/{customerId}/items/{sku}/quantity")]
+    [WolverinePost("/carts/mine/items/{sku}/quantity")]
     public static async Task<IResult> Post(
-        string customerId, string sku, ChangeCartItemQuantity command, IDocumentSession session)
+        [FromHeader(Name = "X-Customer-Id")] string? customerId, string sku,
+        ChangeCartItemQuantity command, IDocumentSession session)
     {
+        // Identity rides in the X-Customer-Id header (ADR 009 seam); a missing/blank header is a
+        // malformed request → 400, mirroring ViewMyCart and the cart's other commands.
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return Results.BadRequest("X-Customer-Id header is required.");
+        }
+
         // Malformed input, not a state conflict: zero or negative is never a valid quantity.
         // Removing an item is its own command (Workshop § 6.1 slice 3.3 failure path).
         if (command.NewQuantity <= 0)

@@ -32,7 +32,8 @@ public class AddToCartTests
     {
         var result = await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl($"/carts/{customerId}/items");
+            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", customerId);
             _.StatusCodeShouldBe(201);
         });
 
@@ -168,7 +169,8 @@ public class AddToCartTests
 
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new AddToCart("crit-001", 1, null!)).ToUrl("/carts/customer-X/items");
+            _.Post.Json(new AddToCart("crit-001", 1, null!)).ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(400);
         });
 
@@ -188,7 +190,8 @@ public class AddToCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("", 24.99m)))
-                .ToUrl("/carts/customer-X/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(400);
         });
     }
@@ -202,8 +205,30 @@ public class AddToCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("Cosmic Critter Plush", -1m)))
-                .ToUrl("/carts/customer-X/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(400);
         });
+    }
+
+    // Harmonized identity transport (change 032): an add with a VALID snapshot but no X-Customer-Id
+    // header is rejected with 400 — the snapshot Validate guard passes, so the header guard in the
+    // handler is what fires (no identity to resolve/create a cart), mirroring the cart read.
+    [Fact]
+    public async Task adding_without_an_identity_header_returns_400()
+    {
+        await ResetOrdersAsync();
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Json(new AddToCart("crit-001", 1, CosmicCritterPlush)).ToUrl("/carts/mine/items");
+            _.StatusCodeShouldBe(400);
+        });
+
+        // The short-circuit appended nothing: the (header-less) request created no cart at all.
+        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
+        await using var session = store.LightweightSession();
+        var carts = await session.Query<CartView>().ToListAsync();
+        carts.ShouldBeEmpty();
     }
 }

@@ -33,7 +33,8 @@ public class PlaceOrderTests
     {
         var result = await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl($"/carts/{customerId}/items");
+            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", customerId);
             _.StatusCodeShouldBe(201);
         });
 
@@ -155,7 +156,8 @@ public class PlaceOrderTests
 
         await _fixture.Host.Scenario(_ =>
         {
-            _.Delete.Url("/carts/customer-X/items/crit-001");
+            _.Delete.Url("/carts/mine/items/crit-001");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(204);
         });
 

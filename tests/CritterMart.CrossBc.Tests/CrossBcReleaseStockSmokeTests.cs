@@ -39,7 +39,8 @@ public class CrossBcReleaseStockSmokeTests
         await _fixture.OrdersHost.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-009", 2, new ProductSnapshot("Wandering Wombat", 30.00m)))
-                .ToUrl("/carts/decline-customer/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "decline-customer");
             _.StatusCodeShouldBe(201);
         });
 

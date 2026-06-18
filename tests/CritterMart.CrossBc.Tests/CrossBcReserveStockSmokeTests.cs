@@ -38,7 +38,8 @@ public class CrossBcReserveStockSmokeTests
         await _fixture.OrdersHost.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-001", 2, new ProductSnapshot("Cosmic Critter Plush", 24.99m)))
-                .ToUrl("/carts/customer-X/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(201);
         });
 
