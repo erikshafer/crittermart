@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <!-- The persistence-agnostic teaching beat (spike): Wolverine over EF Core (Npgsql) instead of
+         Marten, on the SAME shared Postgres as the three event-sourced services. Identity is a data
+         store (ADR 009), not an auth provider — no Polecat, no authN/authZ. -->
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" />
+    <PackageReference Include="WolverineFx.Postgresql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="WolverineFx.Http" />
+    <!-- Wolverine runtime + listener health exposed to ASP.NET health checks (ADR 019). -->
+    <PackageReference Include="WolverineFx.HealthChecks" />
+    <!-- Cross-BC messaging over RabbitMQ (ADR 003) — wired exactly like the Marten services. The
+         spike's CustomerRegistered cascades to the EF outbox and publishes here UNCONSUMED. -->
+    <PackageReference Include="WolverineFx.RabbitMQ" />
+    <PackageReference Include="Wolverine.CritterWatch" />
+    <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>
