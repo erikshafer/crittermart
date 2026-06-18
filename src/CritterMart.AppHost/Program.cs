@@ -23,6 +23,7 @@ var crittermart = postgres.AddDatabase("crittermart");
 // StockReserved / StockReservationFailed reply returns — so both services WithReference it.
 // WaitFor lets AutoProvision declare exchanges/queues reliably against a healthy broker.
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
+    .WithManagementPlugin()
     .WithContainerRuntimeArgs("--label", $"com.docker.compose.project={dockerProject}");
 
 // CritterWatch monitoring console (out-of-band trial). It keeps its own event store in a
