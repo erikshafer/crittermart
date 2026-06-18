@@ -85,6 +85,17 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// The duplicate-email guard's DATABASE backstop. RegisterCustomer.ValidateAsync returns the friendly
+// 409, but a unique index on `email` is what closes the check-then-insert race the app-level check can't
+// (two concurrent registrations both passing the guard before either commits). Weasel's EF-managed
+// migrations create the `customers` table but NOT secondary indexes (they migrate tables/columns/PKs/FKs
+// only — confirmed against the Wolverine EF-Core docs + a live schema check), so an EF `HasIndex` would be
+// silently dropped. The index is therefore applied here as idempotent DDL. ApplicationStarted fires AFTER
+// every hosted service's StartAsync — including Weasel's resource setup that creates the table — and runs
+// synchronously, so the index is in place before the host reports started (and before any Alba scenario
+// runs). The stored email is already normalized (trim + lowercase), so the index is case-insensitive.
+app.Lifetime.ApplicationStarted.Register(EnsureEmailUniqueIndex);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -102,6 +113,18 @@ app.MapWolverineEndpoints();
 app.MapDefaultEndpoints();
 
 app.Run();
+
+// Applies the email unique index out-of-band (Weasel migrates the EF table but not its indexes — see the
+// comment at the ApplicationStarted registration above and in IdentityDbContext). Idempotent so a restart
+// against an existing schema is a no-op; the `identity`-schema `customers` table exists by the time this
+// runs because ApplicationStarted fires after Weasel's resource-setup hosted service.
+void EnsureEmailUniqueIndex()
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+    db.Database.ExecuteSqlRaw(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_customers_email ON identity.customers (email)");
+}
 
 // Exposed for Alba integration tests.
 public partial class Program;

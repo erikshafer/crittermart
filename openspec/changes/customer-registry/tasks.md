@@ -14,15 +14,16 @@
 ## 3. Add the duplicate-email guard (the one increment over the spike)
 
 - [x] 3.1 `src/CritterMart.Identity/Features/RegisterCustomer.cs` — a `Normalize(email) => email.Trim().ToLowerInvariant()` helper; a `ValidateAsync(RegisterCustomer, IdentityDbContext)` returning `409 CustomerAlreadyRegistered` (`ProblemDetails`) when `db.Customers.AnyAsync(c => c.Email == normalized)`, else `WolverineContinue.NoProblems`; `Post` stores the normalized email.
-- [x] 3.2 `src/CritterMart.Identity/Customers/IdentityDbContext.cs` — `e.HasIndex(x => x.Email).IsUnique();` on the `Customer` entity (the race backstop; the stored value is already normalized, so it enforces case-insensitive uniqueness).
-- [x] 3.3 `tests/CritterMart.Identity.Tests/RegisterCustomerTests.cs` — a `registering_a_duplicate_email_is_rejected_case_insensitively` test: register `ada@example.com`, then POST `"  Ada@Example.com  "` → assert `409` + `Title == "CustomerAlreadyRegistered"`, then assert exactly one row for `ada@example.com` from a fresh scope (idempotency).
+- [x] 3.2 Email unique index — applied as **idempotent startup DDL** (`CREATE UNIQUE INDEX IF NOT EXISTS ux_customers_email ON identity.customers (email)`) from an `ApplicationStarted` hook in `src/CritterMart.Identity/Program.cs`, **not** an EF `HasIndex` (Weasel migrates tables/columns/PKs/FKs but not secondary indexes — a live schema check proved an EF-declared index absent from the DB; see design Decision 3). `IdentityDbContext` carries a pointer comment where the index would otherwise be declared.
+- [x] 3.3 `tests/CritterMart.Identity.Tests/RegisterCustomerTests.cs` — `registering_a_duplicate_email_is_rejected_case_insensitively`: register `ada@example.com`, then POST `"  Ada@Example.com  "` → assert `409` + `Title == "CustomerAlreadyRegistered"`, then assert exactly one row for `ada@example.com` from a fresh scope (the app-guard path).
+- [x] 3.4 `tests/CritterMart.Identity.Tests/RegisterCustomerTests.cs` — `the_email_unique_index_rejects_a_duplicate_inserted_directly`: insert a duplicate **directly through the `DbContext`** (bypassing the HTTP guard) → assert `DbUpdateException` whose inner `PostgresException.SqlState == "23505"`. Proves the DB index backstop independently of the app guard, and locks the Weasel-index gap from regressing.
 
 ## 4. Verify
 
-- [ ] 4.1 `dotnet build` clean (only the pre-existing NU1507).
-- [ ] 4.2 `dotnet test` — Identity tests green, including the new duplicate-email test (5 tests); existing services' suites unchanged.
-- [ ] 4.3 `openspec validate customer-registry --strict` green.
-- [ ] 4.4 Live Aspire boot (`docs/demo-runbook.md`): register / read / 404 / duplicate over HTTP; the 4th CritterWatch node; the `identity` schema + `customers` row + unique index on disk; outbox drains to 0.
+- [x] 4.1 `dotnet build` (full solution) clean — 0 errors (only the pre-existing NU1507).
+- [x] 4.2 `dotnet test` — Identity **6/6** green (the 4 re-applied + the case-insensitive duplicate-email HTTP test + the direct-insert index-backstop test); existing services' suites unchanged.
+- [x] 4.3 `openspec validate customer-registry --strict` green.
+- [x] 4.4 Live Aspire boot (`docs/demo-runbook.md`): all 4 services healthy (Identity `:5105`); register `201`+`Location` / resolve `200` / unknown `404` / duplicate `409 CustomerAlreadyRegistered` (case-insensitive) over HTTP; `catalog`/`identity`/`inventory`/`orders` schemas coexisting; **exactly one** `customers` row despite the duplicate; outbox drained to 0. **The live boot caught the missing index** (EF `HasIndex` not migrated by Weasel) → fixed via startup DDL (3.2) and re-verified live that `ux_customers_email` is present.
 
 ## 5. Sibling artifacts (in this PR — the consolidated per-slice chain)
 
