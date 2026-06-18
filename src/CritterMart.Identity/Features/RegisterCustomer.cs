@@ -1,3 +1,4 @@
+using CritterMart.Contracts;
 using CritterMart.Identity.Customers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,12 @@ namespace CritterMart.Identity.Features;
 // rule (email) — the contrast with the event-sourced services' FetchForWriting + append is the
 // teaching point, and the guard is Catalog's PublishProduct.ValidateAsync idiom expressed over a
 // DbContext instead of an IDocumentSession.
-public record RegisterCustomer(string Email, string DisplayName);
+//
+// The optional Id field (slice 5.4 / seeder): when the caller supplies an explicit id the server
+// uses it verbatim; when absent (the default) the server mints a UUID. This lets the seeder
+// register "customer-demo" with a deterministic id that matches the SPA's X-Customer-Id stub
+// without requiring every caller to supply an id.
+public record RegisterCustomer(string Email, string DisplayName, string? Id = null);
 
 public record RegisterCustomerResponse(string Id);
 
@@ -49,12 +55,15 @@ public static class RegisterCustomerEndpoint
     // in the SAME transaction Wolverine enrolls CustomerRegistered in the EF Core outbox and publishes
     // it only after the commit succeeds. Note what is NOT here: no session.SaveChangesAsync() — the
     // transactional middleware owns the commit, exactly as the Marten endpoints never commit by hand.
+    //
+    // CustomerRegistered now lives in CritterMart.Contracts (the shared Published-Language type) — this
+    // is when it graduated from Identity-internal (slice 5.4), because Orders now has a handler for it.
     [WolverinePost("/customers")]
     public static (IResult, CustomerRegistered) Post(RegisterCustomer command, IdentityDbContext db)
     {
         var customer = new Customer
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = command.Id ?? Guid.NewGuid().ToString(),
             Email = Normalize(command.Email),
             DisplayName = command.DisplayName,
             RegisteredAt = DateTimeOffset.UtcNow

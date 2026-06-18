@@ -1,3 +1,4 @@
+using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
@@ -88,11 +89,19 @@ public static class PlaceOrderEndpoint
 
 public static class OrderEndpoint
 {
+    // Enrich the order with the customer's display name resolved from the consumer-local
+    // LocalCustomerView (slice 5.3). Two primary-key loads: the order view (existing) and the
+    // customer view (new). CustomerName is null when the local model is absent — the eventually-
+    // consistent degradation (PL event not yet delivered). No synchronous call to Identity.
     [WolverineGet("/orders/{orderId}")]
     public static async Task<IResult> Get(string orderId, IQuerySession session)
     {
         var view = await session.LoadAsync<OrderStatusView>(orderId);
-        return view is null ? Results.NotFound() : Results.Ok(view);
+        if (view is null)
+            return Results.NotFound();
+
+        var customer = await session.LoadAsync<LocalCustomerView>(view.CustomerId);
+        return Results.Ok(EnrichedOrderView.From(view, customer?.DisplayName));
     }
 
     // The Bruun todo-list (slice 4.7): every order still awaiting its terminal state, soonest

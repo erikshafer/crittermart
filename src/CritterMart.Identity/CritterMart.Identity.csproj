@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- CustomerRegistered graduates to the shared Published-Language contracts assembly (slice 5.4). -->
+    <ProjectReference Include="..\CritterMart.Contracts\CritterMart.Contracts.csproj" />
     <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
   </ItemGroup>
 

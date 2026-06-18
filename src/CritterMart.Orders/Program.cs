@@ -105,6 +105,13 @@ builder.Services.AddMarten(opts =>
         // one-open-cart invariant, which is the write-side partial-unique index on the Cart aggregate above).
         opts.Schema.For<OrderStatusView>().Index(x => x.CustomerId);
 
+        // The consumer-local customer read model (slice 5.4): a plain Marten document upserted by
+        // CustomerRegisteredHandler when the CustomerRegistered Published-Language event arrives from
+        // Identity over RabbitMQ. Registered here so Marten's schema management creates the
+        // `orders.mt_doc_localcustomerview` table on startup alongside the other order documents.
+        // All reads are primary-key loads (session.LoadAsync<LocalCustomerView>(customerId)) — no index.
+        opts.Schema.For<CritterMart.Orders.Customers.LocalCustomerView>();
+
         // OpenTelemetry (ADR 005, completing chore/002's deferred half): verbose connection
         // tracking emits a `marten.connection` span per connection AND tags every write op (the
         // event appends) after a successful commit, so the appends show up inside the trace next
