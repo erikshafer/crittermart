@@ -30,7 +30,7 @@ public static class PlaceOrderEndpoint
     [WolverinePost("/orders")]
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
         [FromHeader(Name = "X-Customer-Id")] string? customerId,
-        IDocumentSession session, PaymentDeadline deadline)
+        IDocumentSession session, [FromServices] PaymentDeadline deadline)
     {
         // A missing/blank header is a malformed request — 400, consistent with GET /orders/mine and
         // GET /carts/mine (ADR 009; the Polecat promotion swaps the header for a claim).
