@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("usePlaceOrder", () => {
-  it("POSTs { customerId } to /orders, invalidates the cart, and navigates to the confirmation on success", async () => {
+  it("POSTs an empty body to /orders with X-Customer-Id header, invalidates the cart, and navigates to the confirmation on success", async () => {
     const queryClient = freshClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const fetchMock = vi
@@ -56,9 +56,8 @@ describe("usePlaceOrder", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/orders$/); // POST /orders — NOT route-keyed by customer
     expect(init.method).toBe("POST");
-    // Body-keyed identity (the 3rd transport shape): { customerId } rides the body, not the route. The order's
-    // contents are NOT sent — the server resolves the customer's open cart.
-    expect(JSON.parse(init.body as string)).toEqual({ customerId: CUSTOMER });
+    // Header-keyed identity (Convention 4): X-Customer-Id is set by the shared client; body is empty.
+    expect(JSON.parse(init.body as string)).toEqual({});
     // The cart badge resets: invalidating /carts/mine refetches → 404 → Cart (0).
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: cartKeys.mine(CUSTOMER) });
     // Navigate to W3, keyed by the returned orderId (the ONLY field the place response carries).

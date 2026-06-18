@@ -136,6 +136,36 @@ describe("OrderStatusPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
+  // Slice 5.3: customerName surfaces beneath the order id when present, absent silently when not yet arrived.
+  it("renders customerName when present (the enriched happy path)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...orderAt("confirmed"), customerName: "Demo Customer" }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    renderStatusPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    expect(screen.getByText("Demo Customer")).toBeInTheDocument();
+  });
+
+  it("omits customerName gracefully when absent (eventual-consistency gap — no error, no empty label)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(orderAt("confirmed")), { status: 200 })),
+    );
+
+    renderStatusPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    expect(screen.queryByText("Demo Customer")).not.toBeInTheDocument();
+  });
+
   it("renders a genuine error state when the order read fails (a 404 is NOT an empty domain state here)", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
 

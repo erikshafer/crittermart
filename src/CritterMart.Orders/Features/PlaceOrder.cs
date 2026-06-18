@@ -3,6 +3,7 @@ using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 using Wolverine.Http;
 using Contracts = CritterMart.Contracts;
@@ -10,9 +11,9 @@ using Contracts = CritterMart.Contracts;
 namespace CritterMart.Orders.Features;
 
 // The Customer checks out their open cart, turning it into an order (Workshop 001 slice 4.1).
-// customerId rides on the command; the cart's snapshotted lines + computed total are frozen
-// onto a new Order stream. This is the project's first multi-stream atomic write.
-public record PlaceOrder(string CustomerId);
+// customerId rides the X-Customer-Id header — the same identity transport as GET /orders/mine and
+// GET /carts/mine (ADR 009). The cart's snapshotted lines + computed total are frozen onto a new
+// Order stream. This is the project's first multi-stream atomic write.
 
 // The orderId handed back so the caller can read the order at GET /orders/{orderId}.
 public record PlaceOrderResponse(string OrderId);
@@ -28,21 +29,27 @@ public static class PlaceOrderEndpoint
     // order, so both cascades are null (Wolverine skips null cascading messages).
     [WolverinePost("/orders")]
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
-        PlaceOrder command, IDocumentSession session, PaymentDeadline deadline)
+        [FromHeader(Name = "X-Customer-Id")] string? customerId,
+        IDocumentSession session, PaymentDeadline deadline)
     {
+        // A missing/blank header is a malformed request — 400, consistent with GET /orders/mine and
+        // GET /carts/mine (ADR 009; the Polecat promotion swaps the header for a claim).
+        if (string.IsNullOrWhiteSpace(customerId))
+            return (Results.BadRequest("X-Customer-Id header is required."), null, null);
+
         // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
         // open cart and is rejected here: the workshop's "cart already checked out" failure
         // path, handled for free by open-cart resolution (no separate guard needed).
         var cart = await session.Query<Cart>()
-            .Where(c => c.CustomerId == command.CustomerId && c.IsOpen)
+            .Where(c => c.CustomerId == customerId && c.IsOpen)
             .FirstOrDefaultAsync();
 
         if (cart is null)
         {
             return (Results.Problem(
                 title: "NoOpenCart",
-                detail: $"Customer '{command.CustomerId}' has no open cart to place.",
+                detail: $"Customer '{customerId}' has no open cart to place.",
                 statusCode: StatusCodes.Status409Conflict), null, null);
         }
 
@@ -53,7 +60,7 @@ public static class PlaceOrderEndpoint
         {
             return (Results.Problem(
                 title: "CartEmpty",
-                detail: $"Customer '{command.CustomerId}' has an empty cart.",
+                detail: $"Customer '{customerId}' has an empty cart.",
                 statusCode: StatusCodes.Status409Conflict), null, null);
         }
 
@@ -67,7 +74,7 @@ public static class PlaceOrderEndpoint
         // cart's terminal CartCheckedOut, committed together by AutoApplyTransactions in ONE
         // transaction. The inline OrderStatusView, Cart, and CartView projections all update.
         session.Events.StartStream<Order>(
-            orderId, new OrderPlaced(orderId, command.CustomerId, items, total));
+            orderId, new OrderPlaced(orderId, customerId, items, total));
 
         var cartStream = await session.Events.FetchForWriting<Cart>(cart.Id);
         cartStream.AppendOne(new CartCheckedOut(orderId));

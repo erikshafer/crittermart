@@ -188,7 +188,8 @@ public class PaymentTimeoutTests
         });
         var placed = await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder("customer-V")).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", "customer-V");
             _.StatusCodeShouldBe(201);
         });
         var orderId = placed.ReadAsJson<PlaceOrderResponse>()!.OrderId;

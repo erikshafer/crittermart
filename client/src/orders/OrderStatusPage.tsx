@@ -165,6 +165,9 @@ export function OrderStatusPage({ orderId }: { orderId: string }) {
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">Your order</h1>
         <p className="break-all font-mono text-sm text-muted-foreground">{order.id}</p>
+        {order.customerName && (
+          <p className="text-sm text-muted-foreground">{order.customerName}</p>
+        )}
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-6">

@@ -45,7 +45,8 @@ public class PlaceOrderTests
     {
         var result = await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder(customerId)).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", customerId);
             _.StatusCodeShouldBe(201);
         });
 
@@ -139,7 +140,8 @@ public class PlaceOrderTests
 
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder("nobody")).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", "nobody");
             _.StatusCodeShouldBe(409);
         });
     }
@@ -163,7 +165,8 @@ public class PlaceOrderTests
 
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder("customer-X")).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(409);
         });
 
@@ -194,7 +197,8 @@ public class PlaceOrderTests
 
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder("customer-X")).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(409);
         });
 

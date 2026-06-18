@@ -82,6 +82,18 @@ describe("OrderStatusViewSchema", () => {
     expect(order.lines).toHaveLength(2);
   });
 
+  // customerName is optional (slice 5.3): present when LocalCustomerView has arrived, absent during the
+  // eventual-consistency gap. Both shapes must parse — the SPA degrades gracefully, not loudly.
+  it("parses customerName when present (the enriched happy path)", () => {
+    const order = OrderStatusViewSchema.parse({ ...wireOrder, customerName: "Demo Customer" });
+    expect(order.customerName).toBe("Demo Customer");
+  });
+
+  it("parses without customerName (the eventual-consistency gap — field absent is not an error)", () => {
+    const order = OrderStatusViewSchema.parse(wireOrder);
+    expect(order.customerName).toBeUndefined();
+  });
+
   // The drift that MUST be caught: `total` (a read field) regressing from a number to a quoted string would
   // otherwise surface as a broken display or NaN downstream.
   it("rejects drift in a read field — total as a string", () => {

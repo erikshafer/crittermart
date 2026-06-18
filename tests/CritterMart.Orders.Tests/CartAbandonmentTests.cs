@@ -130,7 +130,8 @@ public class CartAbandonmentTests
         // Check the cart out through the front door.
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new PlaceOrder("customer-X")).ToUrl("/orders");
+            _.Post.Url("/orders");
+            _.WithRequestHeader("X-Customer-Id", "customer-X");
             _.StatusCodeShouldBe(201);
         });
 

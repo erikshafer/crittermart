@@ -24,12 +24,11 @@ import { cartKeys } from "@/cart/cartQueries";
 // confirmation screen must follow up with the OrderStatusView read.
 export const PlaceOrderResponseSchema = z.object({ orderId: z.string() });
 
-// The place-order mutation hook. Identity transport (frontend SKILL Convention 4) is a THIRD shape: `PlaceOrder`
-// is **body-keyed** — `{ customerId }` rides the request body (the server's `PlaceOrder` record binds it),
-// beside the header-keyed cart read (`/carts/mine`) and the route-keyed cart commands (`/carts/{customerId}/…`).
-// The `X-Customer-Id` header still rides along (the shared client always sets it) but the body is authoritative.
-// `mutate()` takes no variables — the customer comes from the seam, and the order's contents are NOT sent (the
-// server resolves the customer's open cart, Narrative 005 Moment 4).
+// The place-order mutation hook. Identity transport (frontend SKILL Convention 4): `POST /orders` is now
+// **header-keyed** — identity rides the `X-Customer-Id` header set by the shared client, matching every
+// other customer-keyed endpoint (GET /orders/mine, GET /carts/mine). The body is empty: the order's
+// contents are NOT sent (the server resolves the customer's open cart, Narrative 005 Moment 4).
+// `mutate()` takes no variables — the customer comes from the seam.
 export function usePlaceOrder() {
   const ctx = useApiContext();
   const queryClient = useQueryClient();
@@ -39,7 +38,7 @@ export function usePlaceOrder() {
     mutationFn: () =>
       postCommand(
         `${serviceUrls.ordersUrl}/orders`,
-        { customerId: ctx.customerId },
+        {},
         ctx,
         PlaceOrderResponseSchema,
       ),

@@ -53,7 +53,8 @@ public class CrossBcCommitStockSmokeTests
             {
                 var result = await _fixture.OrdersHost.Scenario(_ =>
                 {
-                    _.Post.Json(new PlaceOrder("commit-customer")).ToUrl("/orders");
+                    _.Post.Url("/orders");
+                    _.WithRequestHeader("X-Customer-Id", "commit-customer");
                     _.StatusCodeShouldBe(201);
                 });
                 orderId = result.ReadAsJson<PlaceOrderResponse>()!.OrderId;

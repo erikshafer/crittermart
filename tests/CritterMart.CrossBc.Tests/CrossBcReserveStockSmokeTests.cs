@@ -57,7 +57,8 @@ public class CrossBcReserveStockSmokeTests
             {
                 var result = await _fixture.OrdersHost.Scenario(_ =>
                 {
-                    _.Post.Json(new PlaceOrder("customer-X")).ToUrl("/orders");
+                    _.Post.Url("/orders");
+                    _.WithRequestHeader("X-Customer-Id", "customer-X");
                     _.StatusCodeShouldBe(201);
                 });
                 orderId = result.ReadAsJson<PlaceOrderResponse>()!.OrderId;
