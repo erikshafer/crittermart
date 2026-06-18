@@ -25,6 +25,15 @@ public interface IPaymentProvider
     public Task<PaymentDecision> AuthorizeAsync(AuthorizePayment command);
 }
 
+// DEMO AFFORDANCE — a configurable artificial delay before the stub responds, so the order's
+// stock_reserved → payment_authorized → confirmed steps are visible during a live demo.
+// Default is zero (no delay) everywhere except the AppHost's demo wiring. Mirrors the
+// PaymentDeclinePolicy / PaymentDeadline config-singleton pattern.
+public record PaymentAuthDelay(TimeSpan Duration)
+{
+    public static readonly TimeSpan Default = TimeSpan.Zero;
+}
+
 // DEMO AFFORDANCE — the policy that lets the stub decline on demand. `DeclineOverAmount` is null by
 // default (and in tests): the stub then approves everything, exactly as round one always did. When the
 // AppHost sets `Payment:DeclineOverAmount` for the live demo (src/CritterMart.AppHost/Program.cs), the

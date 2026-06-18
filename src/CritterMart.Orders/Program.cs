@@ -184,6 +184,13 @@ builder.Services.AddHealthChecks()
 var declineOverAmount = builder.Configuration.GetValue<decimal?>("Payment:DeclineOverAmount");
 builder.Services.AddSingleton(new PaymentDeclinePolicy(declineOverAmount));
 
+// DEMO AFFORDANCE (Payment:AuthDelay): when set, the stub sleeps this long before returning a
+// decision — so the stock_reserved → payment_authorized transition is visible at speaking pace.
+// Default is zero (no delay) everywhere except the AppHost's demo wiring.
+var paymentAuthDelay = builder.Configuration.GetValue<TimeSpan?>("Payment:AuthDelay")
+    ?? PaymentAuthDelay.Default;
+builder.Services.AddSingleton(new PaymentAuthDelay(paymentAuthDelay));
+
 builder.Services.AddSingleton<CritterMart.Orders.Ordering.IPaymentProvider,
     CritterMart.Orders.Ordering.StubPaymentProvider>();
 
