@@ -35,4 +35,4 @@ The methodology for facilitating, simulating, or planning an Event Modeling work
 
 ## Current population
 
-One workshop has landed for round one: `001-crittermart-event-model.md` (cross-BC event model covering all four BCs).
+Two workshops have landed: `001-crittermart-event-model.md` (the round-one cross-BC event model covering all four BCs) and `002-identity-event-model.md` (the Identity BC, promoted from round-one stub to a kept EF-Core registry — Open-Host Service + Published Language).
