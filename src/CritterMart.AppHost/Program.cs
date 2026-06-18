@@ -80,6 +80,20 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     //   • Full how-to + the order amounts to use: docs/demo-runbook.md § Step 5 / Payment decline.
     .WithEnvironment("Payment__DeclineOverAmount", "100");
 
+// Identity (round-two EF-Core SPIKE) — the ONE service that is NOT event-sourced: a deliberately
+// boring EF Core customer registry on the shared Postgres, proving Wolverine's handler model is
+// persistence-agnostic (same wiring as the Marten services, a DbContext instead of an
+// IDocumentSession). It is a DATA STORE per ADR 009, NOT an auth provider (no Polecat). It has no
+// cross-BC message flows — its CustomerRegistered cascades to the EF Core outbox and publishes over
+// RabbitMQ unconsumed — so nothing WithReference()s it and the SPA gets no Identity URL. Wired like
+// the others (crittermart + rabbitmq + CritterWatch) so it appears as a 4th node on the dashboard.
+builder.AddProject<Projects.CritterMart_Identity>("identity")
+    .WithReference(crittermart)
+    .WithReference(rabbitmq)
+    .WaitFor(crittermart)
+    .WaitFor(rabbitmq)
+    .WaitFor(critterwatch);
+
 // Demo seed automation (closes demo-runbook Known Gap #1). A one-shot console wired as an Aspire
 // resource: once Catalog + Inventory are healthy it POSTs the canonical seed (the three demo products
 // + their stock) to those services' HTTP endpoints, then exits — so a single `dotnet run` yields a

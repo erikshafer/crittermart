@@ -21,11 +21,19 @@
   <!-- Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2) -->
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.HealthChecks" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.Http" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.Marten" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.8.0" />
+  </ItemGroup>
+  <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
+       (the persistence-agnostic teaching beat; a data store per ADR 009, NOT an auth provider).
+       .NET 10 / EF Core 10 line. -->
+  <ItemGroup>
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial; same Critter Stack 2026 line) -->
   <ItemGroup>

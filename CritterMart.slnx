@@ -9,6 +9,7 @@
     <Project Path="src/CritterMart.Catalog/CritterMart.Catalog.csproj" />
     <Project Path="src/CritterMart.Contracts/CritterMart.Contracts.csproj" />
     <Project Path="src/CritterMart.CritterWatch/CritterMart.CritterWatch.csproj" />
+    <Project Path="src/CritterMart.Identity/CritterMart.Identity.csproj" />
     <Project Path="src/CritterMart.Inventory/CritterMart.Inventory.csproj" />
     <Project Path="src/CritterMart.Orders/CritterMart.Orders.csproj" />
     <Project Path="src/CritterMart.Seeding/CritterMart.Seeding.csproj" />
@@ -17,6 +18,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/CritterMart.Catalog.Tests/CritterMart.Catalog.Tests.csproj" />
     <Project Path="tests/CritterMart.CrossBc.Tests/CritterMart.CrossBc.Tests.csproj" />
+    <Project Path="tests/CritterMart.Identity.Tests/CritterMart.Identity.Tests.csproj" />
     <Project Path="tests/CritterMart.Inventory.Tests/CritterMart.Inventory.Tests.csproj" />
     <Project Path="tests/CritterMart.Orders.Tests/CritterMart.Orders.Tests.csproj" />
   </Folder>
