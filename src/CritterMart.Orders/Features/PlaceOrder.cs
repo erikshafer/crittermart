@@ -97,7 +97,8 @@ public static class OrderEndpoint
     public static async Task<IResult> Get(string orderId, IQuerySession session)
     {
         var view = await session.LoadAsync<OrderStatusView>(orderId);
-        if (view is null) return Results.NotFound();
+        if (view is null)
+            return Results.NotFound();
 
         var customer = await session.LoadAsync<LocalCustomerView>(view.CustomerId);
         return Results.Ok(EnrichedOrderView.From(view, customer?.DisplayName));
