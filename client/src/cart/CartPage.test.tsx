@@ -97,7 +97,7 @@ describe("CartPage", () => {
     expect(await screen.findByText(/your cart is empty/i)).toBeInTheDocument();
   });
 
-  it("[+] issues ChangeCartItemQuantity with newQuantity = N+1 to the route-keyed URL", async () => {
+  it("[+] issues ChangeCartItemQuantity with newQuantity = N+1 to the header-keyed URL", async () => {
     const fetchMock = stubCartFetch(openCart); // crit-001 @ qty 2
     renderCartPage();
     await screen.findByText("Cosmic Critter Plush");
@@ -108,7 +108,7 @@ describe("CartPage", () => {
 
     await waitFor(() => expect(commandCall(fetchMock)).toBeDefined());
     const [url, init] = commandCall(fetchMock)!;
-    expect(url).toContain("/carts/customer-demo/items/crit-001/quantity");
+    expect(url).toContain("/carts/mine/items/crit-001/quantity");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ newQuantity: 3 }); // 2 + 1, absolute
   });
@@ -144,7 +144,7 @@ describe("CartPage", () => {
     ).toBeEnabled();
   });
 
-  it("[x] issues a route-keyed DELETE to remove the line", async () => {
+  it("[x] issues a header-keyed DELETE to remove the line", async () => {
     const fetchMock = stubCartFetch(openCart);
     renderCartPage();
     await screen.findByText("Cosmic Critter Plush");
@@ -155,7 +155,7 @@ describe("CartPage", () => {
 
     await waitFor(() => expect(commandCall(fetchMock)).toBeDefined());
     const [url, init] = commandCall(fetchMock)!;
-    expect(url).toContain("/carts/customer-demo/items/crit-001");
+    expect(url).toContain("/carts/mine/items/crit-001");
     expect(init.method).toBe("DELETE");
   });
 

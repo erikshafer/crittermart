@@ -37,7 +37,8 @@ public class CrossBcCommitStockSmokeTests
         await _fixture.OrdersHost.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-020", 3, new ProductSnapshot("Galactic Gecko", 15.00m)))
-                .ToUrl("/carts/commit-customer/items");
+                .ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", "commit-customer");
             _.StatusCodeShouldBe(201);
         });
 

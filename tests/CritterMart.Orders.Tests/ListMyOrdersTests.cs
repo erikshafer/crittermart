@@ -35,7 +35,8 @@ public class ListMyOrdersTests
     {
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl($"/carts/{customerId}/items");
+            _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
+            _.WithRequestHeader("X-Customer-Id", customerId);
             _.StatusCodeShouldBe(201);
         });
     }

@@ -73,7 +73,7 @@ while ($Continuous -or $i -lt $Count) {
     $qty = if ($decline) { 5 } else { 1 }   # 5 x $24.99 = $124.95 > $100 -> payment_declined
     $customer = "traffic-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     try {
-        Invoke-RestMethod "$OrdersUrl/carts/$customer/items" -Method Post -ContentType application/json `
+        Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id" = $customer } `
             -Body (ConvertTo-CompactJson @{ sku = $product.sku; quantity = $qty; productSnapshot = @{ name = $product.name; price = $product.price } }) | Out-Null
         $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -ContentType application/json `
                 -Body (ConvertTo-CompactJson @{ customerId = $customer })).orderId
