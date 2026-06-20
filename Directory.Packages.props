@@ -24,7 +24,7 @@
     <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.HealthChecks" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.Http" Version="6.8.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.8.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.10.0" />
     <PackageVersion Include="WolverineFx.Postgresql" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.8.0" />
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.8.0" />
@@ -38,7 +38,7 @@
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial; same Critter Stack 2026 line) -->
   <ItemGroup>
     <PackageVersion Include="CritterWatch" Version="0.9.1" />
-    <PackageVersion Include="Wolverine.CritterWatch" Version="0.9.1" />
+    <PackageVersion Include="Wolverine.CritterWatch" Version="0.9.5" />
   </ItemGroup>
   <!-- CritterWatch 0.9.1 transitively pulls MessagePack 2.5.x, which has a high-severity
        CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version bump
