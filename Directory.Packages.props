@@ -37,7 +37,7 @@
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial; same Critter Stack 2026 line) -->
   <ItemGroup>
-    <PackageVersion Include="CritterWatch" Version="0.9.1" />
+    <PackageVersion Include="CritterWatch" Version="0.9.5" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="0.9.1" />
   </ItemGroup>
   <!-- CritterWatch 0.9.1 transitively pulls MessagePack 2.5.x, which has a high-severity
