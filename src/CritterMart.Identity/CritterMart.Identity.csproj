@@ -5,6 +5,7 @@
          Marten, on the SAME shared Postgres as the three event-sourced services. Identity is a data
          store (ADR 009), not an auth provider — no Polecat, no authN/authZ. -->
     <PackageReference Include="WolverineFx.EntityFrameworkCore" />
+    <PackageReference Include="WolverineFx.Marten" />
     <PackageReference Include="WolverineFx.Postgresql" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="WolverineFx.Http" />
