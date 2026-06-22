@@ -37,6 +37,7 @@ A research doc is a waypoint, not a terminus. Its findings travel:
 | [otel-trace-walkthrough](otel-trace-walkthrough.md) | Teaching walkthrough of the cross-service purchase trace in the Aspire dashboard | Active |
 | [mmoreconnect-overlap-audit](mmoreconnect-overlap-audit.md) | Fixed-surface (ports/containers) collision audit vs. the sibling MmoReconnect app | Active |
 | [e2e-reqnroll-aspire-testing](e2e-reqnroll-aspire-testing.md) | Current test coverage, gaps, and the aspiration for Reqnroll + Aspire.Hosting.Testing E2E | Active |
+| [e2e-strategy-conceptual-plan](e2e-strategy-conceptual-plan.md) | Conceptual plan for the Reqnroll + Aspire E2E layer — pyramid placement, suite shapes, CI job, pipeline path (companion to the aspiration note; feeds ADR 022) | Active |
 
 Keep this table in sync when a research doc is added or its status changes — it is the discoverability payload of this README.
 

@@ -175,7 +175,13 @@ over the Aspire-hosted backend.
 
 ## Next step when this resumes
 
-Author an ADR under `docs/decisions/` ("E2E testing strategy: Reqnroll + Aspire.Hosting.Testing")
-capturing the decision and the taxonomy above. If it lands, follow with an implementation
-prompt for the first `.feature` traced to a workshop GWT scenario. This note is the durable
-input that survives the machine switch.
+The conceptual strategy has since been drafted — see the companion note
+[`e2e-strategy-conceptual-plan.md`](e2e-strategy-conceptual-plan.md) (pyramid placement,
+suite shapes, the CI `e2e-tests` job, and the pipeline path). Read it alongside this one:
+this note is the *self-discovery*, that note is the *strategy*.
+
+The remaining step is to **author ADR 022** under `docs/decisions/` ("E2E testing strategy:
+Reqnroll + Aspire.Hosting.Testing") capturing the decision and the taxonomy above. If it
+lands, follow with an implementation prompt for the first `.feature` traced to a workshop
+GWT scenario. These two research notes are the durable input that survives the machine
+switch.
