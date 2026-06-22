@@ -78,11 +78,11 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     // Payment__AuthDelay: artificial pause inside the stub before it returns a decision, so the
     // stock_reserved → payment_authorized → confirmed steps are visible at speaking pace.
     // Default (when unset): TimeSpan.Zero (instant). Tune or remove for prod. See PaymentProvider.cs.
-    .WithEnvironment("Payment__AuthDelay", "00:00:20")
+    .WithEnvironment("Payment__AuthDelay", "00:03:00")
     // Orders__PaymentTimeout: how long a placed order may sit non-terminal before the scheduled
     // OrderPaymentTimeout self-message fires and cancels it (Bruun temporal automation, slice 4.7).
     // Default (when unset): 10 minutes (PaymentDeadline.Default in OrderPaymentTimeout.cs).
-    .WithEnvironment("Orders__PaymentTimeout", "00:10:00");
+    .WithEnvironment("Orders__PaymentTimeout", "00:07:00");
 
 // Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
 // registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic
