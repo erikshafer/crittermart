@@ -20,6 +20,18 @@ This is a heuristic UI/UX review done from an operator's task perspective ("is m
 redesign. Every item is a targeted change (a component swap, a label, a state, a tooltip, or a bit of
 progressive disclosure), sized for beta, v1.1, or v1.2.
 
+### How to read the suggestions
+
+Read every recommendation below as a question, not a verdict. We're reporting the friction we felt as
+operators and floating a possible fix — you own the design and will see options we can't. The durable
+signal in each entry is the friction described, not the specific solution we reached for.
+
+One principle we want to state outright: **embrace the Critter Stack vocabulary, don't hide it.** Terms
+like `High Water Mark`, `DCB Tag Query`, and `Inbox/Outbox/Handled` are the real ubiquitous language,
+and surfacing them is a feature. Wherever an entry flags a term as confusing, the ask is to *teach* it
+in place (a one-line popover), never to soften, rename, or bury it. The console can be a teaching
+surface for the stack's mechanics, not just a dashboard.
+
 ### How the console was lit (to reproduce)
 
 On branch `research/cw-telemetry-spike` with `Cw__Telemetry=true`, the Marten async daemon, an
@@ -137,20 +149,22 @@ The team has good instincts worth reinforcing before the critiques:
   Today nothing submits, so the checkboxes should be switches.
 - **Recommendation:** One binary-toggle pattern app-wide, plus a tooltip on "Flat."
 
-### 7. Inline help where the vocabulary leaks
+### 7. Teach the Critter Stack vocabulary in place (don't hide it)
 **Target:** beta, then v1.1 (incremental) · **Effort:** S each
 **Where:** `shots/03-projections.png`, `shots/02-topology.png`, `shots/ex-inventory-rehydrate-aggregate.png`, `shots/04-durability.png`
 
-- **Observation:** This is a backend tool surfacing Marten/Wolverine internals to operators:
-  `High Water Mark`, `Mode: continuous`, `Shards`, `DCB Tag Query`, `Rehydrate`,
-  `Inbox/Outbox/Handled`. There's one global ⓘ for the whole app, but no help at the point of
-  confusion.
-- **Why it matters:** An operator who isn't a Critter Stack expert hits undefined jargon right at the
-  point of making a decision.
-- **Recommendation:** Add a small ⓘ popover next to the leakiest column headers and tab names, the
-  same pattern you already use for "Progress / Gap." Highest-value targets: `High Water Mark`,
-  `DCB Tag Query`, the three Source modes, Rehydrate's full-name requirement, and `Inbox/Outbox/Handled`.
-  Ship one at a time.
+- **Observation:** The console surfaces the stack's real mechanics to operators: `High Water Mark`,
+  `Mode: continuous`, `Shards`, `DCB Tag Query`, `Rehydrate`, `Inbox/Outbox/Handled`. This is the right
+  call — it's the ubiquitous language, and exposing it is a feature, not a leak. There's one global ⓘ
+  for the whole app, but no definition at the point a term is actually used.
+- **Why it matters:** An operator still learning the Critter Stack meets these terms right at the
+  moment of a decision, with nowhere in the UI to learn what they mean. The fix is to teach the
+  vocabulary, not to dumb it down.
+- **Recommendation:** Add a small ⓘ popover next to the highest-value column headers and tab names that
+  *defines* the term in a sentence — the same pattern you already use for "Progress / Gap." Highest-value
+  targets: `High Water Mark`, `DCB Tag Query`, the three Source modes, Rehydrate's full-name requirement,
+  and `Inbox/Outbox/Handled`. Ship one at a time. Done well, the console becomes a teaching surface for
+  the stack's mechanics rather than something an operator has to go read the docs to decode.
 
 ### 8. Show the data first, tuck the apparatus (noise)
 **Target:** v1.1 / v1.2 · **Effort:** S/M
@@ -179,7 +193,8 @@ The team has good instincts worth reinforcing before the critiques:
 3. **De-duplicate or relabel the service selectors** so they can't disagree (entry 3).
 4. **Show inline projections as `n/a` with a tooltip** instead of `Unknown` (entry 4). Stops healthy
    systems looking broken.
-5. **Inline ⓘ popovers** on the five leakiest terms (entry 7). Incremental, one a day.
+5. **Inline ⓘ popovers that *define*** the five highest-value terms (entry 7). Incremental, one a day
+   — turns the console into a teaching surface rather than softening the vocabulary.
 
 ---
 
