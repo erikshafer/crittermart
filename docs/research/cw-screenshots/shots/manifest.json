@@ -1,0 +1,110 @@
+[
+  {
+    "file": "00-dashboard.png",
+    "note": "Route /"
+  },
+  {
+    "file": "01-services.png",
+    "note": "Route /services"
+  },
+  {
+    "file": "02-topology.png",
+    "note": "Route /topology"
+  },
+  {
+    "file": "03-projections.png",
+    "note": "Route /projections"
+  },
+  {
+    "file": "04-durability.png",
+    "note": "Route /durability"
+  },
+  {
+    "file": "05-listeners.png",
+    "note": "Route /listeners"
+  },
+  {
+    "file": "06-events.png",
+    "note": "Route /events"
+  },
+  {
+    "file": "07-explorer.png",
+    "note": "Route /explorer"
+  },
+  {
+    "file": "08-scheduled.png",
+    "note": "Route /scheduled"
+  },
+  {
+    "file": "09-dead-letters.png",
+    "note": "Route /dlq"
+  },
+  {
+    "file": "10-timeline.png",
+    "note": "Route /timeline"
+  },
+  {
+    "file": "11-audit-log.png",
+    "note": "Route /audit-log"
+  },
+  {
+    "file": "12-store-inspector.png",
+    "note": "Route /raw"
+  },
+  {
+    "file": "ex-orders-recent-streams.png",
+    "note": "Explorer · Orders · Recent Streams"
+  },
+  {
+    "file": "ex-orders-stream-events.png",
+    "note": "Explorer · Orders · Stream Events"
+  },
+  {
+    "file": "ex-orders-projection-statuses.png",
+    "note": "Explorer · Orders · Projection Statuses"
+  },
+  {
+    "file": "ex-orders-projection-stepper.png",
+    "note": "Explorer · Orders · Projection Stepper"
+  },
+  {
+    "file": "ex-orders-rehydrate-aggregate.png",
+    "note": "Explorer · Orders · Rehydrate Aggregate"
+  },
+  {
+    "file": "ex-inventory-recent-streams.png",
+    "note": "Explorer · Inventory · Recent Streams"
+  },
+  {
+    "file": "ex-inventory-stream-events.png",
+    "note": "Explorer · Inventory · Stream Events"
+  },
+  {
+    "file": "ex-inventory-projection-statuses.png",
+    "note": "Explorer · Inventory · Projection Statuses"
+  },
+  {
+    "file": "ex-inventory-projection-stepper.png",
+    "note": "Explorer · Inventory · Projection Stepper"
+  },
+  {
+    "file": "ex-inventory-rehydrate-aggregate.png",
+    "note": "Explorer · Inventory · Rehydrate Aggregate"
+  },
+  {
+    "file": "st-stocklevel-1-configured.png",
+    "note": "Stepper configured · Inventory/StockLevel — immutable-record rehydrate failure"
+  },
+  {
+    "file": "st-stocklevel-2-after-run.png",
+    "note": "Stepper after Run · Inventory/StockLevel — immutable-record rehydrate failure"
+  },
+  {
+    "file": "st-leaderboard-1-configured.png",
+    "note": "Stepper configured · Orders/ProductSalesLeaderboard — multi-stream, Stream source"
+  },
+  {
+    "file": "st-leaderboard-2-after-run.png",
+    "note": "Stepper after Run · Orders/ProductSalesLeaderboard — multi-stream, Stream source"
+  }
+]

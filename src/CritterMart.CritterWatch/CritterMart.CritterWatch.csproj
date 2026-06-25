@@ -8,6 +8,8 @@
   <ItemGroup>
     <!-- The monitoring console: embedded dashboard SPA, Marten event store, SignalR hub. -->
     <PackageReference Include="CritterWatch" />
+    <!-- The cross-application MCP server mounted on the console at /api/mcp (spike DX exploration). -->
+    <PackageReference Include="CritterWatch.Mcp" />
     <!-- Telemetry arrives over the same RabbitMQ broker the services use (ADR 003). -->
     <PackageReference Include="WolverineFx.RabbitMQ" />
     <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->

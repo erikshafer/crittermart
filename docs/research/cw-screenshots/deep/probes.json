@@ -1,0 +1,11 @@
+{
+  "conflict": {
+    "header": "Catalog",
+    "pagePick": "Inventory"
+  },
+  "deepLink": {
+    "urlAfterSelect": "http://localhost:5104/explorer",
+    "urlEncodesScope": false,
+    "scopeAfterReload": "Select a service"
+  }
+}

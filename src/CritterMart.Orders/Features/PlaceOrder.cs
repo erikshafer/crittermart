@@ -1,6 +1,7 @@
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.Orders.Spike;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -27,15 +28,20 @@ public static class PlaceOrderEndpoint
     // goes out, and the payment deadline is set in the same step that placed the order (the Bruun
     // temporal automation's starting gun; Workshop slice 4.1 writes-to). On a rejection there is no
     // order, so both cascades are null (Wolverine skips null cascading messages).
+    // CW-TELEMETRY SPIKE: the fourth tuple member, Contracts.OrderPlacedSignal?, is a broadcast
+    // notification fanned out to Inventory + Catalog when Cw:Telemetry is on (null otherwise, and on
+    // every rejection path — Wolverine skips null cascades). It is pure CritterWatch topology fodder
+    // and changes no order behaviour. See docs/research/cw-telemetry-fodder.md.
     [WolverinePost("/orders")]
-    public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
+    public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?, Contracts.OrderPlacedSignal?)> Post(
         [FromHeader(Name = "X-Customer-Id")] string? customerId,
-        IDocumentSession session, [FromServices] PaymentDeadline deadline)
+        IDocumentSession session, [FromServices] PaymentDeadline deadline,
+        [FromServices] CwTelemetryFlag cwTelemetry)
     {
         // A missing/blank header is a malformed request — 400, consistent with GET /orders/mine and
         // GET /carts/mine (ADR 009; the Polecat promotion swaps the header for a claim).
         if (string.IsNullOrWhiteSpace(customerId))
-            return (Results.BadRequest("X-Customer-Id header is required."), null, null);
+            return (Results.BadRequest("X-Customer-Id header is required."), null, null, null);
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no
@@ -50,7 +56,7 @@ public static class PlaceOrderEndpoint
             return (Results.Problem(
                 title: "NoOpenCart",
                 detail: $"Customer '{customerId}' has no open cart to place.",
-                statusCode: StatusCodes.Status409Conflict), null, null);
+                statusCode: StatusCodes.Status409Conflict), null, null, null);
         }
 
         // Defensive guard for the workshop's CartEmpty path. Unreachable in 4.1 (a cart is
@@ -61,7 +67,7 @@ public static class PlaceOrderEndpoint
             return (Results.Problem(
                 title: "CartEmpty",
                 detail: $"Customer '{customerId}' has an empty cart.",
-                statusCode: StatusCodes.Status409Conflict), null, null);
+                statusCode: StatusCodes.Status409Conflict), null, null, null);
         }
 
         var orderId = Guid.NewGuid().ToString();
@@ -90,7 +96,13 @@ public static class PlaceOrderEndpoint
         // terminal guard makes it a no-op; if not, the order is cancelled and its stock released.
         var paymentTimeout = new OrderPaymentTimeout(orderId).DelayedFor(deadline.Duration);
 
-        return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock, paymentTimeout);
+        // CW-TELEMETRY SPIKE: broadcast the placed order to Inventory + Catalog (fan-out topology)
+        // only when the flag is on — null keeps the baseline order flow byte-for-byte unchanged.
+        var orderPlacedSignal = cwTelemetry.Enabled
+            ? new Contracts.OrderPlacedSignal(orderId, customerId, total)
+            : null;
+
+        return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock, paymentTimeout, orderPlacedSignal);
     }
 }
 

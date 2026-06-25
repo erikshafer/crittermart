@@ -16,6 +16,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
+    <!-- CW-TELEMETRY SPIKE (research/cw-telemetry-spike) — NOT round-one baseline: Catalog needs the
+         shared contract types to subscribe to the OrderPlacedSignal broadcast (fan-out target #2). On
+         `main` Catalog has no cross-BC flows and deliberately does not reference Contracts. -->
+    <ProjectReference Include="..\CritterMart.Contracts\CritterMart.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

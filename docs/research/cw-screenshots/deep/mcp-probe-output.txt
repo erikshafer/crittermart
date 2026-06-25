@@ -1,0 +1,82 @@
+CritterWatch.Mcp 1.0.0-alpha.3 — live probe of /api/mcp (console as Production, dashboard license=Trial)
+Captured 2026-06-25 against the lit stack. See cw-feedback-jasperfx-deep.md DX-6.
+============================================================================================
+
+### initialize + tools/list ###
+== initialize ==
+status: 200 session: (none/stateless)
+server: {"name":"CritterMart.CritterWatch","version":"1.0.0.0"}
+
+== tools/list ==
+status: 200 tool count: 37
+  - restart_listener
+  - get_projection_lag
+  - get_service_health
+  - get_alert
+  - describe_lifecycle
+  - rebuild_projection
+  - disable_chaos_monkey
+  - enable_chaos_monkey
+  - hard_delete_tenant
+  - discard_dead_letters
+  - get_trace
+  - acknowledge_alert
+  - query_recent_traces
+  - remove_tenant
+  - enable_tenant
+  - replay_dead_letters
+  - set_chaos_monkey_projection_failure_rate
+  - set_chaos_monkey_slow_handler
+  - explain_message_routing
+  - list_message_routing
+  - drain_listener
+  - list_degraded_surfaces
+  - check_trace_provider_health
+  - summarize_active_alerts
+  - disable_tenant
+  - clear_alert
+  - list_active_alerts
+  - set_chaos_monkey_failure_rate
+  - get_message_routing
+  - snooze_alert
+  - pause_projection
+  - pause_listener
+  - restart_projection
+  - get_backlog_state
+  - summarize_cluster_health
+  - list_backlog_hotspots
+  - add_tenant
+
+== tools/call get_service_health ==
+status: 200
+result: {"content":[{"type":"text","text":"An error occurred invoking 'get_service_health'."}],"isError":true}
+
+### success-path + schema + license-gate probe ###
+
+== summarize_cluster_health({}) ==
+isError: (n/a)
+text: {
+  "error": "LicenseMissing",
+  "message": "CritterWatch.Mcp tools require a valid CritterWatch license. Set the JASPERFX__LICENSEKEY environment variable (or JasperFx:LicenseKey in configuration)."
+}
+
+== list_active_alerts({}) ==
+isError: (n/a)
+text: {
+  "error": "LicenseMissing",
+  "message": "CritterWatch.Mcp tools require a valid CritterWatch license. Set the JASPERFX__LICENSEKEY environment variable (or JasperFx:LicenseKey in configuration)."
+}
+
+== schema: get_service_health ==
+{"type":"object","properties":{"serviceName":{"description":"Service name (matches ServiceSummary.Id — case-sensitive).","type":"string"}},"required":["serviceName"]}
+
+== get_service_health({"serviceName":"Orders"}) ==
+isError: (n/a)
+text: {
+  "error": "LicenseMissing",
+  "message": "CritterWatch.Mcp tools require a valid CritterWatch license. Set the JASPERFX__LICENSEKEY environment variable (or JasperFx:LicenseKey in configuration)."
+}
+
+== get_service_health({"service":"Orders"}) ==
+isError: true
+text: An error occurred invoking 'get_service_health'.
