@@ -1,6 +1,9 @@
+using CritterMart.Orders.Analytics;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.Orders.Spike;
 using JasperFx.Events;
+using JasperFx.Events.Daemon;
 using JasperFx.Events.Projections;
 using JasperFx.OpenTelemetry;
 using Marten;
@@ -39,7 +42,7 @@ builder.Services.AddSingleton(new CartActivityDeadline(cartActivityTimeout));
 // "now" — injected as TimeProvider so tests can drive the clock instead of waiting real time.
 builder.Services.AddSingleton(TimeProvider.System);
 
-builder.Services.AddMarten(opts =>
+var martenConfig = builder.Services.AddMarten(opts =>
     {
         opts.Connection(connectionString);
 
@@ -85,6 +88,15 @@ builder.Services.AddMarten(opts =>
         // talk's teaching beat, not a bug.
         opts.Projections.Add<CartAbandonmentReportProjection>(ProjectionLifecycle.Async);
 
+        // ── CW-TELEMETRY SPIKE projections (research/cw-telemetry-spike) — NOT round-one baseline ──
+        // Two ASYNC read models that only MOVE when the daemon is on (Cw:Telemetry, below). They give
+        // CritterWatch the live async telemetry the baseline never produces: ProductSalesLeaderboard is
+        // a fan-out multi-stream projection (one OrderPlaced → one doc per SKU); OrderLineItemsProjection
+        // is a flat SQL table (orders.order_line_items). Registered unconditionally — exactly like the
+        // CartAbandonment teaser above, they sit inert until a daemon turns. See docs/research/.
+        opts.Projections.Add<ProductSalesLeaderboardProjection>(ProjectionLifecycle.Async);
+        opts.Projections.Add<OrderLineItemsProjection>(ProjectionLifecycle.Async);
+
         // The open-cart invariant lives on the Cart AGGREGATE (ADR 020 — it is a write-side rule):
         // a partial-unique index on Cart.CustomerId, scoped to open carts, enforces "one open cart
         // per customer" at the DB. The write paths resolve the customer's open cart against this index; a
@@ -124,6 +136,21 @@ builder.Services.AddMarten(opts =>
     })
     .IntegrateWithWolverine()
     .ApplyAllDatabaseChangesOnStartup();
+
+// ── CW-TELEMETRY SPIKE: async daemon (research/cw-telemetry-spike) — NOT round-one baseline ────────
+// ADR 008 keeps the baseline daemon-free; the spike flips it ON behind Cw:Telemetry so the async
+// projections above (plus the previously-inert CartAbandonment teaser) actually run and stream
+// shard / lag / rebuild telemetry to CritterWatch — letting you WATCH lag climb then drain in the
+// console. Solo mode = single node, right for the single-instance Aspire host. Flag OFF = exact
+// baseline behaviour (the "before" CritterWatch picture). See docs/research/cw-telemetry-fodder.md.
+var cwTelemetry = builder.Configuration.GetValue<bool>("Cw:Telemetry");
+if (cwTelemetry)
+{
+    martenConfig.AddAsyncDaemon(DaemonMode.Solo);
+}
+
+// Expose the toggle so the PlaceOrder endpoint can decide whether to broadcast OrderPlacedSignal.
+builder.Services.AddSingleton(new CwTelemetryFlag(cwTelemetry));
 
 builder.Host.UseWolverine(opts =>
 {

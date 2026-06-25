@@ -82,7 +82,13 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     // Orders__PaymentTimeout: how long a placed order may sit non-terminal before the scheduled
     // OrderPaymentTimeout self-message fires and cancels it (Bruun temporal automation, slice 4.7).
     // Default (when unset): 10 minutes (PaymentDeadline.Default in OrderPaymentTimeout.cs).
-    .WithEnvironment("Orders__PaymentTimeout", "00:07:00");
+    .WithEnvironment("Orders__PaymentTimeout", "00:07:00")
+    // ───── CW-TELEMETRY SPIKE (research/cw-telemetry-spike) — NOT round-one baseline ────────────────
+    // Turns on the Marten async daemon + the OrderPlacedSignal broadcast so CritterWatch sees live
+    // async projection progress (lag climb→drain, rebuilds) and cross-BC fan-out topology. ADR 008
+    // keeps the baseline daemon-free — set this to "false" (or delete the line) to reproduce the
+    // baseline console picture. See docs/research/cw-telemetry-fodder.md.
+    .WithEnvironment("Cw__Telemetry", "true");
 
 // Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
 // registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic

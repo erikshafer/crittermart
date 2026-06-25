@@ -47,11 +47,15 @@ builder.Host.UseWolverine(opts =>
     // event stream in the console's store) — must be unique across monitored services.
     opts.ServiceName = "Catalog";
 
-    // RabbitMQ solely as the CritterWatch telemetry channel — Catalog has no cross-BC
-    // message flows (no UseConventionalRouting on purpose). Aspire injects the "rabbitmq"
-    // connection string via WithReference.
+    // RabbitMQ as the CritterWatch telemetry channel. On `main` Catalog has no cross-BC message
+    // flows (no UseConventionalRouting on purpose). Aspire injects the "rabbitmq" connection string
+    // via WithReference.
     opts.UseRabbitMqUsingNamedConnection("rabbitmq")
-        .AutoProvision();
+        .AutoProvision()
+        // CW-TELEMETRY SPIKE (research/cw-telemetry-spike) — NOT round-one baseline: conventional
+        // routing so Catalog can subscribe to the OrderPlacedSignal broadcast (fan-out target #2),
+        // giving it its first inbound Topology edge in the console. See docs/research/.
+        .UseConventionalRouting();
 
     // Metrics/health flow to the shared `critterwatch` queue; the console sends control
     // commands (pause listeners, chaos monkey, …) back on this service's private queue.

@@ -38,6 +38,8 @@ A research doc is a waypoint, not a terminus. Its findings travel:
 | [mmoreconnect-overlap-audit](mmoreconnect-overlap-audit.md) | Fixed-surface (ports/containers) collision audit vs. the sibling MmoReconnect app | Active |
 | [e2e-reqnroll-aspire-testing](e2e-reqnroll-aspire-testing.md) | Current test coverage, gaps, and the aspiration for Reqnroll + Aspire.Hosting.Testing E2E | Active |
 | [e2e-strategy-conceptual-plan](e2e-strategy-conceptual-plan.md) | Conceptual plan for the Reqnroll + Aspire E2E layer — pyramid placement, suite shapes, CI job, pipeline path (companion to the aspiration note; feeds ADR 022) | Active |
+| [cw-telemetry-fodder](cw-telemetry-fodder.md) | CritterWatch telemetry spike — async daemon + 4 projection/messaging shapes (gated on `Cw:Telemetry`) to light the monitoring console for a UI/UX review | Active |
+| [cw-feedback-jasperfx](cw-feedback-jasperfx.md) | Distilled, screenshot-anchored UI/UX feedback packet for JasperFx (Jeremy/Babu) on CritterWatch 1.0.0-alpha.3, with [`cw-screenshots/`](cw-screenshots/README.md) evidence | Active |
 
 Keep this table in sync when a research doc is added or its status changes — it is the discoverability payload of this README.
 
