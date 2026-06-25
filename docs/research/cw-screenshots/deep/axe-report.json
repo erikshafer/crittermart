@@ -1,0 +1,902 @@
+[
+  {
+    "surface": "00-dashboard",
+    "route": "/",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".is-active",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 22,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active > span",
+          ".el-tag--dark > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 1,
+        "sample": [
+          "#el-id-3618-7"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "01-services",
+    "route": "/services",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".is-active.el-menu-item[role=\"menuitem\"]",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 51,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active.el-menu-item[role=\"menuitem\"] > span[data-v-4fbd469c=\"\"]",
+          ".cw-dlq-pill > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 3,
+        "sample": [
+          "#el-id-1162-7",
+          "input[value=\"cards\"]",
+          "input[value=\"table\"]"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "02-topology",
+    "route": "/topology",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".is-active.el-menu-item[role=\"menuitem\"]"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 7,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active.el-menu-item[role=\"menuitem\"] > span[data-v-4fbd469c=\"\"]",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 4,
+        "sample": [
+          "#el-id-8253-18",
+          "#el-id-8253-20",
+          "#el-id-8253-21"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "03-projections",
+    "route": "/projections",
+    "violationCount": 7,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "button-name",
+        "impact": "critical",
+        "help": "Buttons must have discernible text",
+        "nodes": 14,
+        "sample": [
+          "button[data-testid=\"projection-refresh-Catalog\"]",
+          ".hwm-row.el-table__row--striped.el-table__row > .el-table_1_column_18.is-center > .cell > .is-circle.is-text[data-testid=\"projection-refresh-Inventory\"]",
+          ".cw-clickable-row.el-table__row:nth-child(3) > .el-table_1_column_18.is-center > .cell > .is-circle.is-text[data-testid=\"projection-refresh-Inventory\"]"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 6,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active > span[data-v-4fbd469c=\"\"]",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 7,
+        "sample": [
+          "#el-id-11-7",
+          "#el-id-11-55",
+          "#el-id-11-56"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "04-durability",
+    "route": "/durability",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 6,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active > span",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 2,
+        "sample": [
+          "#el-id-5720-10",
+          "#el-id-5720-11"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "05-listeners",
+    "route": "/listeners",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 6,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active.el-menu-item[role=\"menuitem\"] > span[data-v-4fbd469c=\"\"]",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 25,
+        "sample": [
+          "#el-id-2875-7",
+          "#el-id-2875-32",
+          "#el-id-2875-33"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "06-events",
+    "route": "/events",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 7,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active.el-menu-item[role=\"menuitem\"] > span",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 2,
+        "sample": [
+          "#el-id-4446-37",
+          "#el-id-4446-38"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "07-explorer",
+    "route": "/explorer",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 9,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active.el-menu-item[role=\"menuitem\"] > span",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 2,
+        "sample": [
+          "#el-id-585-25",
+          "#el-id-585-26"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "08-scheduled",
+    "route": "/scheduled",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 10,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".is-active > span[data-v-4fbd469c=\"\"]",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 3,
+        "sample": [
+          "#el-id-5853-32",
+          "#el-id-5853-33",
+          "#el-id-5853-34"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "09-dead-letters",
+    "route": "/dlq",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 11,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".cw-nav-label",
+          ".el-tag--danger > .el-tag__content"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 2,
+        "sample": [
+          "#el-id-7497-7",
+          "#el-id-7497-43"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "10-timeline",
+    "route": "/timeline",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 102,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".cw-dlq-pill > .el-tag__content",
+          ".is-active > span[data-v-4fbd469c=\"\"]"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 3,
+        "sample": [
+          "#el-id-3615-15",
+          "#el-id-3615-17",
+          "#el-id-3615-18"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "11-audit-log",
+    "route": "/audit-log",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 7,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".el-tag--danger > .el-tag__content",
+          ".el-menu-item-group:nth-child(2) > .el-menu-item-group__title"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 4,
+        "sample": [
+          "#el-id-8523-33",
+          "#el-id-8523-34",
+          "#el-id-8523-35"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  },
+  {
+    "surface": "12-store-inspector",
+    "route": "/raw",
+    "violationCount": 6,
+    "violations": [
+      {
+        "id": "aria-required-children",
+        "impact": "critical",
+        "help": "Certain ARIA roles must contain particular children",
+        "nodes": 1,
+        "sample": [
+          ".el-menu"
+        ]
+      },
+      {
+        "id": "aria-required-parent",
+        "impact": "critical",
+        "help": "Certain ARIA roles must be contained by particular parents",
+        "nodes": 15,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(1)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(2)",
+          ".el-menu-item-group:nth-child(1) > ul > .el-menu-item[role=\"menuitem\"]:nth-child(3)"
+        ]
+      },
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "nodes": 6,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > .el-menu-item-group__title",
+          ".el-tag--danger > .el-tag__content",
+          ".el-menu-item-group:nth-child(2) > .el-menu-item-group__title"
+        ]
+      },
+      {
+        "id": "label",
+        "impact": "critical",
+        "help": "Form elements must have labels",
+        "nodes": 1,
+        "sample": [
+          "#el-id-3743-18"
+        ]
+      },
+      {
+        "id": "list",
+        "impact": "serious",
+        "help": "<ul> and <ol> must only directly contain <li>, <script> or <template> elements",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1) > ul",
+          ".el-menu-item-group:nth-child(2) > ul"
+        ]
+      },
+      {
+        "id": "listitem",
+        "impact": "serious",
+        "help": "<li> elements must be contained in a <ul> or <ol>",
+        "nodes": 2,
+        "sample": [
+          ".el-menu-item-group:nth-child(1)",
+          ".el-menu-item-group:nth-child(2)"
+        ]
+      }
+    ]
+  }
+]

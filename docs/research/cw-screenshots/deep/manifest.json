@@ -1,0 +1,118 @@
+[
+  {
+    "file": "wide/00-dashboard.png",
+    "note": "Route / (wide light)"
+  },
+  {
+    "file": "wide/01-services.png",
+    "note": "Route /services (wide light)"
+  },
+  {
+    "file": "wide/02-topology.png",
+    "note": "Route /topology (wide light)"
+  },
+  {
+    "file": "wide/03-projections.png",
+    "note": "Route /projections (wide light)"
+  },
+  {
+    "file": "wide/04-durability.png",
+    "note": "Route /durability (wide light)"
+  },
+  {
+    "file": "wide/05-listeners.png",
+    "note": "Route /listeners (wide light)"
+  },
+  {
+    "file": "wide/06-events.png",
+    "note": "Route /events (wide light)"
+  },
+  {
+    "file": "wide/07-explorer.png",
+    "note": "Route /explorer (wide light)"
+  },
+  {
+    "file": "wide/08-scheduled.png",
+    "note": "Route /scheduled (wide light)"
+  },
+  {
+    "file": "wide/09-dead-letters.png",
+    "note": "Route /dlq (wide light)"
+  },
+  {
+    "file": "wide/10-timeline.png",
+    "note": "Route /timeline (wide light)"
+  },
+  {
+    "file": "wide/11-audit-log.png",
+    "note": "Route /audit-log (wide light)"
+  },
+  {
+    "file": "wide/12-store-inspector.png",
+    "note": "Route /raw (wide light)"
+  },
+  {
+    "file": "a11y-focus-after-tabbing.png",
+    "note": "Dashboard after 10× Tab — is the focused control visibly ringed?"
+  },
+  {
+    "file": "ux-two-selector-conflict.png",
+    "note": "Header scope='Catalog' vs Explorer scope='Inventory' — contradictory scopes in one view"
+  },
+  {
+    "file": "ux-deeplink-after-reload.png",
+    "note": "Explorer reloaded — selected Inventory, URL was 'http://localhost:5104/explorer', scope after reload: 'Select a service'"
+  },
+  {
+    "file": "narrow/1024-00-dashboard.png",
+    "note": "Route / @ 1024px wide"
+  },
+  {
+    "file": "narrow/1024-03-projections.png",
+    "note": "Route /projections @ 1024px wide"
+  },
+  {
+    "file": "narrow/1024-04-durability.png",
+    "note": "Route /durability @ 1024px wide"
+  },
+  {
+    "file": "narrow/1024-07-explorer.png",
+    "note": "Route /explorer @ 1024px wide"
+  },
+  {
+    "file": "narrow/1024-09-dead-letters.png",
+    "note": "Route /dlq @ 1024px wide"
+  },
+  {
+    "file": "narrow/768-00-dashboard.png",
+    "note": "Route / @ 768px wide"
+  },
+  {
+    "file": "narrow/768-03-projections.png",
+    "note": "Route /projections @ 768px wide"
+  },
+  {
+    "file": "narrow/768-04-durability.png",
+    "note": "Route /durability @ 768px wide"
+  },
+  {
+    "file": "narrow/768-07-explorer.png",
+    "note": "Route /explorer @ 768px wide"
+  },
+  {
+    "file": "narrow/768-09-dead-letters.png",
+    "note": "Route /dlq @ 768px wide"
+  },
+  {
+    "file": "dark/00-dashboard.png",
+    "note": "Route / (prefers-color-scheme: dark)"
+  },
+  {
+    "file": "dark/03-projections.png",
+    "note": "Route /projections (prefers-color-scheme: dark)"
+  },
+  {
+    "file": "dark/09-dead-letters.png",
+    "note": "Route /dlq (prefers-color-scheme: dark)"
+  }
+]

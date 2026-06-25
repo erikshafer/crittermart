@@ -40,6 +40,8 @@ A research doc is a waypoint, not a terminus. Its findings travel:
 | [e2e-strategy-conceptual-plan](e2e-strategy-conceptual-plan.md) | Conceptual plan for the Reqnroll + Aspire E2E layer — pyramid placement, suite shapes, CI job, pipeline path (companion to the aspiration note; feeds ADR 022) | Active |
 | [cw-telemetry-fodder](cw-telemetry-fodder.md) | CritterWatch telemetry spike — async daemon + 4 projection/messaging shapes (gated on `Cw:Telemetry`) to light the monitoring console for a UI/UX review | Active |
 | [cw-feedback-jasperfx](cw-feedback-jasperfx.md) | Distilled, screenshot-anchored UI/UX feedback packet for JasperFx (Jeremy/Babu) on CritterWatch 1.0.0-alpha.3, with [`cw-screenshots/`](cw-screenshots/README.md) evidence | Active |
+| [cw-alpha4-and-deep-round-plan](cw-alpha4-and-deep-round-plan.md) | Plan for the alpha.4 upgrade assessment + the deep DX/UX feedback round (handoff to the higher-effort session) | Active |
+| [cw-feedback-jasperfx-deep](cw-feedback-jasperfx-deep.md) | Deep round — adds a DX lens (install/version-coupling/licensing/MCP/docs accuracy) + interaction-level UI/UX (axe-core a11y, narrow-viewport, dark mode, deep-linking) on alpha.3, with round-one closure and the alpha.4 recommendation; evidence in [`cw-screenshots/deep/`](cw-screenshots/deep/) | Active |
 
 Keep this table in sync when a research doc is added or its status changes — it is the discoverability payload of this README.
 

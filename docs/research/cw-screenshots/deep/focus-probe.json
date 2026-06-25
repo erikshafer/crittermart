@@ -1,0 +1,92 @@
+[
+  {
+    "stop": 1,
+    "tag": "input",
+    "cls": "el-select__input",
+    "text": "",
+    "visibleFocus": false,
+    "outlineWidth": "3px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 2,
+    "tag": "a",
+    "cls": "",
+    "text": "2",
+    "visibleFocus": true,
+    "outlineWidth": "1px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 3,
+    "tag": "button",
+    "cls": "el-button el-button--primary el-button--small",
+    "text": "View All Services",
+    "visibleFocus": true,
+    "outlineWidth": "2px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 4,
+    "tag": "button",
+    "cls": "el-button el-button--small",
+    "text": "View Dead Letters",
+    "visibleFocus": true,
+    "outlineWidth": "2px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 5,
+    "tag": "button",
+    "cls": "el-button el-button--small",
+    "text": "View Projections",
+    "visibleFocus": true,
+    "outlineWidth": "2px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 6,
+    "tag": "button",
+    "cls": "el-button el-button--small",
+    "text": "Alert Configuration",
+    "visibleFocus": true,
+    "outlineWidth": "2px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 7,
+    "tag": "a",
+    "cls": "",
+    "text": "Inventory",
+    "visibleFocus": true,
+    "outlineWidth": "1px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 8,
+    "tag": "a",
+    "cls": "",
+    "text": "Orders",
+    "visibleFocus": true,
+    "outlineWidth": "1px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 9,
+    "tag": "a",
+    "cls": "",
+    "text": "Catalog",
+    "visibleFocus": true,
+    "outlineWidth": "1px",
+    "boxShadow": "no"
+  },
+  {
+    "stop": 10,
+    "tag": "a",
+    "cls": "",
+    "text": "Identity",
+    "visibleFocus": true,
+    "outlineWidth": "1px",
+    "boxShadow": "no"
+  }
+]
