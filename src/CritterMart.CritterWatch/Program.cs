@@ -1,3 +1,4 @@
+using CritterWatch.Mcp;
 using CritterWatch.Services.Hosting;
 using Wolverine.RabbitMQ;
 
@@ -39,9 +40,20 @@ builder.AddCritterWatch(postgresConnection, opts =>
     // listener above already gives one node the same per-service ordering guarantee.
     enableClusterPartitioning: false);
 
+// CritterWatch.Mcp — the cross-application MCP server (spike DX exploration for the JasperFx feedback
+// round). Stateless HTTP transport is mandatory: in stateful mode the HttpContext reachable for RBAC is
+// the one that opened the SignalR/MCP session, not the per-tool-call one, so HttpContext.User would be
+// stale. AddCritterWatchMcp() sets stateless mode itself. The tool surface is license-gated (paid tier),
+// which our Trial license satisfies; action tools additionally check ICritterWatchAuthorizer (open by
+// default here — no RBAC wired). NOT a round-one feature; see docs/research/cw-feedback-jasperfx-deep.md DX-6.
+builder.Services.AddCritterWatchMcp();
+
 var app = builder.Build();
 
 // Maps the Wolverine HTTP endpoints, the SignalR hub at /api/messages, and the embedded SPA.
 app.UseCritterWatch();
+
+// Mounts the MCP streamable-HTTP endpoint (default route /api/mcp).
+app.MapCritterWatchMcp();
 
 await app.RunAsync();

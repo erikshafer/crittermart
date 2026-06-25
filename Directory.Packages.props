@@ -49,6 +49,10 @@
   <ItemGroup>
     <PackageVersion Include="CritterWatch" Version="1.0.0-alpha.3" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-alpha.3" />
+    <!-- CritterWatch.Mcp — the cross-application MCP server, mounted on the console at /api/mcp.
+         Versions in lockstep with the CritterWatch pair above (1.0.0-alpha line). Spike-only: this is
+         a DX exploration of the MCP surface for the JasperFx feedback round, NOT a round-one feature. -->
+    <PackageVersion Include="CritterWatch.Mcp" Version="1.0.0-alpha.3" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-alpha.3) transitively pulls MessagePack 2.5.301, which has a
        high-severity CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version

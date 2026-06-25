@@ -159,20 +159,42 @@ production-shaped install of the console, so these are first-contact notes.
   constructor and can't be stepped this way"* — instead of N copies of a CLR stack trace? (UI-side
   collapse is UX-7 below; this entry is about the construction strategy.)
 
-### DX-6. The MCP surface is unexercised — opportunity, not defect
-**Target:** v1.x (docs/sample) · **Effort:** S to assess · **Evidence:** no `CritterWatch.Mcp` / `Wolverine.CritterWatch.Http` reference in the solution
+### DX-6. We wired & exercised the MCP server — a valid license is invisible to it
+**Target:** beta (the license split) · **Effort:** M · **Evidence:** `deep/mcp-probe-output.txt`, console `Program.cs` (`AddCritterWatchMcp` / `MapCritterWatchMcp`)
 
-- **What we found:** CritterMart wires neither `CritterWatch.Mcp` (the cross-application MCP server, 15
-  read + 21 action tools per the setup skill) nor `Wolverine.CritterWatch.Http`. So we can't review the
-  MCP DX from use — only from the docs. The mounting story reads clean (`AddCritterWatchMcp()` +
-  `MapCritterWatchMcp()` at `/api/mcp`, stateless transport mandatory for RBAC), and the tool catalog is
-  thoughtfully capability-gated.
-- **The question:** for an event-sourcing teaching app like CritterMart, the MCP server is a compelling
-  "ask an agent about your event store" beat. Is there a minimal reference (one console + one service +
-  the MCP package) that shows the smallest wiring that lights up `/api/mcp`? We'd happily be a second
-  real-world MCP install if there's a 10-minute on-ramp. (Minor doc nit while here: the setup skill says
-  `AddCritterWatchMcp()` "registers all ten tool types," but the catalog table lists 11 families / 36
-  tools — the count reads inconsistent.)
+This round we actually wired `CritterWatch.Mcp 1.0.0-alpha.3` into the console (`AddCritterWatchMcp()` +
+`MapCritterWatchMcp()`) and drove `/api/mcp` over JSON-RPC. Findings, good and bad:
+
+- **The mounting API is accurate (keep).** `AddCritterWatchMcp()` + `MapCritterWatchMcp()` compiled and
+  ran exactly as the setup skill documents — `/api/mcp` answers `405` to GET (POST-only, correct),
+  `initialize` returns stateless with `serverInfo` naming the host, and `tools/list` returns the tool
+  set. The MCP mounting docs are the *one* CritterWatch doc surface we found that matched the binary.
+- **The tool schemas are exemplary (keep).** `get_service_health` advertises
+  `required: ["serviceName"]` with a description ("matches `ServiceSummary.Id` — case-sensitive"), so an
+  agent can read the schema and call correctly. This is good MCP citizenship.
+- **The headline (a real bug): every tool returns `LicenseMissing` even with a valid Trial license.**
+  In the same process, at the same moment, the **console dashboard** validates the key as **Tier =
+  Trial** (Settings → License Info) while **every MCP tool** returns
+  `{"error":"LicenseMissing","message":"CritterWatch.Mcp tools require a valid CritterWatch license. Set
+  the JASPERFX__LICENSEKEY environment variable (or JasperFx:LicenseKey in configuration)."}`. The key
+  *is* in configuration — the console loads `JasperFx:LicenseKey` from user secrets (the same source the
+  dashboard validates from) — yet `McpLicenseGuard` doesn't see it. So the MCP license resolution
+  diverges from the console's: a developer who follows the docs and has a license their dashboard
+  accepts gets **every** MCP tool rejected.
+- **The question:** can the MCP `McpLicenseGuard` resolve the license through the *same* path
+  `AddCritterWatch` already validated (the loaded `JasperFx:LicenseKey` / the JasperFx license
+  singleton), rather than re-reading and missing it? Right now the only way the error text suggests is
+  the `JASPERFX__LICENSEKEY` env var — which contradicts the console's own user-secrets/config pattern.
+- **Secondary (tool-error ergonomics):** passing a *wrong* argument name (`service` instead of
+  `serviceName`) returns the opaque `"An error occurred invoking 'get_service_health'."` (`isError:true`)
+  — much less helpful than the crisp, actionable `LicenseMissing` JSON. Could arg-validation failures
+  name the offending/missing parameter the way the schema already does?
+- **Doc nit (now measured):** the setup skill says `AddCritterWatchMcp()` "registers all ten tool
+  types"; its catalog table sums to 36; the **live `tools/list` returned 37** — including
+  `describe_lifecycle`, which isn't in the catalog at all. The doc both undercounts and omits a tool.
+
+**Wiring note:** the MCP packages/registration are committed on this spike branch as a DX exploration
+(not a round-one feature). `CritterWatch.Mcp` version-locks to the `CritterWatch` pin (`1.0.0-alpha.3`).
 
 ---
 
@@ -346,11 +368,18 @@ jumps to `6.14.0-alpha.2`, so `6.13.x` remains a version no CritterWatch was bui
 ## Appendix: evidence index and regeneration
 
 - **Screenshots + reports:** [`cw-screenshots/deep/`](cw-screenshots/deep/) — `wide/` (13 lit routes +
-  axe), `narrow/` (1024 + 768px × 5 surfaces), `dark/` (3 surfaces), plus `a11y-focus-after-tabbing.png`,
-  `ux-two-selector-conflict.png`, `ux-deeplink-after-reload.png`, `closure-stocklevel-stepper-crash.png`,
-  `dx-settings-license.png`.
+  axe), `narrow/` (1024 + 768px × 5 surfaces), `dark/` (3 surfaces), `baseline/` (the 13 routes with
+  `Cw__Telemetry=false` — the inline-only "before" picture to pair against the lit "after" set), plus
+  `a11y-focus-after-tabbing.png`, `ux-two-selector-conflict.png`, `ux-deeplink-after-reload.png`,
+  `closure-stocklevel-stepper-crash.png`, `dx-settings-license.png`, and `mcp-probe-output.txt` (the
+  live `/api/mcp` JSON-RPC session behind DX-6).
 - **Machine-readable:** `axe-report.json` (per-surface WCAG violations), `focus-probe.json` (per-tab-stop
   focus visibility), `probes.json` (conflict + deep-link results).
+- **Before/after pair:** `baseline/*` vs `wide/*` is the telemetry-off → telemetry-on contrast round one
+  never captured. Note one nuance: CW's **Topology** is a static routing map (it shows the
+  `OrderPlacedSignal`/`PoisonPing` routes even with telemetry off, because the handlers are registered
+  regardless), so the meaningful before/after delta is on **Projections** (inline-only vs advancing async
+  shards), **Dead Letters**, and **Durability**, not Topology.
 - **Regenerate:** with the stack lit as above, set `NODE_PATH` to `client/node_modules`, `CW_BASE` to the
   console proxy, `CW_OUT` to `cw-screenshots/deep`, and run
   `node cw-screenshots/capture-cw-deep.cjs`. The round-one static tour
