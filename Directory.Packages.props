@@ -47,7 +47,7 @@
        1.0.0-alpha line — alpha.3 targets WolverineFx.Marten 6.12.0, which is why the Wolverine
        block above is held at 6.12.0 (see that comment). Bump the two together, never apart. -->
   <ItemGroup>
-    <PackageVersion Include="CritterWatch" Version="1.0.0-alpha.3" />
+    <PackageVersion Include="CritterWatch" Version="1.0.0-alpha.4" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-alpha.3" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-alpha.3) transitively pulls MessagePack 2.5.301, which has a
