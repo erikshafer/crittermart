@@ -29,13 +29,13 @@
        again (diagnosed 2026-06-24; see the dependency-update runbook). -->
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.12.0" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.12.0" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.15.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.15.0" />
   </ItemGroup>
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
        (the persistence-agnostic teaching beat; a data store per ADR 009, NOT an auth provider).
