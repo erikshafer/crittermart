@@ -59,7 +59,7 @@
   </ItemGroup>
   <!-- API documentation (Swagger UI) -->
   <ItemGroup>
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
   <!-- Test packages -->
   <ItemGroup>
