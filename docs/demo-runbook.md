@@ -153,9 +153,9 @@ The canonical seed set (matches the three order routes below):
 
 | SKU | Name | Price | Stock | Used by |
 |---|---|---|---|---|
-| `crit-001` | Cosmic Critter Plush | $24.99 | 100 | [Step 4](#step-4--drive-an-order-happy-path) happy path |
+| `crit-001` | Cosmic Critter Plush | $24.99 | 1000 | [Step 4](#step-4--drive-an-order-happy-path) happy path (seeded high for sustained traffic) |
 | `crit-rare` | Rare Critter | $49.99 | 3 | [Step 5a](#5a--insufficient-stock-stock_unavailable) insufficient-stock cancel (order **>3** to trigger) |
-| `crit-deluxe` | Deluxe Critter | $24.99 | 100 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel |
+| `crit-deluxe` | Deluxe Critter | $24.99 | 1000 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel (seeded high for sustained traffic) |
 
 **Disable auto-seed** (to seed by hand, or to demo an empty store): set `SEEDING_ENABLED=false` on the
 `seeder` resource (e.g. add `.WithEnvironment("SEEDING_ENABLED","false")` in the AppHost, or export it),
@@ -174,11 +174,11 @@ function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json `
   -Body (J @{ sku=$sku; name="Cosmic Critter Plush"; description="A plush from the cosmos."; price=24.99 })
 
-# 2. Receive stock (Inventory — event-sourced)
+# 2. Receive stock (Inventory — event-sourced). 1000 matches the seeder's high-stock SKUs.
 Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json `
-  -Body (J @{ quantity=100 })
+  -Body (J @{ quantity=1000 })
 
-# Confirm: available=100, reserved=0, committed=0
+# Confirm: available=1000, reserved=0, committed=0
 Invoke-RestMethod "$inv/stock/$sku"
 ```
 
@@ -237,7 +237,7 @@ Invoke-RestMethod "$ord/orders/mine" -Headers @{ "X-Customer-Id"=$cust }
 
 **Expected:** `status = confirmed` (after the ~3-min `AuthDelay` window); the order walked
 `awaiting_confirmation → stock_reserved → payment_authorized → confirmed`. Stock moves
-**available 100 → 98, reserved → 0, committed 0 → 2**
+**available 1000 → 998, reserved → 0, committed 0 → 2**
 (`Invoke-RestMethod "$inv/stock/$sku"`). No service called another directly — Orders cascaded
 `ReserveStock`/`CommitStock` messages over RabbitMQ and reacted to the replies. That stock movement
 is the proof the message round-trip completed.
@@ -278,7 +278,7 @@ all-or-nothing, so a refusal reserved nothing → **no** compensating release.
 This is the richer route: stock **is** reserved, then payment declines, so the order cancels **and the
 reserved stock is released back** (a compensating `ReleaseStock` to Inventory). It is enabled by the
 **`Payment:DeclineOverAmount`** demo affordance (**$200**, set by the AppHost — see the box below): order
-total **over $200** → the stub declines. `crit-deluxe` is auto-seeded at 100 units @ $24.99, so **9 units =
+total **over $200** → the stub declines. `crit-deluxe` is auto-seeded at 1000 units @ $24.99, so **9 units =
 $224.91** clears the threshold (8 = $199.92 would *not*).
 
 ```powershell
@@ -296,7 +296,7 @@ $o=$null; for ($i=0;$i -lt 50;$i++){ Start-Sleep -Seconds 5; $o=Invoke-RestMetho
 ```
 
 **Expected:** `status=cancelled reason=payment_declined` (after the ~3-min `AuthDelay`), and stock returns to
-**available 100, reserved 0** — it was reserved at the stock gate, then **released back** when payment failed.
+**available 1000, reserved 0** — it was reserved at the stock gate, then **released back** when payment failed.
 That release (`reserved 9 → 0`) is the compensation the audience sees flow back to Inventory in the trace /
 CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 
@@ -381,12 +381,14 @@ the decline by price (not quantity) keeps it to one reserved unit. Declines are 
 what they reserved), and the boot reseeds stock — so a fresh boot restores full stock. The script
 fires-and-forgets (no polling), so sagas run async in the background and the flow stays visible.
 
-> **⚠️ Sustained-run caveat:** only happy orders consume stock (1 unit each, held for the full ~3-min
-> `Payment__AuthDelay` before committing), and the rotation uses just `crit-001` + `crit-deluxe` (100 each =
-> 200 units). A dense `-Continuous` run eventually drains the pool, after which the script **silently starts
-> producing `stock_unavailable` cancels** — an unplanned third flow. Reboot to reseed, or thin the traffic
-> (raise `-DelaySeconds`), for a long "keep it running" session. A durable fix (higher seed quantities or a
-> periodic-reseed flag) is a known follow-up, not yet on `main`.
+> **ℹ️ Sustained-run stock note:** only happy orders consume stock (1 unit each, held for the full ~3-min
+> `Payment__AuthDelay` before committing), and the rotation uses `crit-001` + `crit-deluxe`, both **seeded
+> high at 1000 (= 2000 units)** precisely so a long run keeps painting traffic without draining the pool —
+> that buys roughly tens of minutes of continuous default-rate (`-DelaySeconds 1.5`) traffic. It is still
+> **finite**: a very long or very dense (`-Continuous -DelaySeconds 0.2`) run can eventually exhaust it, after
+> which the script silently flips to `stock_unavailable` cancels. For a marathon session, reboot to reseed or
+> raise `-DelaySeconds`. (The high seed quantity is the durable mitigation for this — see
+> `src/CritterMart.Seeding/Program.cs`.)
 
 ---
 
@@ -425,7 +427,7 @@ CAT=http://localhost:5101; INV=http://localhost:5102; ORD=http://localhost:5103
 CUST=demo-buyer; SKU=crit-001
 curl -s -X POST $CAT/products -H 'content-type: application/json' \
   -d '{"sku":"crit-001","name":"Cosmic Critter Plush","description":"A plush from the cosmos.","price":24.99}'
-curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":100}'
+curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":1000}'
 curl -s -X POST $ORD/carts/mine/items -H 'content-type: application/json' -H "X-Customer-Id: $CUST" \
   -d '{"sku":"crit-001","quantity":2,"productSnapshot":{"name":"Cosmic Critter Plush","price":24.99}}'
 # /orders takes NO body — identity is the X-Customer-Id header (a missing header is a 400).
