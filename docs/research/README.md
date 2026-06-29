@@ -39,6 +39,7 @@ A research doc is a waypoint, not a terminus. Its findings travel:
 | [e2e-reqnroll-aspire-testing](e2e-reqnroll-aspire-testing.md) | Current test coverage, gaps, and the aspiration for Reqnroll + Aspire.Hosting.Testing E2E | Active |
 | [e2e-strategy-conceptual-plan](e2e-strategy-conceptual-plan.md) | Conceptual plan for the Reqnroll + Aspire E2E layer — pyramid placement, suite shapes, CI job, pipeline path (companion to the aspiration note; feeds ADR 022) | Active |
 | [identity-ef-core-first-class-expansion](identity-ef-core-first-class-expansion.md) | Parking-lot idea — grow Identity into a fuller "Wolverine treats EF Core as first-class" showcase (outbox, `[Entity]`, more published-language/RabbitMQ); low priority, likely lands as a design-return | Active |
+| [wolverine-saga-feasibility](wolverine-saga-feasibility.md) | Spike behind adding CritterMart's first convention `Wolverine.Saga` — two additive homes (Inventory backorder / Marten, Identity email-change / EF Core) and the two plumbing unknowns, resolved from docs (no prototype code) | Active |
 
 Keep this table in sync when a research doc is added or its status changes — it is the discoverability payload of this README.
 

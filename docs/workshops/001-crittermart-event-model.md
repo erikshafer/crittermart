@@ -2,9 +2,9 @@
 workshop: 001
 title: CritterMart Round-One Rolled-Up Event Model
 scope: All four bounded contexts (Catalog, Inventory, Orders, Identity stubbed); round-one success criteria from vision.md
-status: Round-one complete; round-two storefront frontend spine (W1→W4) shipped; § 5.1 wireframe dimension reconciled to the shipped wire, including W4 placed-at + per-reason cancel copy now bound (ADR 016, slice 025)
-version: v1.11
-date: 2026-06-17
+status: Round-one complete; round-two storefront frontend spine (W1→W4) shipped; § 5.1 wireframe dimension reconciled to the shipped wire, including W4 placed-at + per-reason cancel copy now bound (ADR 016, slice 025); v1.12 adds forward-modeled Inventory replenishment-saga slices 2.5–2.7 (first net-new domain increment since v1.0; not yet implemented)
+version: v1.12
+date: 2026-06-28
 participants: session-runner in solo multi-persona mode (Facilitator, Domain Expert, Architect, Backend Developer, Frontend Developer, QA, Product Owner, UX)
 references:
   - docs/vision.md
@@ -16,6 +16,7 @@ references:
   - docs/decisions/007-process-manager-via-handlers-for-order.md
   - docs/decisions/008-inline-projections-async-teaser-no-daemon.md
   - docs/decisions/009-polecat-deferred-for-round-one.md
+  - docs/research/wolverine-saga-feasibility.md
 ---
 
 # Workshop 001 — CritterMart Round-One Rolled-Up Event Model
@@ -43,6 +44,8 @@ Primary events: `ProductPublished`, `ProductPriceChanged`. (Optional: `ProductDi
 The textbook event-sourcing case. The `Stock` aggregate is keyed per SKU; the stream records physical and reservation lifecycle. Inline snapshot projections feed a `StockLevelView` read model used by Orders' process manager indirectly (Orders never reads the view, but the projection drives Inventory's own internal decisions). Inventory is the supplier in the Orders ↔ Inventory Customer-Supplier relationship from the context map.
 
 Primary events on the Stock stream: `StockReceived`, `StockReserved`, `StockReleased`. (Out-of-stream message: `StockReservationFailed` is an outbound Wolverine message back to Orders but is *not* persisted on the Stock stream — there's no state change to record. Orders captures it on its own stream as a Klefter translation-decision event.)
+
+**Replenishment saga (v1.12 forward increment, not yet implemented).** Slices 2.5–2.7 add a `Replenishment` saga keyed per SKU: when a `ReserveStock` cannot be filled, Inventory opens a saga that requests a restock, awaits it, and escalates on a timeout. This is CritterMart's **first convention `Wolverine.Saga`** — a deliberate, additive counterpart to the Order aggregate's Process Manager via Handlers (the "no `Wolverine.Saga`" stance in the § 2 *Orders* note below is Order-specific, ADR 007). Its state lives in **saga storage, not on the Stock stream**, and is deleted on completion; the slice 2.2 reserve-failure path is unchanged (the saga is a separate reaction to the same shortfall). Modeling detail in § 4's "Saga state and saga messages" subsection and slices 2.5–2.7.
 
 ### Orders (deployed; event-sourced)
 
@@ -140,6 +143,15 @@ These are Wolverine messages a service sends to itself with a future delivery ti
 
 - **CartActivityTimeout** — scheduled when cart activity occurs; if no further activity by deadline, the handler emits `CartAbandoned` (Bruun temporal automation, slice 3.4).
 - **OrderPaymentTimeout** — scheduled when `OrderPlaced`; if the Order stream is not terminal at deadline, the handler emits `OrderCancelled` with reason `payment_timeout` (Bruun temporal automation, slice 4.7; per ADR 007).
+- **ReplenishTimeout** — scheduled when a `Replenishment` saga opens (slice 2.5); if the SKU's shortfall is still outstanding when the deadline passes, the saga escalates and completes (slice 2.7). The Inventory analogue of `OrderPaymentTimeout`, but it advances *saga* state, not a stream — see "Saga state and saga messages" below. (Wolverine `TimeoutMessage`; v1.12 forward increment.)
+
+### Saga state and saga messages (NOT events on any stream) — v1.12 forward increment
+
+The **Replenishment saga** (Inventory, slices 2.5–2.7) is CritterMart's **first convention `Wolverine.Saga`** — modeled here, not yet implemented. It is the deliberate contrast to the Order aggregate's Process Manager via Handlers (ADR 007, which forgoes the saga base class *for the Order*): the Order keeps its process state **on its event stream**; the Replenishment saga keeps its state in **saga storage** — a Marten document keyed by SKU, **deleted on `MarkCompleted()`**, never event-sourced. Transient coordination state is exactly what a saga is for, and *not* event-sourcing it is the teaching point. It is also the third member of the "ways to wait for a deadline" trio: Bruun temporal automation (todo-list projection + self-message, slices 3.4/4.7) vs. a convention saga (saga document + `TimeoutMessage`).
+
+- **Replenishment** *(saga state, not a stream)* — one open instance per backordered SKU, keyed by SKU. Tracks the outstanding shortfall while a restock is awaited; `MarkCompleted()` (which deletes the state) fires when the shortfall is covered (slice 2.6) or escalated at timeout (slice 2.7).
+- **RequestRestock** *(outbound message, not an event)* — the saga's request to replenish a SKU. Round-one stub: a logged/notified "supplier order," fulfilled in practice by the Operator's existing `ReceiveStock` path (slice 2.1) — there is no new fulfillment mechanism.
+- **RestockArrived** *(message, not an event)* — the signal that a SKU was restocked, correlated to the saga by SKU. Whether this is a dedicated message or the forwarded `StockReceived` stream event (Marten→Wolverine event forwarding, daemon-free per ADR 008) is an open implementation question — see § 8 item 15.
 
 ### Identity
 
@@ -149,7 +161,7 @@ No events. Identity is stubbed.
 
 ## 5. Slice Table
 
-Per the skill's Structured Output Format, augmented with `Reads-from` and `Writes-to` columns per CLAUDE.md § 3. Slices that span BCs note the chain with `→` in the BC column. `*(query)*` denotes a read-only slice; `*(scheduled)*` denotes a clock-triggered slice; `*(system)*` denotes a slice triggered by an upstream event/command from inside the same service.
+Per the skill's Structured Output Format, augmented with `Reads-from` and `Writes-to` columns per CLAUDE.md § 3. Slices that span BCs note the chain with `→` in the BC column. `*(query)*` denotes a read-only slice; `*(scheduled)*` denotes a clock-triggered slice; `*(system)*` denotes a slice triggered by an upstream event/command from inside the same service; `*(saga)*` denotes a slice whose state lives in a Wolverine convention saga rather than an event stream.
 
 | #   | Slice                                              | Command                  | Events                                              | View                                          | BC                        | Reads-from                                 | Writes-to                                                                     | Priority |
 | --- | -------------------------------------------------- | ------------------------ | --------------------------------------------------- | --------------------------------------------- | ------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- | -------- |
@@ -160,6 +172,9 @@ Per the skill's Structured Output Format, augmented with `Reads-from` and `Write
 | 2.2 | Reserve stock for an order                         | `ReserveStock`           | `StockReserved` (or `StockReservationFailed` msg)   | `StockLevelView`                              | Orders → Inventory        | Stock stream                               | Stock stream (on grant); outbound msg to Orders; `StockLevelView`             | P0       |
 | 2.3 | Release reserved stock on order cancellation       | *(system)* via `OrderCancelled` event from Orders | `StockReleased`            | `StockLevelView`                              | Orders → Inventory        | Stock stream                               | Stock stream; `StockLevelView`                                                | P0       |
 | 2.4 | Commit reserved stock on order confirmation        | *(system)* via `OrderConfirmed` from Orders       | `StockCommitted`           | `StockLevelView`                              | Orders → Inventory        | Stock stream                               | Stock stream; `StockLevelView`                                                | P0       |
+| 2.5 | Open replenishment on stock shortfall *(saga)*     | *(system)* on `ReserveStock` shortfall            | — *(starts `Replenishment` saga; no stream event)* | `StockLevelView`             | Inventory                 | Stock stream / `StockLevelView` (shortfall) | `Replenishment` saga state; outbound `RequestRestock`; `ReplenishTimeout` scheduled | P1       |
+| 2.6 | Resolve replenishment on restock *(saga)*          | *(system)* `RestockArrived` (or forwarded `StockReceived`) | — *(completes/reduces `Replenishment` saga)* | `StockLevelView`             | Inventory                 | `Replenishment` saga state; Stock stream    | `Replenishment` saga `MarkCompleted` (or reduced `outstanding`)               | P1       |
+| 2.7 | Escalate replenishment on timeout *(saga)*         | *(scheduled)* `ReplenishTimeout` self-message     | — *(completes `Replenishment` saga)*           | —                            | Inventory                 | `Replenishment` saga state                  | operator escalation; `Replenishment` saga `MarkCompleted`                     | P1       |
 | 3.1 | Add item to cart                                   | `AddToCart`              | `CartCreated` (first time), `CartItemAdded`         | `CartView`                                    | Orders                    | Cart stream                                | Cart stream; `CartView`; refresh `CartActivityTimeout`                        | P0       |
 | 3.2 | Remove item from cart                              | `RemoveCartItem`         | `CartItemRemoved`                                   | `CartView`                                    | Orders                    | Cart stream                                | Cart stream; `CartView`; refresh `CartActivityTimeout`                        | P0       |
 | 3.3 | Change cart item quantity                          | `ChangeCartItemQuantity` | `CartItemQuantityChanged`                           | `CartView`                                    | Orders                    | Cart stream                                | Cart stream; `CartView`; refresh `CartActivityTimeout`                        | P1       |
@@ -173,14 +188,15 @@ Per the skill's Structured Output Format, augmented with `Reads-from` and `Write
 | 4.6 | Cancel order on payment-auth failure               | *(aggregate decision)* on `PaymentAuthFailed` | `OrderCancelled` (reason: `payment_declined`) | `OrderStatusView` (cancelled) | Orders → Inventory | Order stream | Order stream; `OrderStatusView`; `OrdersAwaitingPayment*` row removed; outbound `OrderCancelled` to Inventory | P0       |
 | 4.7 | Cancel order on payment timeout (Bruun pattern)    | *(scheduled)* `OrderPaymentTimeout` self-message | `OrderCancelled` (reason: `payment_timeout`) | `OrderStatusView` (cancelled) | Orders → Inventory | Order stream; `OrdersAwaitingPayment*`     | Order stream; `OrderStatusView`; `OrdersAwaitingPayment*` row removed; outbound `OrderCancelled` to Inventory | P0       |
 
-**Slice count by BC.** Catalog: 3 (1 P2). Inventory: 4. Orders Cart: 5 (incl. round-two view slice 3.5). Orders Place Order journey: 7. Total: 19.
+**Slice count by BC.** Catalog: 3 (1 P2). Inventory: 7 (incl. replenishment-saga slices 2.5–2.7 — v1.12 forward increment, not yet implemented). Orders Cart: 5 (incl. round-two view slice 3.5). Orders Place Order journey: 7. Total: 22.
 
-**Slice priority distribution.** P0: 16. P1: 2 (`ChangeCartItemQuantity` and `CartAbandoned`). P2: 1 (`ChangeProductPrice`).
+**Slice priority distribution.** P0: 16. P1: 5 (`ChangeCartItemQuantity`, `CartAbandoned`, and replenishment-saga slices 2.5–2.7). P2: 1 (`ChangeProductPrice`).
 
 **Pattern citations in the table.**
 
 - Bruun temporal-automation pattern is cited on slice 3.4 (`CartAbandoned` via `CartsAwaitingActivity*`) and slice 4.7 (`OrderCancelled` via `OrdersAwaitingPayment*`). The asterisk suffix marks the todo-list projection as a Bruun temporal-automation source.
 - Klefter translation-decision pattern is cited on slices 4.2, 4.3, 4.5, 4.6: any time Orders commits an external decision (Inventory's refusal, the stubbed provider's response) as a local event on its own stream.
+- The convention **Wolverine Saga** pattern is cited on slices 2.5–2.7 (the `Replenishment` saga) via the `*(saga)*` marker — CritterMart's first use of the `Wolverine.Saga` base class, a deliberate additive contrast to the Order aggregate's PMvH (ADR 007). State lives in saga storage, not on a stream; see § 4 "Saga state and saga messages." (v1.12 forward increment.)
 
 ---
 
@@ -414,6 +430,51 @@ The `Given` clauses reference events already on the relevant stream (preconditio
 
 **Note.** This is the mirror of slice 2.3 (release). Both are cross-BC, both use published-language commands in `CritterMart.Contracts` (ADR 014), both are per-SKU idempotent via the `Reservations` list guard, and both are one-way (no reply to Orders). The difference: release returns stock to `Available`; commit moves it to `Committed`. Together they ensure every reservation on the Stock stream reaches a terminal event — either `StockReleased` or `StockCommitted`. The `StockLevelView` invariant `Available + Reserved + Committed = ΣStockReceived` is assertable after every fold.
 
+### 2.5 Open replenishment on stock shortfall — *(saga)* on `ReserveStock` shortfall
+
+CritterMart's first convention-saga slice (v1.12 forward increment, not yet implemented). When `ReserveStock` cannot satisfy a SKU (the slice 2.2 failure path), Inventory — in addition to refusing the order back to Orders — opens a `Replenishment` saga for the short SKU so future orders can be filled. The saga is a separate, parallel reaction; **slice 2.2's behavior is unchanged** (the order is still refused, the Stock stream is still not modified).
+
+**Happy path — open a backorder.**
+- **Given** no `Replenishment` saga is open for SKU `crit-001`, whose Stock stream shows `available: 1`.
+- **When** Inventory handles `ReserveStock { orderId: "ord-B", sku: "crit-001", quantity: 2 }` and finds the SKU short (the slice 2.2 refusal).
+- **Then** a `Replenishment` saga is started keyed by `crit-001` with `outstanding: 1` (the shortfall), `RequestRestock { sku: "crit-001", quantity: 1 }` is sent (supplier stub), and `ReplenishTimeout { sku: "crit-001" }` is scheduled. The Stock stream is **not** modified (Design A — saga state is not an event), and Orders still receives `StockReservationFailed` exactly as slice 2.2 specifies.
+
+**Failure path — shortfall on an already-backordered SKU (idempotent re-open).**
+- **Given** a `Replenishment` saga is already open for `crit-001` with `outstanding: 1`.
+- **When** Inventory handles another short `ReserveStock` for `crit-001` (a second customer, shortfall 3).
+- **Then** the existing saga is found (one instance per SKU keyed by `[SagaIdentity]` on the SKU) and its `outstanding` is updated rather than a second saga being started; no duplicate timeout race is opened. (The exact aggregation rule — sum vs. max vs. latest — is open question § 8 item 16.)
+
+### 2.6 Resolve replenishment on restock — *(saga)* `RestockArrived` (or forwarded `StockReceived`)
+
+**Happy path — restock covers the shortfall.**
+- **Given** a `Replenishment` saga is open for `crit-001` with `outstanding: 1`.
+- **When** the Operator receives stock (slice 2.1, `ReceiveStock { sku: "crit-001", quantity: 100 }`) and the resulting restock signal reaches the saga, correlated by SKU.
+- **Then** the received quantity (100) covers the outstanding shortfall (1), so the saga calls `MarkCompleted()` and its state is **deleted** from saga storage. The Stock stream records `StockReceived` exactly as slice 2.1 specifies — the saga adds no stream event.
+
+**Failure path — restock for a SKU with no open saga (no-op).**
+- **Given** no `Replenishment` saga is open for `crit-002`.
+- **When** a restock signal arrives for `crit-002` (every receipt may signal, if the raw `StockReceived` is forwarded).
+- **Then** no saga is found for `crit-002`; the signal is a silent no-op (Wolverine's saga `NotFound` path). Receiving stock for a SKU nobody backordered is the common case and must cost nothing.
+
+**Failure path — partial restock (saga stays open).**
+- **Given** a `Replenishment` saga is open for `crit-001` with `outstanding: 10`.
+- **When** a restock of `quantity: 4` reaches the saga.
+- **Then** the shortfall is only partially covered; the saga reduces `outstanding` to 6 and stays open (it does **not** complete), still awaiting a covering restock or its timeout. (Whether a partial restock re-issues `RequestRestock` is open question § 8 item 17.)
+
+### 2.7 Escalate replenishment on timeout — *(scheduled)* `ReplenishTimeout` self-message
+
+The saga's deadline — the Inventory mirror of slice 4.7, and the purest expression of "a saga is just stateful coordination with a timeout."
+
+**Happy path — timeout with shortfall still outstanding (escalate).**
+- **Given** a `Replenishment` saga is open for `crit-001` with `outstanding: 1` and its `ReplenishTimeout` fires.
+- **When** the saga handles `ReplenishTimeout { sku: "crit-001" }` and the shortfall is still outstanding.
+- **Then** the saga escalates — an operator alert / log that `crit-001` went unreplenished — and calls `MarkCompleted()` (state deleted). (Escalate-and-complete vs. escalate-and-re-arm is open question § 8 item 18.)
+
+**Failure path — timeout after the saga already resolved (no-op).**
+- **Given** the `Replenishment` saga for `crit-001` already completed (slice 2.6 covered the shortfall) and was deleted.
+- **When** the previously-scheduled `ReplenishTimeout { sku: "crit-001" }` is delivered anyway (Wolverine has no scheduled-message cancellation API — the same property slices 3.4/4.7 rely on).
+- **Then** no saga is found for `crit-001`; the timeout is a silent no-op (saga `NotFound`). Losing the race to a successful restock is the timer's normal, expected fate — exactly as in slice 4.7.
+
 ### 3.1 Add item to cart — `AddToCart`
 
 **Happy path — first item.**
@@ -625,6 +686,16 @@ Items the Architect, QA, Product Owner, and Domain Expert voices surfaced but di
 3. **`StockCommitted` event on the Stock stream when `OrderConfirmed` lands.** In current model, reserved stock simply *stays* reserved until released by `OrderCancelled` — there's no explicit "this reservation is now permanent" event. A `StockCommitted` event would close that loop and improve auditability. Deferred from round one to keep Inventory tight; flagged as a future-ADR candidate. **→ RESOLVED (v1.6, slice 2.4, 2026-06-13): yes, shipped.** Orders cascades `CommitStock { orderId, lines }` (published-language command, ADR 014) to Inventory on `OrderConfirmed`; Inventory appends `StockCommitted` per SKU (per-SKU idempotent via `Reservations` guard, same as release). `StockLevelView` gains a `Committed` counter; the invariant `Available + Reserved + Committed = ΣStockReceived` is assertable. Every reservation now reaches a terminal event (`StockReleased` or `StockCommitted`), completing the Stock stream's lifecycle story. See § 5 slice 2.4 + § 6.1 slice 2.4 GWT scenarios.
 4. **Catalog → Orders price-change notifications.** Currently Catalog has zero BC-level outbound integration; the frontend snapshots prices at add-to-cart time. If a price changes between add-to-cart and place-order, the Cart's snapshot wins — by design. A future round could promote `ProductPriceChanged` to a cross-BC Published-Language event Orders subscribes to. Out of scope for round one.
 
+### Open questions — replenishment saga (v1.12 forward increment)
+
+These are the modeling forks the saga slices (2.5–2.7) deliberately leave to the OpenSpec proposal / implementation. They are *plumbing/policy* questions; the event model above holds regardless of how they resolve. See [`docs/research/wolverine-saga-feasibility.md`](../research/wolverine-saga-feasibility.md) for the feasibility spike behind them.
+
+15. **Restock-arrival delivery (slice 2.6).** Forward the raw `StockReceived` stream event (Marten→Wolverine **event forwarding**, `UseFastEventForwarding`, daemon-free per ADR 008) with `[SagaIdentity]` on the SKU — chatty, every receipt queries saga storage — **vs.** emit a dedicated `RestockArrived { sku, quantity }` message from the `ReceiveStock` handler. Both are technically proven (research note); the choice is event-naming/coupling taste. *Lean: dedicated `RestockArrived`.* Event **subscriptions** are out — they require the async daemon round one forgoes.
+16. **Shortfall aggregation on re-open (slice 2.5).** When a second order is short on an already-backordered SKU, does `outstanding` become the **sum** of shortfalls, the **max**, or the latest? Affects when slice 2.6 considers the shortfall "covered."
+17. **Partial-restock behavior (slice 2.6).** When a restock only partially covers `outstanding`, does the saga re-issue `RequestRestock` for the remainder, or simply wait for more?
+18. **Timeout policy (slice 2.7).** Escalate-and-complete (delete the saga, operator owns it) vs. escalate-and-re-arm (alert, reschedule, keep waiting). The Bruun slices (3.4/4.7) re-aim or terminate; the saga can do either.
+19. **`RequestRestock` fulfillment (slice 2.5).** Round one models it as a stub satisfied by the Operator's existing `ReceiveStock` path. Is a stubbed auto-restock "supplier" demo lever wanted (a configured delay, then auto-receive), mirroring the `Payment:AuthDelay` affordance? This is adjacent to parked item 12 (Configuration-as-Events for stock policy) but does **not** require it.
+
 ### Long-road parking lot (from vision.md)
 
 5. Polecat-backed deployed Identity service.
@@ -659,3 +730,4 @@ Items the Architect, QA, Product Owner, and Domain Expert voices surfaced but di
 | v1.10   | 2026-06-16 | **Design-return reconciliation** (`tidy: design-return`, PR-pending) — the cadence interleave after four consecutive frontend implementations (#60 W1, #61 W2-edits, #62 W3, #64 W4). No model change; a **§ 5.1 amendment block** reconciles two wireframe claims to the shipped frontend wire: **(1)** W3's place-order response carries **only `{ orderId }`**, not `{ orderId, status }` — W3 reads the order back (`GET /orders/{orderId}`) for status/total (the correction Narrative 005 v1.5 already carried; the workshop was the straggler); **(2)** W4's `Placed … UTC` timestamp and per-reason `cancelled` copy are **backend gaps** — the shipped `OrderStatusView` is `{ id, customerId, status, lines, total }` with `OrderCancelled` → bare `cancelled` (`OrderStatusView.cs:44`), so both are fenced to a future "enrich `OrderStatusView`" slice. Frozen § 5.1 wireframe text left intact (append-only); frontmatter `version` v1.8→v1.10 (the v1.9 slice-3.5-close row never synced the field), `date`→2026-06-16, `status` → storefront spine W1→W4 shipped. Sibling refresh: `client/README.md` `## Layout` updated to the real feature-folder map. Realized in retrospective `docs/013`. Slice table (§5) left at the model-level intent intentionally. |
 | v1.11   | 2026-06-17 | `tidy: design-return` amendment — the v1.10-fenced "enrich `OrderStatusView`" slice landed. § 5.1 gains a **v1.11 amendment block** flipping W4's `Placed … UTC` line + per-reason cancel copy from *aspirational* (v1.10) to **bound**: slice 025 (PR #67) added `placedAt` (genesis `OrderPlaced` append metadata) + `cancelReason` (folding `OrderCancelled.Reason`) to `OrderStatusView`, the additive superset `{ id, customerId, status, lines, total, placedAt, cancelReason }`. **Narrative 005 v1.7 already recorded the binding** (the workshop is the lone straggler catching up, as v1.10 framed it). Frozen § 5.1 wireframe + the v1.10 amendment block left intact (append-only); frontmatter `version` v1.10→v1.11, `date`→2026-06-17, `status` extended. Realized in `openspec/specs/order-lifecycle/spec.md` (**8→9 requirements**; archived change `enrich-order-status-view`) + retrospective `docs/014`. Slice table (§5) left at the model-level intent intentionally. |
 | v1.9    | 2026-06-15 | `tidy: docs` amendment after slice 3.5 shipped (PR #50). Amended § 6 (slice 3.5 GWT) with two faithfulness notes: **(1)** the identity transport — left as "query-param vs. header is the slice's call" at modeling time — is resolved to the **`X-Customer-Id` request header** (`[FromHeader]`), chosen so the Polecat promotion is a localized header→claim swap rather than a per-caller param removal; **(2)** a **third GWT shipped beyond the two modeled** — missing/blank identity → `400`, kept distinct from the no-open-cart `404`. Recorded the implementation shape (a `CartView` LINQ query, not `[ReadAggregate]`; `IResult` return; new `Features/ViewMyCart.cs`; no edit to `AddToCart.cs`) and confirmed **no new event/command/projection/index**. Realized in `openspec/specs/shopping-cart/spec.md` (**7→8 requirements**, "Read the Customer's open cart"; archived change `slice-3-5-view-open-cart`) + `docs/retrospectives/implementations/015-slice-3-5-view-open-cart.md`. **Slice 3.5 — the first round-two frontend *implementation* slice — is complete.** Slice table (§5) left at the model-level intent intentionally. |
+| v1.12   | 2026-06-28 | **First net-new domain increment since v1.0** (forward modeling, *not* a post-hoc reconciliation) — adds the **Inventory replenishment saga**, CritterMart's first convention `Wolverine.Saga`. Added slices **2.5 open / 2.6 resolve / 2.7 escalate** to § 5 (Inventory 4→7, Total 19→22, P1 2→5) with a new `*(saga)*` marker + pattern citation; § 4 gains `ReplenishTimeout` (self-scheduled) and a new **"Saga state and saga messages (NOT events on any stream)"** subsection (`Replenishment` saga, `RequestRestock`, `RestockArrived`); § 6 gains GWT scenarios 2.5–2.7 (happy + failure/idempotency paths); § 2 Inventory notes the saga; § 8 adds open questions 15–19 (restock delivery, shortfall aggregation, partial restock, timeout policy, fulfillment). **Design A (saga-centric)** chosen with Erik: saga state lives in saga storage and is deleted on completion — **no new Stock-stream events**, and slice 2.2's refusal path is **unchanged** (the saga is a separate, additive reaction). **Not yet implemented** — the sibling OpenSpec proposal + narrative + prompt are the next sessions. Feasibility spike: `docs/research/wolverine-saga-feasibility.md`. |
