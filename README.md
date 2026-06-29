@@ -227,7 +227,7 @@ Many of the cuts are explicit candidates for future rounds, tracked in [`docs/vi
 
 ## Companion Library: JasperFx ai-skills
 
-CritterMart defers to the [JasperFx ai-skills library](https://github.com/jasperfx/ai-skills) for generic Critter Stack patterns (Wolverine, Marten, Polecat). Local skills under [`docs/skills/`](docs/skills/) are authored only when a CritterMart-specific convention diverges from upstream, or when a project-specific methodology needs its own home (the in-repo [`event-modeling`](docs/skills/event-modeling/SKILL.md) skill is the current example). The project does not duplicate upstream content. See [`docs/skills/README.md`](docs/skills/README.md) for the layering rationale.
+CritterMart defers to the [JasperFx ai-skills library](http://ai-skills.jasperfx.net/) for generic Critter Stack patterns (Wolverine, Marten, Polecat). Local skills under [`docs/skills/`](docs/skills/) are authored only when a CritterMart-specific convention diverges from upstream, or when a project-specific methodology needs its own home (the in-repo [`event-modeling`](docs/skills/event-modeling/SKILL.md) skill is the current example). The project does not duplicate upstream content. See [`docs/skills/README.md`](docs/skills/README.md) for the layering rationale.
 
 ---
 
