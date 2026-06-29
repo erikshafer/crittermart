@@ -153,9 +153,9 @@ The canonical seed set (matches the three order routes below):
 
 | SKU | Name | Price | Stock | Used by |
 |---|---|---|---|---|
-| `crit-001` | Cosmic Critter Plush | $24.99 | 100 | [Step 4](#step-4--drive-an-order-happy-path) happy path |
-| `crit-rare` | Rare Critter | $49.99 | 1 | [Step 5a](#5a--insufficient-stock-stock_unavailable) insufficient-stock cancel |
-| `crit-deluxe` | Deluxe Critter | $24.99 | 100 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel |
+| `crit-001` | Cosmic Critter Plush | $24.99 | 1000 | [Step 4](#step-4--drive-an-order-happy-path) happy path (seeded high for sustained traffic) |
+| `crit-rare` | Rare Critter | $49.99 | 3 | [Step 5a](#5a--insufficient-stock-stock_unavailable) insufficient-stock cancel (order **>3** to trigger) |
+| `crit-deluxe` | Deluxe Critter | $24.99 | 1000 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel (seeded high for sustained traffic) |
 
 **Disable auto-seed** (to seed by hand, or to demo an empty store): set `SEEDING_ENABLED=false` on the
 `seeder` resource (e.g. add `.WithEnvironment("SEEDING_ENABLED","false")` in the AppHost, or export it),
@@ -174,11 +174,11 @@ function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json `
   -Body (J @{ sku=$sku; name="Cosmic Critter Plush"; description="A plush from the cosmos."; price=24.99 })
 
-# 2. Receive stock (Inventory — event-sourced)
+# 2. Receive stock (Inventory — event-sourced). 1000 matches the seeder's high-stock SKUs.
 Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json `
-  -Body (J @{ quantity=100 })
+  -Body (J @{ quantity=1000 })
 
-# Confirm: available=100, reserved=0, committed=0
+# Confirm: available=1000, reserved=0, committed=0
 Invoke-RestMethod "$inv/stock/$sku"
 ```
 
@@ -189,11 +189,28 @@ Invoke-RestMethod "$inv/stock/$sku"
 | `/products` (Catalog) | POST | `{ sku, name, description, price }` |
 | `/stock/{sku}/receipts` (Inventory) | POST | `{ quantity }` |
 | `/carts/mine/items` (Orders) | POST | `{ sku, quantity, productSnapshot: { name, price } }` + header `X-Customer-Id` |
-| `/orders` (Orders) | POST | `{ customerId }` → returns `{ orderId }` |
+| `/orders` (Orders) | POST | *(no body)* — identity from header `X-Customer-Id`; returns `{ orderId }`. Missing/blank header → **400**. |
 
 ---
 
 ## Step 4 — Drive an order (happy path)
+
+> ### ⚙️ The three demo knobs (set in the AppHost on the `orders` resource — `src/CritterMart.AppHost/Program.cs`)
+>
+> The AppHost injects **three** environment knobs that shape the demo's timing and the decline beat.
+> They are the source of truth — trust them over any number in prose:
+>
+> | Knob | Demo value | Default (unset) | Effect |
+> |---|---|---|---|
+> | `Payment__DeclineOverAmount` | **`200`** | always approve | the stub declines any order whose **total > $200** (the [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) decline beat) |
+> | `Payment__AuthDelay` | **`00:03:00`** | `TimeSpan.Zero` (instant) | artificial pause inside the stub before it returns a decision, so `stock_reserved → payment_authorized → confirmed` is visible at speaking pace |
+> | `Orders__PaymentTimeout` | **`00:07:00`** | 10 min | how long an order may sit non-terminal before the scheduled `OrderPaymentTimeout` cancels it |
+>
+> **Timing consequence:** with `AuthDelay = 3 min`, a placed order sits in **`stock_reserved` for ~3 minutes**
+> before it authorizes and confirms — it is **not** "< 1s". Because `3 min < 7 min`, it always confirms before
+> the timeout fires. On stage, **screenshot the in-flight `stock_reserved` state** (and the live Scheduled
+> Messages / Durability backlog it creates) rather than waiting out the 3 minutes — that backlog is the most
+> on-theme CritterWatch visual. `demo-traffic.ps1` is fire-and-forget (no polling) precisely because of this delay.
 
 ```powershell
 $ord="http://localhost:5103"; $cust="demo-buyer"; $sku="crit-001"
@@ -203,20 +220,24 @@ function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } `
   -Body (J @{ sku=$sku; quantity=2; productSnapshot=@{ name="Cosmic Critter Plush"; price=24.99 } })
 
-# Place the order — this ONE call cascades the whole cross-BC saga
-$orderId = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
+# Place the order — identity rides the X-Customer-Id HEADER; there is NO request body (a missing header is a 400).
+# This ONE call cascades the whole cross-BC saga.
+$orderId = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
 "orderId = $orderId"
 
-# Poll to terminal status (the saga runs async over RabbitMQ; usually < 1s)
-$o=$null; for ($i=0; $i -lt 25; $i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$orderId"; if ($o.status -in 'confirmed','cancelled'){break} }
+# Poll to terminal status. The saga runs async over RabbitMQ, BUT the demo Payment__AuthDelay=3min holds the
+# order in stock_reserved for ~3 min before it authorizes → confirmed, so the poll budget MUST exceed 3 min
+# (50 × 5s = ~4.2 min, comfortably under the 7-min timeout). For a talk, prefer fire-and-forget (skip this loop).
+$o=$null; for ($i=0; $i -lt 50; $i++){ Start-Sleep -Seconds 5; $o=Invoke-RestMethod "$ord/orders/$orderId"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status = $($o.status)"
 
 # The 'My Orders' list (header-keyed read, GET /orders/mine)
 Invoke-RestMethod "$ord/orders/mine" -Headers @{ "X-Customer-Id"=$cust }
 ```
 
-**Expected:** `status = confirmed`; the order walked `awaiting_confirmation → stock_reserved →
-payment_authorized → confirmed`. Stock moves **available 100 → 98, reserved → 0, committed 0 → 2**
+**Expected:** `status = confirmed` (after the ~3-min `AuthDelay` window); the order walked
+`awaiting_confirmation → stock_reserved → payment_authorized → confirmed`. Stock moves
+**available 1000 → 998, reserved → 0, committed 0 → 2**
 (`Invoke-RestMethod "$inv/stock/$sku"`). No service called another directly — Orders cascaded
 `ReserveStock`/`CommitStock` messages over RabbitMQ and reacted to the replies. That stock movement
 is the proof the message round-trip completed.
@@ -230,17 +251,21 @@ happy path, just reacting to a failure event — no special error path.
 
 ### 5a — Insufficient stock (`stock_unavailable`)
 
-Order more than the available stock; the reservation refuses.
+Order **more than the available stock**; the reservation refuses. `crit-rare` is auto-seeded at **3 units**
+([Step 3](#step-3--seed-data-auto-on-boot-manual-fallback)), so ordering **4** overshoots it. (Rely on the
+auto-seed — do **not** manually `POST` extra `crit-rare` stock here, or you raise the pool above 4 and the
+order succeeds. If you disabled auto-seed, run [Step 3](#step-3--seed-data-auto-on-boot-manual-fallback)'s
+manual seed first, seeding `crit-rare` at 3.)
 
 ```powershell
-$cat="http://localhost:5101"; $inv="http://localhost:5102"; $ord="http://localhost:5103"
+$ord="http://localhost:5103"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 $cust="demo-fail"; $sku="crit-rare"
 
-Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json -Body (J @{ sku=$sku; name="Rare Critter"; description="Limited."; price=49.99 })
-Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=1 })
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=3; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
-$id = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
+# Order 4 of the 3 seeded crit-rare units → the reservation refuses the whole order.
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=4; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+# This path cancels FAST: the reservation refuses before any payment step, so Payment__AuthDelay never applies.
 $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
 ```
@@ -252,49 +277,56 @@ all-or-nothing, so a refusal reserved nothing → **no** compensating release.
 
 This is the richer route: stock **is** reserved, then payment declines, so the order cancels **and the
 reserved stock is released back** (a compensating `ReleaseStock` to Inventory). It is enabled by the
-**`Payment:DeclineOverAmount`** demo affordance (default **$100**, set by the AppHost — see the box
-below): order over the threshold → the stub declines.
+**`Payment:DeclineOverAmount`** demo affordance (**$200**, set by the AppHost — see the box below): order
+total **over $200** → the stub declines. `crit-deluxe` is auto-seeded at 1000 units @ $24.99, so **9 units =
+$224.91** clears the threshold (8 = $199.92 would *not*).
 
 ```powershell
-$cat="http://localhost:5101"; $inv="http://localhost:5102"; $ord="http://localhost:5103"
+$ord="http://localhost:5103"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 $cust="demo-decline"; $sku="crit-deluxe"
 
-Invoke-RestMethod "$cat/products" -Method Post -ContentType application/json -Body (J @{ sku=$sku; name="Deluxe Critter"; description="Premium."; price=24.99 })
-Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=100 })
-# 5 × $24.99 = $124.95, over the $100 threshold → payment will decline
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=5; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
-$id = (Invoke-RestMethod "$ord/orders" -Method Post -ContentType application/json -Body (J @{ customerId=$cust })).orderId
-$o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
+# 9 × $24.99 = $224.91, over the $200 threshold → payment will decline (relies on the auto-seeded crit-deluxe).
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=9; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+# This path settles AFTER Payment__AuthDelay=3min (the stub waits, then declines), so budget the poll past 3 min.
+$o=$null; for ($i=0;$i -lt 50;$i++){ Start-Sleep -Seconds 5; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
-"stock after: $(Invoke-RestMethod "$inv/stock/$sku" | ConvertTo-Json -Compress)"
+"stock after: $(Invoke-RestMethod "http://localhost:5102/stock/$sku" | ConvertTo-Json -Compress)"
 ```
 
-**Expected:** `status=cancelled reason=payment_declined`, and stock returns to **available 100,
-reserved 0** — it was reserved at the stock gate, then **released back** when payment failed. That
-release (`reserved 5 → 0`) is the compensation the audience sees flow back to Inventory in the trace /
+**Expected:** `status=cancelled reason=payment_declined` (after the ~3-min `AuthDelay`), and stock returns to
+**available 1000, reserved 0** — it was reserved at the stock gate, then **released back** when payment failed.
+That release (`reserved 9 → 0`) is the compensation the audience sees flow back to Inventory in the trace /
 CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 
 > ### ⚙️ The `Payment:DeclineOverAmount` demo affordance — read this so it's never a surprise
 >
+> (One of the [three demo knobs](#step-4--drive-an-order-happy-path); this box is the decline-specific detail.)
+>
 > By default the stubbed payment provider **always approves** (round-one behavior). To make the
 > decline route demo-able live, the **AppHost** (`src/CritterMart.AppHost/Program.cs`) injects
-> `Payment__DeclineOverAmount = 100` into the Orders service, so the stub declines any order whose
-> **total exceeds $100**. This is the *only* thing that makes a decline happen at runtime — the whole
+> `Payment__DeclineOverAmount = 200` into the Orders service, so the stub declines any order whose
+> **total exceeds $200**. This is the *only* thing that makes a decline happen at runtime — the whole
 > decline→cancel→release chain is real and was built/tested as slice 4.6.
 >
-> - **It is ON by default when you run via Aspire.** Orders over $100 **will** cancel with
+> - **It is ON by default when you run via Aspire.** Orders over $200 **will** cancel with
 >   `payment_declined` — that is expected, not a bug.
-> - **Change it:** edit the `WithEnvironment("Payment__DeclineOverAmount", "100")` value in the AppHost.
+> - **Change it:** edit the `WithEnvironment("Payment__DeclineOverAmount", "200")` value in the AppHost.
 > - **Turn it OFF (restore "always approve"):** delete that one line in the AppHost, or set
 >   `Payment:DeclineOverAmount` to empty. **Do this after the talk** if you want production-faithful
 >   behavior back.
+> - **Timing:** the decision is **not instant** — the `Payment__AuthDelay=00:03:00` knob makes the stub
+>   wait ~3 min before it declines, so the order sits in `stock_reserved` for that window first.
 > - Code: `PaymentDeclinePolicy` + `StubPaymentProvider` in
 >   `src/CritterMart.Orders/Ordering/PaymentProvider.cs`; registered in `src/CritterMart.Orders/Program.cs`.
 >
 > **The third cancel route — payment timeout (`payment_timeout`) — is still config-only and not
-> talk-friendly:** it fires only after `Orders:PaymentTimeout` (default **10 min**) elapses. Demo-able
-> by shortening that value, but the wait is dead air; prefer the instant decline (5b) on stage.
+> talk-friendly:** it fires only after `Orders:PaymentTimeout` elapses (the AppHost sets this to **7 min**;
+> the unset default is 10 min). Because `AuthDelay 3min < 7min`, normal orders authorize or decline before
+> the timeout fires, so this route effectively never triggers in the demo. Demo-able by shortening the
+> timeout *below* the auth delay, but the wait is dead air; prefer the decline beat (5b) on stage — it
+> settles after the 3-min `AuthDelay` rather than the full timeout.
 
 ---
 
@@ -310,10 +342,10 @@ CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 
 > **⏱️ A `POST /orders` trace's waterfall stays tight (~tens of milliseconds) — screenshot it anytime.**
 > Every placed order schedules a durable `OrderPaymentTimeout` self-message
-> `DelayedFor(Orders:PaymentTimeout)` (default **10 min**, `src/CritterMart.Orders/Features/PlaceOrder.cs`).
-> Wolverine stamps the placement request's trace context onto that delayed envelope, so *by default* the
-> fired timeout's span would parent back **into** the placement trace and balloon its **Duration** to the
-> whole 10-minute window. The `PaymentTimeoutHandler` (and its cart sibling `CartAbandonmentHandler`) now
+> `DelayedFor(Orders:PaymentTimeout)` (the AppHost sets **7 min** in the demo; the unset default is 10 min —
+> `src/CritterMart.Orders/Features/PlaceOrder.cs`). Wolverine stamps the placement request's trace context
+> onto that delayed envelope, so *by default* the fired timeout's span would parent back **into** the
+> placement trace and balloon its **Duration** to the whole timeout window. The `PaymentTimeoutHandler` (and its cart sibling `CartAbandonmentHandler`) now
 > prevent that: `[WolverineLogging(telemetryEnabled: false)]` suppresses Wolverine's parented span and the
 > handler opens its own **span-linked root trace** instead
 > (`src/CritterMart.Orders/Observability/TemporalAutomationTracing.cs`). So the placement waterfall reads
@@ -343,11 +375,20 @@ pwsh docs/demo-traffic.ps1 -Count 30 -DelaySeconds 0.8 -DeclineEvery 0
 ```
 
 Most orders are happy-path confirms (each consumes 1 unit of `crit-001`/`crit-deluxe`); every Nth
-(`-DeclineEvery`, default 5) is a >$100 order that trips the decline affordance, so the **compensating
-stock-release** branch shows too. Declines are stock-neutral (they release what they reserved), and the
-boot reseeds stock — so a fresh boot restores full stock. The script fires-and-forgets (no polling), so
-sagas run async in the background and the flow stays visible. Last run live-verified: a 15-order burst
-(3 declines) settled with `reserved 0` on every SKU — no leaked reservations.
+(`-DeclineEvery`, default 5) snapshots **one unit at `-DeclinePrice` ($250, above the $200 threshold)** so the
+order total trips the decline affordance, exercising the **compensating stock-release** branch too. Sizing
+the decline by price (not quantity) keeps it to one reserved unit. Declines are stock-neutral (they release
+what they reserved), and the boot reseeds stock — so a fresh boot restores full stock. The script
+fires-and-forgets (no polling), so sagas run async in the background and the flow stays visible.
+
+> **ℹ️ Sustained-run stock note:** only happy orders consume stock (1 unit each, held for the full ~3-min
+> `Payment__AuthDelay` before committing), and the rotation uses `crit-001` + `crit-deluxe`, both **seeded
+> high at 1000 (= 2000 units)** precisely so a long run keeps painting traffic without draining the pool —
+> that buys roughly tens of minutes of continuous default-rate (`-DelaySeconds 1.5`) traffic. It is still
+> **finite**: a very long or very dense (`-Continuous -DelaySeconds 0.2`) run can eventually exhaust it, after
+> which the script silently flips to `stock_unavailable` cancels. For a marathon session, reboot to reseed or
+> raise `-DelaySeconds`. (The high seed quantity is the durable mitigation for this — see
+> `src/CritterMart.Seeding/Program.cs`.)
 
 ---
 
@@ -386,12 +427,13 @@ CAT=http://localhost:5101; INV=http://localhost:5102; ORD=http://localhost:5103
 CUST=demo-buyer; SKU=crit-001
 curl -s -X POST $CAT/products -H 'content-type: application/json' \
   -d '{"sku":"crit-001","name":"Cosmic Critter Plush","description":"A plush from the cosmos.","price":24.99}'
-curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":100}'
+curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":1000}'
 curl -s -X POST $ORD/carts/mine/items -H 'content-type: application/json' -H "X-Customer-Id: $CUST" \
   -d '{"sku":"crit-001","quantity":2,"productSnapshot":{"name":"Cosmic Critter Plush","price":24.99}}'
-ORDER=$(curl -s -X POST $ORD/orders -H 'content-type: application/json' -d '{"customerId":"demo-buyer"}')
+# /orders takes NO body — identity is the X-Customer-Id header (a missing header is a 400).
+ORDER=$(curl -s -X POST $ORD/orders -H "X-Customer-Id: $CUST")
 echo "$ORDER"   # -> {"orderId":"..."}
-# then GET $ORD/orders/<orderId> until status=confirmed; GET $ORD/orders/mine -H "X-Customer-Id: demo-buyer"
+# then GET $ORD/orders/<orderId> until status=confirmed (~3 min under the demo Payment__AuthDelay); GET $ORD/orders/mine -H "X-Customer-Id: $CUST"
 ```
 
 ---
@@ -402,12 +444,14 @@ echo "$ORDER"   # -> {"orderId":"..."}
   Aspire resource; it auto-seeds the canonical set on boot (see
   [Step 3](#step-3--seed-data-auto-on-boot-manual-fallback)). Set `SEEDING_ENABLED=false` to disable and
   seed by hand. (Seeds products + stock only; carts/orders are still driven live in the demo.)
-- **Payment decline is a DEMO AFFORDANCE, on by default** via `Payment:DeclineOverAmount` (= $100,
+- **Payment decline is a DEMO AFFORDANCE, on by default** via `Payment:DeclineOverAmount` (= **$200**,
   set in the AppHost) — orders over the threshold cancel with `payment_declined` (see
   [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat)). **Remove that AppHost line
   after the talk** to restore round-one "always approve."
-- **Payment timeout still config-only** — fires after `Orders:PaymentTimeout` (default 10 min); demo-able
-  only by shortening it, and the wait is dead air (prefer the decline beat live).
+- **Payment timeout still config-only** — fires after `Orders:PaymentTimeout` (the AppHost sets **7 min**;
+  unset default 10 min). Because `Payment__AuthDelay=3min` settles orders first, this route effectively never
+  triggers in the demo; demo-able only by shortening the timeout *below* the auth delay, and the wait is dead
+  air (prefer the decline beat live).
 - **Last verified:** 2026-06-17 on `192d2f0` (`main`) — **full live pass**. Clean boot, auto-seed of all
   three SKUs, and all three saga routes driven live: happy → `confirmed`; insufficient → `cancelled ·
   stock_unavailable` (stock untouched); and **decline → `cancelled · payment_declined` with the reserved

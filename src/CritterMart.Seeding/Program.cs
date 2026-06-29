@@ -35,11 +35,20 @@ Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}, Identity={iden
 //   crit-001    happy path                (Step 4)
 //   crit-rare   insufficient-stock cancel (Step 5a — only 3 in stock; order 4+ to trigger)
 //   crit-deluxe payment-decline cancel    (Step 5b — 9 × $24.99 = $224.91 > the $200 demo threshold)
+//
+// Stock quantities (the last field) are deliberately split by role:
+//   - crit-001 / crit-deluxe seed HIGH (1000) so a sustained demo-traffic.ps1 run paints continuous
+//     message flow onto CritterWatch without draining the pool. Happy orders permanently consume one
+//     unit each and (under the 3-min Payment__AuthDelay) hold it for the auth window before committing,
+//     so a busy run burns through stock; 1000/SKU buys ~tens of minutes of continuous default-rate
+//     traffic before the pool can flip to stock_unavailable cancels. (Mitigates demo-runbook G5.)
+//   - crit-rare seeds LOW (3) on purpose: it IS the insufficient-stock route. Ordering >3 must refuse,
+//     so this number must stay small. Do NOT raise it to match the others.
 SeedItem[] seed =
 [
-    new("crit-001",    "Cosmic Critter Plush", "A plush from the cosmos.", 24.99m, 100),
+    new("crit-001",    "Cosmic Critter Plush", "A plush from the cosmos.", 24.99m, 1000),
     new("crit-rare",   "Rare Critter",         "Limited.",                 49.99m, 3),
-    new("crit-deluxe", "Deluxe Critter",       "Premium.",                 24.99m, 100),
+    new("crit-deluxe", "Deluxe Critter",       "Premium.",                 24.99m, 1000),
 ];
 
 using var catalog = new HttpClient { BaseAddress = new Uri(catalogUrl), Timeout = requestTimeout };

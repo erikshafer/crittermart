@@ -66,8 +66,8 @@ param(
 
 function ConvertTo-CompactJson($value) { $value | ConvertTo-Json -Compress -Depth 6 }
 
-# High-stock SKUs from the canonical seed (crit-001 / crit-deluxe start at 100 each). crit-rare
-# (seeded at 1) is deliberately omitted so a sustained run never stalls on an exhausted SKU.
+# High-stock SKUs from the canonical seed (crit-001 / crit-deluxe start at 1000 each). crit-rare
+# (seeded at 3) is deliberately omitted so a sustained run never stalls on that low-stock SKU.
 $catalog = @(
     @{ sku = 'crit-001'; name = 'Cosmic Critter Plush'; price = 24.99 },
     @{ sku = 'crit-deluxe'; name = 'Deluxe Critter'; price = 24.99 }
