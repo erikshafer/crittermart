@@ -43,7 +43,7 @@ For each workshop slice the narrative threads, a sibling **OpenSpec proposal** a
 
 ## Current population
 
-**Seven narratives.**
+**Eight narratives.**
 
 - [`001-seller-manage-catalog.md`](001-seller-manage-catalog.md) — the Seller's catalog-management journey (v1.1, Catalog BC), covering slices 1.1 (Publish a product) and 1.3 (Change a product's price).
 - [`002-customer-browse-catalog.md`](002-customer-browse-catalog.md) — the Customer's catalog-browsing journey (Catalog BC), covering slice 1.2 (Browse and view products), a read-only query slice. First Customer-actor narrative.
@@ -54,5 +54,7 @@ For each workshop slice the narrative threads, a sibling **OpenSpec proposal** a
 - [`006-customer-registration.md`](006-customer-registration.md) — the Customer's registration journey (v1.0, **Identity BC** — the first narrative for CritterMart's one non-event-sourced context), covering slices 5.1 (Register a customer — happy path + duplicate-email rejection, case-insensitive) and 5.2 (Resolve a customer — the Open-Host Service read + 404). Carries the teaching contrast: the `Customer` row *is* the read model, and `CustomerRegistered` is an EF-Core **outbox notification**, not a stream event. Sibling of the `customer-registry` OpenSpec change.
 
 - [`007-customer-data-in-orders.md`](007-customer-data-in-orders.md) — the customer-data-flows-into-orders journey (v1.0, Identity→Orders Published Language), covering slices 5.4 (Consume `CustomerRegistered` → upsert consumer-local `LocalCustomerView` in Orders) and 5.3 (Resolve `X-Customer-Id` against the local model at read time → `customerName?` on order responses). Carries the PL graduation: `CustomerRegistered` moves from Identity-internal to `CritterMart.Contracts`, and the no-sync-HTTP rule plays out in the upsert handler. Sibling of the `customer-data` OpenSpec change.
+
+- [`008-operator-replenish-backorders.md`](008-operator-replenish-backorders.md) — the Operator's backorder-replenishment journey (v1.0, Inventory BC), covering slices 2.5 (open a replenishment on a `ReserveStock` shortfall), 2.6 (resolve on a covering or partial restock), and 2.7 (escalate on timeout). Threads CritterMart's **first convention `Wolverine.Saga`** — a SKU-keyed `Replenishment` saga whose transient state lives in saga storage and is deleted on completion — and draws the saga-vs-PMvH (ADR 007) contrast (saga storage vs. state on the Order stream, the "third way to wait"). Picks up the reorder/supplier thread Narrative 003 explicitly deferred. Sibling of the `slices-2-5-2-7-replenishment-saga` OpenSpec change.
 
 **Two lenses on the Customer journey.** Narratives 002 + 004 are the *behavior* lens (streams, events, cross-BC hops); 005 is the *screen* lens (wireframes, what the actor sees and touches). They share slices and must agree, but answer different questions — useful precedent if a future actor's journey also splits behavior from UI. (Narrative 006 is a separate Customer journey — registration into the Identity registry — not another lens on the purchase journey.)
