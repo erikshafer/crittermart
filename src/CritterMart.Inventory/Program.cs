@@ -18,6 +18,13 @@ builder.AddServiceDefaults();
 var connectionString = builder.Configuration.GetConnectionString("crittermart")
     ?? "Host=localhost;Port=5432;Database=crittermart;Username=postgres;Password=postgres";
 
+// DEMO AFFORDANCE (Inventory:ReplenishTimeout): the Replenishment saga's deadline (slice 2.7). Config-driven
+// so the escalate path is demoable at speaking pace (a short default) yet realistic in production (set to
+// hours). Mirrors the Orders PaymentDeadline / CartActivityDeadline / PaymentAuthDelay config-singletons.
+var replenishTimeout = builder.Configuration.GetValue<TimeSpan?>("Inventory:ReplenishTimeout")
+    ?? ReplenishDeadline.Default;
+builder.Services.AddSingleton(new ReplenishDeadline(replenishTimeout));
+
 builder.Services.AddMarten(opts =>
     {
         opts.Connection(connectionString);
