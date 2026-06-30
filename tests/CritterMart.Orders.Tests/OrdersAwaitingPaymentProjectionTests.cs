@@ -6,21 +6,21 @@ using Xunit;
 namespace CritterMart.Orders.Tests;
 
 // Pure-function unit tests for the OrdersAwaitingPayment todo-list fold (slice 4.7) — no database,
-// no mocks, no container. Untagged, so they run in the CI `Category!=Integration` job alongside
-// the other projection fold tests. The Apply takes an IEvent<OrderPlaced> wrapper (Marten's
-// using-metadata convention) so the deadline can be computed from the event's append timestamp;
-// the test constructs the wrapper directly with Event<T>.
+// no mocks, no container. Untagged, so they run in the CI `Category!=Integration` job alongside the
+// other projection fold tests. The Apply takes an IEvent<OrderPlaced> wrapper (Marten's using-metadata
+// convention) so it can record the event's append timestamp; the test constructs the wrapper directly
+// with Event<T>. The projection is STATELESS — the visible deadline (PlacedAt + timeout) is applied on
+// read in the endpoint, not here (chore/004; see OrdersAwaitingPayment remarks).
 public class OrdersAwaitingPaymentProjectionTests
 {
     private static readonly OrderLine Plush = new("crit-001", 2, "Cosmic Critter Plush", 24.99m);
-    private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(10);
 
-    private readonly OrdersAwaitingPaymentProjection _projection = new(Timeout);
+    private readonly OrdersAwaitingPaymentProjection _projection = new();
 
-    // OrderPlaced creates the row: the order joins the todo-list with a deadline of placement
-    // time plus the configured payment timeout.
+    // OrderPlaced creates the row: the order joins the todo-list recording its placement timestamp
+    // (the read endpoint adds the configured timeout to produce the visible deadline).
     [Fact]
-    public void order_placed_creates_a_row_with_the_deadline()
+    public void order_placed_creates_a_row_recording_placed_at()
     {
         var view = new OrderAwaitingPayment();
         var placedAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
@@ -33,7 +33,7 @@ public class OrdersAwaitingPaymentProjectionTests
 
         view.CustomerId.ShouldBe("customer-X");
         view.Total.ShouldBe(49.98m);
-        view.Deadline.ShouldBe(placedAt.Add(Timeout));
+        view.PlacedAt.ShouldBe(placedAt);
     }
 
     // The conditional delete (Marten ShouldDelete convention): a confirmed order leaves the list.
