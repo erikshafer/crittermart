@@ -201,7 +201,7 @@ public class CartAbandonmentTests
             _.Get.Url("/carts/awaiting-activity");
             _.StatusCodeShouldBe(200);
         });
-        var rows = listed.ReadAsJson<List<CartAwaitingActivity>>()!;
+        var rows = listed.ReadAsJson<List<CartAwaitingActivityRow>>()!;
         var row = rows.ShouldHaveSingleItem();
         row.Id.ShouldBe(cartId);
         row.CustomerId.ShouldBe("customer-V");
@@ -216,7 +216,7 @@ public class CartAbandonmentTests
             _.Get.Url("/carts/awaiting-activity");
             _.StatusCodeShouldBe(200);
         });
-        afterAbandon.ReadAsJson<List<CartAwaitingActivity>>()!.ShouldBeEmpty();
+        afterAbandon.ReadAsJson<List<CartAwaitingActivityRow>>()!.ShouldBeEmpty();
     }
 
     // ADR 008's teaching beat, proven: the async CartAbandonmentReport is EMPTY until an

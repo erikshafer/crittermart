@@ -200,7 +200,7 @@ public class PaymentTimeoutTests
             _.Get.Url("/orders/awaiting-payment");
             _.StatusCodeShouldBe(200);
         });
-        var rows = listed.ReadAsJson<List<OrderAwaitingPayment>>()!;
+        var rows = listed.ReadAsJson<List<OrderAwaitingPaymentRow>>()!;
         var row = rows.ShouldHaveSingleItem();
         row.Id.ShouldBe(orderId);
         row.Total.ShouldBe(Total);
@@ -214,6 +214,6 @@ public class PaymentTimeoutTests
             _.Get.Url("/orders/awaiting-payment");
             _.StatusCodeShouldBe(200);
         });
-        afterSettle.ReadAsJson<List<OrderAwaitingPayment>>()!.ShouldBeEmpty();
+        afterSettle.ReadAsJson<List<OrderAwaitingPaymentRow>>()!.ShouldBeEmpty();
     }
 }

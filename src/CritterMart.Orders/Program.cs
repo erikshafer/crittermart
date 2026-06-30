@@ -22,7 +22,7 @@ var connectionString = builder.Configuration.GetConnectionString("crittermart")
 // The payment deadline (slice 4.7): how long a placed order may sit non-terminal before the
 // scheduled OrderPaymentTimeout cancels it. Config-driven so the Aspire demo can shorten it
 // (e.g. 30s) without recompiling; one value feeds both the PlaceOrder schedule and the
-// OrdersAwaitingPayment projection's visible deadline.
+// awaiting-payment endpoint's visible deadline (computed on read — the projection is stateless).
 var paymentTimeout = builder.Configuration.GetValue<TimeSpan?>("Orders:PaymentTimeout")
     ?? PaymentDeadline.Default;
 builder.Services.AddSingleton(new PaymentDeadline(paymentTimeout));
@@ -30,7 +30,7 @@ builder.Services.AddSingleton(new PaymentDeadline(paymentTimeout));
 // The cart inactivity window (slice 3.4): how long a cart may sit without activity before the
 // scheduled CartActivityTimeout abandons it. Config-driven like the payment deadline above; one
 // value feeds the AddToCart schedule, the abandonment handler's fire-and-check decision, and the
-// CartsAwaitingActivity projection's visible deadline.
+// awaiting-activity endpoint's visible deadline (computed on read — the projection is stateless).
 var cartActivityTimeout = builder.Configuration.GetValue<TimeSpan?>("Orders:CartActivityTimeout")
     ?? CartActivityDeadline.Default;
 builder.Services.AddSingleton(new CartActivityDeadline(cartActivityTimeout));
@@ -71,13 +71,14 @@ builder.Services.AddMarten(opts =>
         opts.Projections.Snapshot<OrderStatusView>(SnapshotLifecycle.Inline);
 
         // The Bruun todo-list (slice 4.7): a second inline projection over the same Order stream.
-        // Instance-registered (not generic) because the projection carries the configured payment
-        // timeout — the row's visible deadline must match the schedule PlaceOrder actually sets.
-        opts.Projections.Add(new OrdersAwaitingPaymentProjection(paymentTimeout), ProjectionLifecycle.Inline);
+        // STATELESS + generic-registered: it records the placement timestamp only; the awaiting-payment
+        // endpoint adds the configured timeout on read. (Marten 9.x re-materializes instance-registered
+        // projections, dropping constructor-injected state — chore/004; see OrdersAwaitingPayment remarks.)
+        opts.Projections.Add<OrdersAwaitingPaymentProjection>(ProjectionLifecycle.Inline);
 
-        // The cart-side Bruun todo-list (slice 3.4): the same shape over the Cart stream —
-        // instance-registered with the configured inactivity window.
-        opts.Projections.Add(new CartsAwaitingActivityProjection(cartActivityTimeout), ProjectionLifecycle.Inline);
+        // The cart-side Bruun todo-list (slice 3.4): the same stateless shape over the Cart stream —
+        // records the latest activity timestamp; the awaiting-activity endpoint adds the window on read.
+        opts.Projections.Add<CartsAwaitingActivityProjection>(ProjectionLifecycle.Inline);
 
         // The round-one ASYNC projection teaser (ADR 008, slice 3.4): registered with the async
         // lifecycle but NO AddAsyncDaemon anywhere — the daily abandonment report stays empty

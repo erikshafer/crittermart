@@ -131,11 +131,16 @@ public static class CartEndpoint
     // conditional deletes). A literal route segment, so it wins over /carts/{cartId} by ASP.NET
     // Core route precedence.
     [WolverineGet("/carts/awaiting-activity")]
-    public static async Task<IResult> GetAwaitingActivity(IQuerySession session)
+    public static async Task<IResult> GetAwaitingActivity(IQuerySession session, CartActivityDeadline deadline)
     {
+        // The view stores LastActivityAt; the visible Deadline is LastActivityAt + the configured window,
+        // applied here on read (the projection is stateless — see CartsAwaitingActivity remarks). Ordering
+        // by LastActivityAt equals ordering by Deadline since the window is constant across rows.
         var rows = await session.Query<CartAwaitingActivity>()
-            .OrderBy(x => x.Deadline)
+            .OrderBy(x => x.LastActivityAt)
             .ToListAsync();
-        return Results.Ok(rows);
+        var result = rows.Select(r =>
+            new CartAwaitingActivityRow(r.Id, r.CustomerId, r.LastActivityAt.Add(deadline.Duration)));
+        return Results.Ok(result);
     }
 }

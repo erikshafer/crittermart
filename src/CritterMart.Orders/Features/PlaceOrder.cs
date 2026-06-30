@@ -117,11 +117,16 @@ public static class OrderEndpoint
     // live set of orders the payment-timeout automation is watching. A literal route segment, so
     // it wins over /orders/{orderId} by ASP.NET Core route precedence.
     [WolverineGet("/orders/awaiting-payment")]
-    public static async Task<IResult> GetAwaitingPayment(IQuerySession session)
+    public static async Task<IResult> GetAwaitingPayment(IQuerySession session, PaymentDeadline deadline)
     {
+        // The view stores PlacedAt; the visible Deadline is PlacedAt + the configured timeout, applied
+        // here on read (the projection is stateless — see OrdersAwaitingPayment remarks). Ordering by
+        // PlacedAt equals ordering by Deadline since the timeout is constant across rows.
         var rows = await session.Query<OrderAwaitingPayment>()
-            .OrderBy(x => x.Deadline)
+            .OrderBy(x => x.PlacedAt)
             .ToListAsync();
-        return Results.Ok(rows);
+        var result = rows.Select(r =>
+            new OrderAwaitingPaymentRow(r.Id, r.CustomerId, r.Total, r.PlacedAt.Add(deadline.Duration)));
+        return Results.Ok(result);
     }
 }
