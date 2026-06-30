@@ -8,7 +8,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 // Only Postgres + RabbitMQ are containers here — the three services and the seeder are dotnet
 // processes and the storefront is a node process, so they never appear in Docker Desktop's
 // container list. WithContainerRuntimeArgs passes the --label straight through to the runtime.
-// Mirrors CritterBids' AppHost (same Aspire 13.4.3).
+// Mirrors CritterBids' AppHost (both on the Aspire 13.4 line).
 const string dockerProject = "crittermart";
 
 // Shared PostgreSQL with one database; each service uses its own schema (ADR 002).
