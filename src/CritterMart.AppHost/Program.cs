@@ -59,7 +59,18 @@ var inventory = builder.AddProject<Projects.CritterMart_Inventory>("inventory")
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
-    .WaitFor(critterwatch);
+    .WaitFor(critterwatch)
+    // ───── DEMO AFFORDANCE — the saga's escalate clock ───────────────────────────────────────────────
+    // Inventory__ReplenishTimeout: the Replenishment saga's escalate deadline (slice 2.7). When a refused
+    // reservation opens the saga (a BackorderDetected — order a SKU over its stock), the saga schedules a
+    // ReplenishTimeout for this duration; if no covering RestockArrived (an Operator stock receipt) lands
+    // first, the timeout fires and the saga escalates (ReplenishmentEscalated → the "Operator alert" log +
+    // bus signal). The default (when unset) is 2 minutes (ReplenishDeadline.Default); 25s makes the escalate
+    // beat demoable at speaking pace instead of two minutes of dead air. The service already binds this key
+    // (Inventory:ReplenishTimeout via the __→: convention, src/CritterMart.Inventory/Program.cs) — this just
+    // supplies the demo value. DELETE after the demo to restore the production-faithful 2-min default.
+    // Full how-to: docs/demo-runbook.md § 5c.
+    .WithEnvironment("Inventory__ReplenishTimeout", "00:00:25");
 
 // Orders is the second event-sourced service (Cart + Order aggregates, slices 3.1/4.1).
 // Slice 4.2 sends its first cross-BC RabbitMQ flow (Reserve stock) to Inventory.
