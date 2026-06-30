@@ -211,6 +211,10 @@ Invoke-RestMethod "$inv/stock/$sku"
 > the timeout fires. On stage, **screenshot the in-flight `stock_reserved` state** (and the live Scheduled
 > Messages / Durability backlog it creates) rather than waiting out the 3 minutes — that backlog is the most
 > on-theme CritterWatch visual. `demo-traffic.ps1` is fire-and-forget (no polling) precisely because of this delay.
+>
+> **A fourth knob lives on a different resource:** `Inventory__ReplenishTimeout` (on the **`inventory`**
+> resource, not `orders`) drives the Replenishment saga's escalate clock — it is documented with the saga in
+> [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga).
 
 ```powershell
 $ord="http://localhost:5103"; $cust="demo-buyer"; $sku="crit-001"
@@ -330,6 +334,83 @@ CritterWatch. Contrast with 5a, where nothing was reserved so nothing came back.
 
 ---
 
+## Step 5c — Backorder & replenishment (the Inventory saga)
+
+The **same refused reservation as [5a](#5a--insufficient-stock-stock_unavailable)**, seen from the
+**Inventory** side. When an order's quantity exceeds a SKU's available stock, `ReserveStockHandler` refuses
+the order (`stock_unavailable`, exactly as 5a) **and additionally** emits a `BackorderDetected`, which opens a
+**`Replenishment` saga** for that SKU (CritterMart's first `Wolverine.Saga`, slices 2.5–2.7). One customer
+action, two reactions in two bounded contexts — the order cancels in **Orders**, a backorder opens in
+**Inventory**.
+
+> 5a's `crit-rare × 4` already opens a saga (outstanding **1**) — the saga shipped after this runbook's prior
+> revision. This section orders **more** so the outstanding is visible and a partial-then-cover is demoable.
+
+The saga has three beats:
+
+- **open** — `BackorderDetected` with no open saga → records `Outstanding`, fires `RequestRestock` (the
+  supplier-notification stub — logs *“Supplier notified: restock …”*), and schedules a `ReplenishTimeout`.
+- **resolve** — a stock receipt (`POST /stock/{sku}/receipts`) publishes `RestockArrived`. A receipt that
+  **covers** `Outstanding` completes the saga (its doc is deleted); a **partial** receipt reduces `Outstanding`
+  and the saga stays open (no fresh `RequestRestock`).
+- **escalate** — if no covering receipt arrives before the deadline, `ReplenishTimeout` fires →
+  `ReplenishmentEscalated` (logs *“Operator alert: SKU … went unreplenished”* at **Warning**) and the saga
+  completes.
+
+> ### ⚙️ The fourth demo knob — `Inventory__ReplenishTimeout` (on the `inventory` resource)
+>
+> The AppHost injects `Inventory__ReplenishTimeout = 00:00:25` so the **escalate** beat fires in ~25s instead
+> of the unset **2-minute** default (`ReplenishDeadline.Default`). The service already binds
+> `Inventory:ReplenishTimeout` (`src/CritterMart.Inventory/Program.cs`) via the `__`→`:` convention; the
+> AppHost just supplies the demo value. **Delete that one AppHost line after the talk** to restore the
+> production-faithful 2-minute default. (It is the saga sibling of the [three order-timing
+> knobs](#step-4--drive-an-order-happy-path), but lives on `inventory`, not `orders`.)
+
+**Drive it with the script (easiest):**
+
+```powershell
+# open the saga (orders crit-rare × 10 over the seeded 3 → outstanding 7), then print the follow-ups:
+pwsh docs/demo-traffic.ps1 -Backorder
+
+# open AND resolve in one command (fires the covering receipt):
+pwsh docs/demo-traffic.ps1 -Backorder -Cover
+```
+
+**Or drive each beat by hand:**
+
+```powershell
+$ord="http://localhost:5103"; $inv="http://localhost:5102"; $sku="crit-rare"
+function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
+$cust="demo-backorder"
+
+# open: order 10 of the 3 seeded crit-rare → refuses (stock_unavailable) AND opens the saga (outstanding 7)
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=10; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+$o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
+"order: status=$($o.status) reason=$($o.cancelReason)"   # → cancelled / stock_unavailable
+
+# resolve: receive the outstanding (7) → RestockArrived covers it → saga completes (doc deleted)
+Invoke-RestMethod "$inv/stock/$sku/receipts" -Method Post -ContentType application/json -Body (J @{ quantity=7 })
+#   partial instead: receive < 7 → outstanding reduces, saga stays open
+#   escalate instead: send NO receipt → after ~25s ReplenishTimeout fires → ReplenishmentEscalated
+```
+
+**Expected:** the order is `cancelled · stock_unavailable` (stock untouched — a refusal reserves nothing, as
+in 5a), and a `Replenishment` saga opens for `crit-rare`. The covering receipt drives it to completion; with
+no receipt it escalates after ~25s. The receipt path also raises `crit-rare`'s available stock, so re-running
+needs a fresh boot (reseed) or a larger `-BackorderQuantity`.
+
+**What to watch (the saga's surfaces):**
+
+| Surface | What shows |
+|---|---|
+| **Inventory logs** | `Supplier notified: restock crit-rare x7` (Information) on open; `Operator alert: SKU crit-rare went unreplenished, N still short` (Warning) on escalate. |
+| **CritterWatch — Saga Explorer** | the live `Replenishment` saga keyed by SKU, carrying `Outstanding`; gone once it resolves/escalates. This is the route that **lights up the previously-dark Saga Explorer**. |
+| **CritterWatch — Topology / Scheduled** | the `RequestRestock` / `RestockArrived` / `ReplenishmentEscalated` bus messages, plus the scheduled `ReplenishTimeout` in the Durability/Scheduled backlog (like `OrderPaymentTimeout` in [Step 6](#step-6--verify-the-demo-surfaces)). |
+| **Marten** | the saga doc in `inventory.mt_doc_replenishment` (`Id` = SKU, `Outstanding`) while open; **deleted** on completion. |
+
+---
+
 ## Step 6 — Verify the demo surfaces
 
 | Surface | How to check | What it shows / talk beat |
@@ -372,7 +453,15 @@ pwsh docs/demo-traffic.ps1 -Continuous
 
 # denser, happy-path only:
 pwsh docs/demo-traffic.ps1 -Count 30 -DelaySeconds 0.8 -DeclineEvery 0
+
+# drive the Replenishment saga instead of happy traffic (orders crit-rare over stock → backorder opens):
+pwsh docs/demo-traffic.ps1 -Backorder          # open the saga + print resolve/partial/escalate follow-ups
+pwsh docs/demo-traffic.ps1 -Backorder -Cover   # open AND fire the covering receipt — open→resolve in one go
 ```
+
+> **`-Backorder` is a focused saga lever, not traffic.** It ignores `-Count`/`-Continuous`/`-Decline*`, orders
+> a low-stock SKU (`crit-rare`) above its stock to open the Replenishment saga, and (with `-Cover`) resolves
+> it — the full beat-by-beat walkthrough is [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga).
 
 Most orders are happy-path confirms (each consumes 1 unit of `crit-001`/`crit-deluxe`); every Nth
 (`-DeclineEvery`, default 5) snapshots **one unit at `-DeclinePrice` ($250, above the $200 threshold)** so the
@@ -452,7 +541,20 @@ echo "$ORDER"   # -> {"orderId":"..."}
   unset default 10 min). Because `Payment__AuthDelay=3min` settles orders first, this route effectively never
   triggers in the demo; demo-able only by shortening the timeout *below* the auth delay, and the wait is dead
   air (prefer the decline beat live).
-- **Last verified:** 2026-06-17 on `192d2f0` (`main`) — **full live pass**. Clean boot, auto-seed of all
+- **Replenishment-saga escalate is a DEMO KNOB** — `Inventory__ReplenishTimeout` (= **25s**, set in the
+  AppHost on the **`inventory`** resource) shortens the saga's escalate deadline from the unset 2-min default
+  so the escalate beat is demoable at speaking pace. **Remove that AppHost line after the talk** to restore
+  the production-faithful 2-min default. The backorder/replenishment route itself is [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga).
+- **Last verified (saga demo affordances):** 2026-06-30 on `chore/saga-demo-affordances` — the [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga)
+  Replenishment-saga route driven live on the full Aspire stack (auto-seeded `crit-rare` = 3): **open** (saga
+  doc present in `inventory.mt_doc_replenishment` with `Outstanding = 7`), **escalate** (after the
+  `Inventory__ReplenishTimeout = 25s` knob the doc was deleted — saga completed — with stock untouched at 3),
+  and **resolve** via `demo-traffic.ps1 -Backorder -Cover` (the covering receipt completed the saga in ~3s,
+  far inside the 25s window; `crit-rare` climbed 3 → 10). The orphaned post-resolve `ReplenishTimeout` fired
+  into the saga's `NotFound` no-op with all three services still healthy (no crash, no zombie saga), and the
+  `-Backorder` guard correctly refused a non-shortfalling order. (Order/cancel routes + SPA not re-run this
+  session — they stand at the full pass below.)
+- **Last verified (full pass):** 2026-06-17 on `192d2f0` (`main`) — **full live pass**. Clean boot, auto-seed of all
   three SKUs, and all three saga routes driven live: happy → `confirmed`; insufficient → `cancelled ·
   stock_unavailable` (stock untouched); and **decline → `cancelled · payment_declined` with the reserved
   stock released back** — this closes the prior "re-verify decline→release against the current commit"
