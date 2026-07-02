@@ -100,7 +100,7 @@ Per-technology or per-component implementation patterns and conventions. Example
 - **Artifact:** `docs/skills/{topic}/SKILL.md`.
 - **Why:** narratives capture *what* a slice should do; skills capture *how* the code structurally expresses it. Without skills, every session re-derives conventions from scratch.
 - **Authoring template:** keep one at `docs/skills/_template/SKILL.md` and clone it.
-- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate. **CritterMart round one** defers to the upstream JasperFx Critter Stack ai-skills library. Local skill files under `docs/skills/` are authored only when a CritterMart-specific convention diverges from the upstream skill or when a project-specific methodology needs its own home (e.g., the in-repo `event-modeling` skill). A minimally populated `docs/skills/` during round one is intentional, not debt.
+- **Companion library:** if the project sits on a stack with a published skills library (e.g., JasperFx ai-skills for Critter Stack), defer library mechanics to the upstream skill and write only project-specific conventions in your local skill files. Don't duplicate. **CritterMart round one** defers to the upstream JasperFx Critter Stack ai-skills library. Local skill files under `docs/skills/` are authored only when a CritterMart-specific convention diverges from the upstream skill or when a project-specific methodology needs its own home; five exist (event-modeling, frontend, marten-projection-conventions, updating-critter-stack-dependencies, wolverine-cross-bc-cascading). A sparsely populated `docs/skills/` is intentional, not debt.
 
 ### Rules — AI-optimized structural constraints
 
@@ -201,6 +201,9 @@ docs/
   retrospectives/
     (mirrors prompts/)
   research/         ← spikes and exploratory work
+  handoffs/         ← durable session-to-session handoff docs
+  demo-runbook.md   ← boot → seed → drive → verify → teardown procedure
+  demo-traffic.ps1  ← scripted demo traffic generator
 
 openspec/           ← OpenSpec workspace (peer to docs/), authored + validated via the openspec CLI
   changes/          ← per-change artifacts: proposal.md, specs/<capability>/spec.md, design.md, tasks.md
@@ -231,10 +234,12 @@ This section is the routing layer's payload — the actual orientation a fresh s
 | Narratives | [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs, one per actor journey |
 | Prompts | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records, frozen at session start |
 | Retrospectives | [`docs/retrospectives/`](docs/retrospectives/README.md) | Per-session outcome records, spec-delta closure |
-| Skills | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns local to CritterMart (one current skill: event-modeling) |
+| Skills | [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns local to CritterMart (five current: event-modeling, frontend, marten-projection-conventions, updating-critter-stack-dependencies, wolverine-cross-bc-cascading) |
 | Rules | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized structural constraints |
 | ADRs | [`docs/decisions/`](docs/decisions/README.md) | Significant architectural decisions (indexed in the folder README) |
 | Research | [`docs/research/`](docs/research/README.md) | Spikes and exploratory work (indexed in the folder README) |
+| Handoffs | [`docs/handoffs/`](docs/handoffs/) | Durable session-to-session handoffs (current: Saga #2) |
+| Demo runbook | [`docs/demo-runbook.md`](docs/demo-runbook.md) | Boot → seed → drive an order → verify every surface → teardown |
 
 ### External-skill path overrides
 
@@ -250,19 +255,19 @@ This is the only path override in round one. Other Critter Stack reference archi
 | --- | --- |
 | Runtime | .NET 10, C# 14 |
 | Messaging | Wolverine, RabbitMQ transport |
-| Persistence | Marten on PostgreSQL (shared database, schema-per-service) |
+| Persistence | Marten on PostgreSQL (Catalog, Inventory, Orders); EF Core + Npgsql (Identity) — shared database, schema-per-service |
 | HTTP | Wolverine.Http |
 | Testing | Alba (integration), xUnit + Shouldly (unit) |
 | Orchestration | .NET Aspire |
-| Observability | OpenTelemetry |
+| Observability | OpenTelemetry + CritterWatch console (ADR 017; Wolverine version is pinned to CritterWatch's build target — see the pin note in `Directory.Packages.props` before bumping WolverineFx) |
 | Frontend | Vite + React SPA (TS, TanStack Query, Tailwind v4, shadcn/ui), per-service Wolverine.Http, no BFF — ADR 015/016 |
 
 ### Architectural non-negotiables
 
-- Three separate services (Catalog, Inventory, Orders); Identity is hardcoded for round one
+- Four separate services (Catalog, Inventory, Orders, Identity); Identity is a real EF-Core-backed customer registry (Open-Host Service + Published Language) but carries no authN/authZ — the frontend still sends a hardcoded `X-Customer-Id` (ADR 009)
 - Cross-service communication via Wolverine over RabbitMQ; no synchronous service-to-service HTTP
 - Shared PostgreSQL with schema-per-service
-- Process Manager via Handlers pattern for the Order aggregate
+- Process Manager via Handlers pattern for the Order aggregate (ADR 007); convention `Wolverine.Saga` is an additive counterpart used elsewhere (Inventory's `Replenishment`, slices 2.5–2.7), not a replacement
 - Inline snapshot projections; no async daemon for round one (one async projection as a teaser is acceptable)
 
 ### Do Not — round one

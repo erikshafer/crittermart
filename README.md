@@ -31,6 +31,7 @@ Ecommerce is a domain most developers intuitively understand — everyone has pl
 |---|---|
 | **Event sourcing** | Stock per SKU (Inventory) and Cart + Order (Orders) are event-sourced; Catalog uses Marten's document store for contrast — "when CRUD is fine" |
 | **Process Manager via Handlers (PMvH)** | The Order aggregate **is** the process manager — no separate saga state stream, no `Wolverine.Saga` base class; state guards on the stream enforce idempotency |
+| **Convention `Wolverine.Saga`** | Inventory's `Replenishment` saga (slices 2.5–2.7) — Marten-backed saga storage keyed per SKU, the deliberate additive counterpart to PMvH; a second, EF-Core-backed saga (Identity email-change) is committed next to prove the saga store is swappable |
 | **Klefter translation-decision events** | The Order stream commits external decisions (Inventory's grant/refusal, the stubbed payment provider's response) as first-class events on its own stream — audit trail by construction |
 | **Bruun temporal automation** | `CartAbandoned` via scheduled `CartActivityTimeout`; `OrderCancelled` via `OrderPaymentTimeout` — both fire on clock conditions, with todo-list projections marked by the asterisk convention |
 | **Cross-BC integration via brokered messaging** | Orders ↔ Inventory via Wolverine over RabbitMQ; no synchronous service-to-service HTTP |
@@ -38,7 +39,7 @@ Ecommerce is a domain most developers intuitively understand — everyone has pl
 | **OpenTelemetry cross-service tracing** | Full Place Order trace spans Orders → RabbitMQ → Inventory and back — visible in the .NET Aspire dashboard |
 | **Spec-Driven Development pipeline** | Vision → context map → workshop → OpenSpec proposal + narrative → prompt → execute + retrospective, with every step version-controlled |
 
-The full slice list (17 round-one slices across the four BCs) lives in [`docs/workshops/001-crittermart-event-model.md`](docs/workshops/001-crittermart-event-model.md).
+The full slice list (17 round-one slices across the four BCs, plus the post-round-one replenishment-saga increment 2.5–2.7) lives in [`docs/workshops/001-crittermart-event-model.md`](docs/workshops/001-crittermart-event-model.md); the Identity BC carries its own model in [`docs/workshops/002-identity-event-model.md`](docs/workshops/002-identity-event-model.md).
 
 ---
 
@@ -51,7 +52,7 @@ CritterMart deploys as **four .NET 10 services** — Catalog, Inventory, Orders,
 | Bounded Context | Responsibility | Storage | Status |
 |---|---|---|---|
 | **Catalog** | Products, prices, descriptions | Marten document store | Implemented — slices 1.1–1.3 (publish, browse, change price) |
-| **Inventory** | Stock per SKU, reservations, commitments | Event-sourced (Marten) | Implemented — slices 2.1 receive, 2.2 reserve, 4.2 cross-BC reserve (responds to Orders' `ReserveStock` over RabbitMQ, all-or-nothing per order), 2.3 release on cancellation (responds to Orders' `ReleaseStock`, per-SKU idempotent), 2.4 commit reserved stock on order confirmation (responds to Orders' `CommitStock`, per-SKU idempotent; invariant `Available + Reserved + Committed = ΣReceived`) |
+| **Inventory** | Stock per SKU, reservations, commitments, backorder replenishment | Event-sourced (Marten) | Implemented — slices 2.1 receive, 2.2 reserve, 4.2 cross-BC reserve (responds to Orders' `ReserveStock` over RabbitMQ, all-or-nothing per order), 2.3 release on cancellation (responds to Orders' `ReleaseStock`, per-SKU idempotent), 2.4 commit reserved stock on order confirmation (responds to Orders' `CommitStock`, per-SKU idempotent; invariant `Available + Reserved + Committed = ΣReceived`), 2.5–2.7 `Replenishment` saga (CritterMart's first convention `Wolverine.Saga` — opened on backorder detection, closed on restock arrival or escalated on timeout; saga state in Marten saga storage, not on the Stock stream) |
 | **Orders** | Cart, Order (process manager), payment timeout, cart abandonment | Event-sourced (Marten) | Implemented — **both aggregates complete**. Order lifecycle: 4.1 placement, 4.2 / 4.5 cross-BC stock reservation + cancel-on-stock-failure, 4.3 / 4.4 stubbed payment authorization + confirmation (confirmation cascades `CommitStock` to Inventory via slice 2.4), 4.6 cancel-on-payment-decline, 4.7 cancel-on-payment-timeout with the `OrdersAwaitingPayment` Bruun todo-list. Cart lifecycle: 3.1 add-to-cart, 3.2 / 3.3 cart edits (remove item, change quantity — SKU-keyed lines), 3.4 abandonment on inactivity (fire-and-check temporal automation, `CartsAwaitingActivity` todo-list, and the `CartAbandonmentReport` async-projection teaser — rebuild-on-demand, no daemon) |
 | **Identity** | Customer registry | EF Core + Npgsql (schema `identity`) | Implemented — slices 5.1 (register customer, email-uniqueness guard), 5.2 (resolve by email); publishes `CustomerRegistered` over RabbitMQ (slices 5.3/5.4 — Orders consumes and maintains a local customer view); Open-Host Service (`GET /customers/{id}`, storefront-facing) + Published Language (`CustomerRegistered` in `CritterMart.Contracts`). Data store, not an auth provider — no Polecat ([ADR 009](docs/decisions/009-polecat-deferred-for-round-one.md)); `X-Customer-Id` header still carries a hardcoded id from the frontend |
 
@@ -64,12 +65,12 @@ Catalog has no BC-level integration with Inventory or Orders in round one — pr
 | Layer | Choice |
 |---|---|
 | Runtime | C# 14 / .NET 10 |
-| Messaging | [Wolverine](https://wolverine.netlify.app/) 6+ over RabbitMQ |
+| Messaging | [Wolverine](https://wolverine.netlify.app/) 6 over RabbitMQ (pinned to CritterWatch's build target — see the pin note in `Directory.Packages.props`) |
 | Persistence | [Marten](https://martendb.io/) 9+ on PostgreSQL (Catalog, Inventory, Orders); EF Core + Npgsql (Identity) — shared database, schema-per-service |
 | HTTP | Wolverine.Http (per service; no BFF for round one) |
 | Testing | [Alba](https://jasperfx.github.io/alba/) (integration), xUnit + Shouldly (unit) |
 | Orchestration | [.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/) |
-| Observability | OpenTelemetry (traces surface in the Aspire dashboard) |
+| Observability | OpenTelemetry (traces surface in the Aspire dashboard) + [CritterWatch](https://jasperfx.net/) monitoring console — per [ADR 017](docs/decisions/017-critterwatch-integrated.md) |
 | Frontend | Vite + React SPA (TypeScript, TanStack Query, Tailwind v4, shadcn/ui) — per [ADR 015](docs/decisions/015-vite-react-frontend-stack.md) |
 
 The full tech-stack rationale lives in the round-one ADRs at [`docs/decisions/`](docs/decisions/) and is summarized terse-form in [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md).
@@ -95,7 +96,7 @@ The pipeline itself doubles as the talk's section on what AI-assisted .NET devel
 
 ## Getting Started
 
-> **Status note.** CritterMart's **round-one modeled implementation set is complete** — every slice in [Workshop 001](docs/workshops/001-crittermart-event-model.md) has shipped. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` holds four services (Catalog, Inventory, and Orders on Wolverine + Marten; Identity on Wolverine + EF Core — the one non-event-sourced BC), the `CritterMart.AppHost` Aspire orchestrator, `CritterMart.ServiceDefaults`, `CritterMart.Contracts` (the cross-BC published language), and `CritterMart.Seeding` (demo auto-seeder). Catalog (1.1–1.3) and Inventory (2.1–2.4) are in; the Orders BC's **Order lifecycle is complete** (4.1 place-order, 4.2/4.5 cross-BC stock reservation + cancel-on-stock-failure — the project's first live RabbitMQ traffic — 4.3/4.4 stubbed payment authorization + confirmation cascading `CommitStock` to Inventory (slice 2.4), 4.6 cancel-on-payment-decline with cross-BC stock release, and 4.7 cancel-on-payment-timeout — the project's first temporal automation; every placed order reaches `confirmed` or `cancelled`); and the **Cart lifecycle is complete** (3.1 add-to-cart, 3.2/3.3 cart edits with SKU-keyed lines, and 3.4 abandonment on inactivity — fire-and-check temporal automation plus the `CartAbandonmentReport` async-projection teaser, rebuild-on-demand with no daemon per ADR 008; every cart reaches `CartCheckedOut` or `CartAbandoned`). What comes next — frontend, talk storyboard assets, round-two modeling — is a vision-level decision, not a remaining slice. The instructions below reflect the working local-development workflow.
+> **Status note.** CritterMart's **round-one modeled implementation set is complete** — every slice in [Workshop 001](docs/workshops/001-crittermart-event-model.md) has shipped. The design artifact suite (vision, context map, workshop, ADRs, rules, folder READMEs, skills, prompts, retrospectives) is complete, and `src/` holds four services (Catalog, Inventory, and Orders on Wolverine + Marten; Identity on Wolverine + EF Core — the one non-event-sourced BC), the `CritterMart.AppHost` Aspire orchestrator, `CritterMart.ServiceDefaults`, `CritterMart.Contracts` (the cross-BC published language), and `CritterMart.Seeding` (demo auto-seeder). Catalog (1.1–1.3) and Inventory (2.1–2.4, plus the post-round-one 2.5–2.7 `Replenishment` saga) are in; the Orders BC's **Order lifecycle is complete** (4.1 place-order, 4.2/4.5 cross-BC stock reservation + cancel-on-stock-failure — the project's first live RabbitMQ traffic — 4.3/4.4 stubbed payment authorization + confirmation cascading `CommitStock` to Inventory (slice 2.4), 4.6 cancel-on-payment-decline with cross-BC stock release, and 4.7 cancel-on-payment-timeout — the project's first temporal automation; every placed order reaches `confirmed` or `cancelled`); and the **Cart lifecycle is complete** (3.1 add-to-cart, 3.2/3.3 cart edits with SKU-keyed lines, and 3.4 abandonment on inactivity — fire-and-check temporal automation plus the `CartAbandonmentReport` async-projection teaser, rebuild-on-demand with no daemon per ADR 008; every cart reaches `CartCheckedOut` or `CartAbandoned`). Beyond the modeled set, the storefront SPA (Vite + React, ADRs 015/016) and CritterWatch monitoring console (ADR 017) have shipped, and the first post-round-one domain increment — the Inventory `Replenishment` saga, slices 2.5–2.7 — is implemented and archived into the `stock-management` spec. The committed next increment is **Saga #2** (Identity email-change, EF-Core-backed saga storage), run design-first per [`docs/handoffs/saga2-handoff.md`](docs/handoffs/saga2-handoff.md). The instructions below reflect the working local-development workflow.
 
 ### Prerequisites
 
@@ -151,14 +152,17 @@ CritterMart/
 │   ├── narratives/             # NDD-informed journey specs (per slice)
 │   ├── decisions/              # Round-one ADRs
 │   ├── rules/                  # AI-optimized structural constraints
-│   ├── skills/                 # Component-scoped patterns (event-modeling skill local)
+│   ├── skills/                 # Component-scoped patterns (five local skills; defers to upstream)
 │   ├── prompts/                # Per-session intent records, frozen at session start
 │   ├── retrospectives/         # Per-session outcome records, spec-delta closure
-│   └── research/               # Spikes and exploratory work
+│   ├── research/               # Spikes and exploratory work
+│   ├── handoffs/               # Durable session-to-session handoff docs
+│   ├── demo-runbook.md         # Boot → seed → drive → verify → teardown procedure
+│   └── demo-traffic.ps1        # Scripted demo traffic generator
 ├── openspec/                   # OpenSpec workspace (peer to docs/) — CLI-managed
 │   ├── changes/                # Per-slice changes (proposal.md + SHALL specs); archive/ holds shipped changes
 │   └── specs/                  # Main specs, synced from a change on archive
-├── src/                        # Catalog, Inventory, Orders, Identity services + AppHost + ServiceDefaults + Contracts (cross-BC published language) + Seeding (demo auto-seeder)
+├── src/                        # Catalog, Inventory, Orders, Identity services + AppHost + ServiceDefaults + Contracts (cross-BC published language) + Seeding (demo auto-seeder) + CritterWatch (monitoring console host)
 ├── tests/                      # Per-service test projects + CrossBc.Tests (two-host cross-BC smoke)
 ├── CLAUDE.md                   # AI development entry point and pipeline overview
 ├── LICENSE                     # MIT
@@ -173,14 +177,16 @@ CritterMart/
 |---|---|
 | [`docs/vision.md`](docs/vision.md) | Canonical source of truth — purpose, bounded contexts, non-goals |
 | [`docs/context-map/README.md`](docs/context-map/README.md) | Cross-BC DDD relationships and integration topology |
-| [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output ([round-one rolled-up model](docs/workshops/001-crittermart-event-model.md)) |
+| [`docs/workshops/`](docs/workshops/README.md) | Event Modeling output ([round-one rolled-up model](docs/workshops/001-crittermart-event-model.md), [Identity model](docs/workshops/002-identity-event-model.md)) |
 | [`docs/narratives/`](docs/narratives/README.md) | NDD-informed journey specs (per slice) |
 | [`openspec/changes/`](openspec/changes/) | OpenSpec proposals + per-capability SHALL specs (per slice, CLI-managed) |
 | [`docs/decisions/`](docs/decisions/) | Round-one ADRs (indexed in the folder README) |
 | [`docs/rules/structural-constraints.md`](docs/rules/structural-constraints.md) | AI-optimized terse imperative list of architectural constraints |
-| [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns (one current local skill: `event-modeling`; others defer to upstream) |
+| [`docs/skills/`](docs/skills/README.md) | Component-scoped patterns (five local skills — `event-modeling`, `frontend`, `marten-projection-conventions`, `updating-critter-stack-dependencies`, `wolverine-cross-bc-cascading`; generic stack mechanics defer to upstream) |
 | [`docs/prompts/`](docs/prompts/README.md) | Per-session intent records |
 | [`docs/retrospectives/`](docs/retrospectives/README.md) | Per-session outcome records |
+| [`docs/handoffs/`](docs/handoffs/) | Durable session-to-session handoffs (current: [Saga #2](docs/handoffs/saga2-handoff.md)) |
+| [`docs/demo-runbook.md`](docs/demo-runbook.md) | Boot → seed → drive an order → verify every surface → teardown |
 | [`CLAUDE.md`](CLAUDE.md) | AI development entry point, pipeline overview, and routing layer |
 
 ---
@@ -227,7 +233,7 @@ Many of the cuts are explicit candidates for future rounds, tracked in [`docs/vi
 
 ## Companion Library: JasperFx ai-skills
 
-CritterMart defers to the [JasperFx ai-skills library](http://ai-skills.jasperfx.net/) for generic Critter Stack patterns (Wolverine, Marten, Polecat). Local skills under [`docs/skills/`](docs/skills/) are authored only when a CritterMart-specific convention diverges from upstream, or when a project-specific methodology needs its own home (the in-repo [`event-modeling`](docs/skills/event-modeling/SKILL.md) skill is the current example). The project does not duplicate upstream content. See [`docs/skills/README.md`](docs/skills/README.md) for the layering rationale.
+CritterMart defers to the [JasperFx ai-skills library](http://ai-skills.jasperfx.net/) for generic Critter Stack patterns (Wolverine, Marten, Polecat). Local skills under [`docs/skills/`](docs/skills/) are authored only when a CritterMart-specific convention diverges from upstream, or when a project-specific methodology needs its own home — five exist today: [`event-modeling`](docs/skills/event-modeling/SKILL.md), `frontend`, `marten-projection-conventions`, `updating-critter-stack-dependencies`, and `wolverine-cross-bc-cascading`. The project does not duplicate upstream content. See [`docs/skills/README.md`](docs/skills/README.md) for the layering rationale.
 
 ---
 

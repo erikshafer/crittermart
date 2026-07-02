@@ -4,7 +4,7 @@ A single-seller storefront, built as a teaching reference architecture for event
 
 ## What this is
 
-CritterMart is an ecommerce reference application designed to demonstrate event sourcing patterns through a recognizable, approachable domain. It runs as three separate .NET 10 services — Catalog, Inventory, and Orders — that communicate via Wolverine over RabbitMQ; there is no synchronous service-to-service HTTP. Persistence is a shared PostgreSQL instance with schema-per-service, accessed through Marten. Wolverine.Http exposes each service's HTTP surface. A frontend client sits in front of the services as the customer-facing storefront: a Vite + React single-page application that calls each service's Wolverine.Http surface directly ([ADR 015](decisions/015-vite-react-frontend-stack.md)), modeled through the full SDD pipeline as first-class UI ([ADR 016](decisions/016-frontend-full-pipeline-ui-first-class.md)). .NET Aspire orchestrates the services, the broker, and the database locally, with OpenTelemetry tracing visible in the Aspire dashboard.
+CritterMart is an ecommerce reference application designed to demonstrate event sourcing patterns through a recognizable, approachable domain. It runs as four separate .NET 10 services — Catalog, Inventory, Orders, and Identity — that communicate via Wolverine over RabbitMQ; there is no synchronous service-to-service HTTP. Persistence is a shared PostgreSQL instance with schema-per-service, accessed through Marten (Catalog, Inventory, Orders) and EF Core + Npgsql (Identity — the deliberately non-event-sourced foil). Wolverine.Http exposes each service's HTTP surface. A frontend client sits in front of the services as the customer-facing storefront: a Vite + React single-page application that calls each service's Wolverine.Http surface directly ([ADR 015](decisions/015-vite-react-frontend-stack.md)), modeled through the full SDD pipeline as first-class UI ([ADR 016](decisions/016-frontend-full-pipeline-ui-first-class.md)). .NET Aspire orchestrates the services, the broker, and the database locally, with OpenTelemetry tracing visible in the Aspire dashboard.
 
 The aim is not to be a complete ecommerce platform. The aim is to teach. Each piece exists because it earns its place in a story about event sourcing, the Decider and Process Manager patterns, projections, and how the Critter Stack supports them in practice.
 
@@ -26,24 +26,24 @@ CritterMart is a single-seller storefront. That choice rules out several things 
 - No backoffice or admin UI
 - No real payment integration; payment is stubbed
 - No returns, no promotions, no shipping rate calculations, no real-time storefront updates
-- No Polecat for round one; identity is intentionally minimal
+- No Polecat for round one; Identity is a real customer-registry service but carries no authentication or authorization — the frontend sends a hardcoded customer id
 
-Many of these cuts will make excellent follow-up blog posts and future enhancements. Cutting them is what keeps the demo, the talk, and the six-day timeline honest.
+Many of these cuts will make excellent follow-up blog posts and future enhancements. Cutting them is what kept the demo, the talk, and the round-one timeline honest.
 
 ## Bounded contexts
 
-Three bounded contexts, each deployed as its own service, with a fourth (Identity) intentionally stubbed for round one:
+Four bounded contexts, each deployed as its own service:
 
 - **Catalog**: products, prices, descriptions. Marten document store. The "when CRUD is fine" example.
-- **Inventory**: stock per SKU. Event sourced. Inline snapshot. The textbook case.
+- **Inventory**: stock per SKU. Event sourced. Inline snapshot. The textbook case. Also home to the `Replenishment` saga — CritterMart's first convention `Wolverine.Saga`, an additive counterpart to the Order aggregate's Process Manager via Handlers.
 - **Orders**: Cart and Order, both event sourced. Order serves as the process manager for fulfilling a purchase, using the Process Manager via Handlers pattern.
-- **Identity** *(stubbed)*: not a running service in round one. A customer identifier is hardcoded into the frontend; there is no auth flow, no customer record store, and no Identity service deployed. Promoting Identity into a real service backed by Polecat is queued in the Long Road section.
+- **Identity**: a real customer-registry service backed by EF Core + Npgsql — the "when relational CRUD is fine, the Wolverine way" example, and an Open-Host Service publishing `CustomerRegistered` over RabbitMQ. It carries no authentication or authorization: a customer identifier is still hardcoded into the frontend, and Polecat remains deferred (ADR 009). Round one originally stubbed this context entirely; it was promoted to a kept BC via Workshop 002.
 
-Three event-sourced aggregates total (Cart, Order, Stock). One document type (Product). The split is intentional. The project itself is the answer to "when should I reach for event sourcing and when shouldn't I?"
+Three event-sourced aggregates total (Cart, Order, Stock). One document type (Product). One relational entity (Customer). One convention saga (Replenishment). The split is intentional. The project itself is the answer to "when should I reach for event sourcing and when shouldn't I?"
 
 ## Success criteria for round one
 
-By the first talk delivery, CritterMart should support:
+By the first talk delivery, CritterMart should support (all met — the round-one modeled implementation set shipped in full, June 2026):
 
 - Browsing the catalog and viewing a product
 - Adding items to a cart, with cart abandonment events captured from day one
@@ -58,6 +58,6 @@ The code does not need to be polished, comprehensive, or production-grade. It ne
 
 ## Long road
 
-After round one ships, the candidate enhancements are open: promoting the stubbed Identity context into a real service backed by Polecat, broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, multi-tenant scaffolding, richer frontend interactions. None of those are in scope this week. All of them could be.
+After round one ships, the candidate enhancements are open: backing the Identity service with Polecat for real authentication (the registry service itself already shipped — promoted from stub via Workshop 002), broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, multi-tenant scaffolding, richer frontend interactions. The first post-round-one increments already landed on this road: the Inventory `Replenishment` saga (slices 2.5–2.7), with an EF-Core-backed Identity email-change saga committed next.
 
-CritterMart is a vehicle. The talk is the destination this week.
+CritterMart is a vehicle. The talk is the destination for round one.
