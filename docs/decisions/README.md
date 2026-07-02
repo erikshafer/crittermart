@@ -55,6 +55,7 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [019](019-wolverine-health-checks-exposed.md) | Wolverine Runtime Health Exposed via ASP.NET Health Checks | Accepted |
 | [020](020-domain-write-models-read-views.md) | Aggregates Are Domain-Named Immutable Write Models; Read Models Are Separate `*View` Projections | Accepted |
 | [021](021-verb-feature-folders.md) | Feature/Slice Folders Named for the Activity (Verb); Domain Types Keep Canonical Noun Names | Accepted |
+| [022](022-convention-sagas-additive-to-pmvh.md) | Convention Sagas Are Additive to PMvH | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 
