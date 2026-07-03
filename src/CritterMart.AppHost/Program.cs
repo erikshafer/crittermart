@@ -106,7 +106,14 @@ var identity = builder.AddProject<Projects.CritterMart_Identity>("identity")
     .WithReference(rabbitmq)
     .WaitFor(crittermart)
     .WaitFor(rabbitmq)
-    .WaitFor(critterwatch);
+    .WaitFor(critterwatch)
+    // ───── DEMO AFFORDANCE — the saga's confirm-or-expire clock ────────────────────────────────────
+    // Identity__EmailChangeTimeout: the EmailChange saga's deadline (Workshop 002 slices 5.5-5.7).
+    // Mirrors Inventory__ReplenishTimeout above — same rationale, same pattern, CritterMart's SECOND
+    // convention Wolverine.Saga. Default (when unset) is 2 minutes (EmailChangeDeadline.Default); 25s
+    // makes the timeout-drop beat demoable at speaking pace. DELETE after the demo (a fifth knob to
+    // add to the existing four-knob teardown list).
+    .WithEnvironment("Identity__EmailChangeTimeout", "00:00:25");
 
 // Demo seed automation (closes demo-runbook Known Gap #1). A one-shot console wired as an Aspire
 // resource: once Catalog + Inventory are healthy it POSTs the canonical seed (the three demo products

@@ -8,6 +8,7 @@ namespace CritterMart.Identity.Customers;
 public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<EmailChange> EmailChanges => Set<EmailChange>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +42,27 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
             // a live schema check). An EF `HasIndex` here would be silently dropped, giving a false sense of
             // a backstop that isn't in the database. The index is therefore applied as idempotent startup
             // DDL in Program.cs (see EnsureEmailUniqueIndex) — the single place it actually takes effect.
+        });
+
+        // EmailChange (Workshop 002 slices 5.5-5.7) — CritterMart's second convention Wolverine.Saga,
+        // EF-Core-backed. Same lowercase-column discipline as Customer above. Keyed by its own PK
+        // (CustomerId) — no secondary index needed, so the Weasel-skips-secondary-indexes gotcha above
+        // does not apply here.
+        //
+        // Version — the base Wolverine.Saga class unconditionally declares `public int Version { get; set; }`
+        // (reflection-confirmed; it backs IRevisioned-based optimistic concurrency even for sagas that don't
+        // opt into IRevisioned). EF Core's default convention picks it up regardless, and Wolverine's own
+        // generated saga-loading query references it — omitting this mapping produced a live
+        // "column e.Version does not exist" failure (Postgres has `version`, EF queried `"Version"`), the
+        // same casing mismatch Id/Email/etc. already guard against, just for an inherited property that's
+        // easy to miss. Map it explicitly rather than ignore it, since Wolverine's own query depends on it.
+        modelBuilder.Entity<EmailChange>(e =>
+        {
+            e.ToTable("email_changes");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").HasMaxLength(100);
+            e.Property(x => x.PendingEmail).HasColumnName("pending_email").HasMaxLength(256).IsRequired();
+            e.Property(x => x.Version).HasColumnName("version");
         });
     }
 }
