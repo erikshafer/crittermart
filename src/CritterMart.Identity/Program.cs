@@ -17,6 +17,13 @@ builder.AddServiceDefaults();
 var connectionString = builder.Configuration.GetConnectionString("crittermart")
     ?? "Host=localhost;Port=5432;Database=crittermart;Username=postgres;Password=postgres";
 
+// DEMO AFFORDANCE (Identity:EmailChangeTimeout): the EmailChange saga's deadline (Workshop 002 slices
+// 5.5-5.7). Config-driven so the confirm/drop paths are demoable at speaking pace (a short default) yet
+// realistic in production (the modeled duration is 24h). Mirrors Inventory's ReplenishDeadline binding.
+var emailChangeTimeout = builder.Configuration.GetValue<TimeSpan?>("Identity:EmailChangeTimeout")
+    ?? EmailChangeDeadline.Default;
+builder.Services.AddSingleton(new EmailChangeDeadline(emailChangeTimeout));
+
 builder.Host.UseWolverine(opts =>
 {
     // Pin handler/endpoint discovery to this service's assembly (deterministic when another service's

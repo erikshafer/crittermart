@@ -1,11 +1,12 @@
 ---
-version: v1.6
+version: v1.7
 status: Active
-date: 2026-06-16
+date: 2026-07-02
 references:
   - docs/vision.md
   - docs/context-map/README.md
   - docs/workshops/001-crittermart-event-model.md
+  - docs/workshops/002-identity-event-model.md
   - docs/decisions/001-separate-services-topology.md
   - docs/decisions/002-shared-postgres-schema-per-service.md
   - docs/decisions/003-wolverine-rabbitmq-transport.md
@@ -20,6 +21,7 @@ references:
   - docs/decisions/014-published-language-contracts-project.md
   - docs/decisions/020-domain-write-models-read-views.md
   - docs/decisions/021-verb-feature-folders.md
+  - docs/decisions/022-convention-sagas-additive-to-pmvh.md
   - CLAUDE.md
 ---
 
@@ -29,10 +31,10 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 
 ## Service topology
 
-- Three deployed services for round one: Catalog, Inventory, and Orders. (ADR 001)
+- Four deployed services for round one: Catalog, Inventory, Orders, and Identity (an EF-Core-backed customer registry; not event-sourced). (ADR 001, ADR 009 second amendment)
 - Each service is its own project with its own `Program.cs`, Marten configuration, and Wolverine.Http surface. (ADR 001)
 - Handlers stay portable across deployment shapes; topology is a deployment decision, not a code decision. (ADR 001)
-- .NET Aspire orchestrates the three services plus RabbitMQ and PostgreSQL via an `AspireHost` project. (ADR 004)
+- .NET Aspire orchestrates the four services plus RabbitMQ and PostgreSQL via an `AspireHost` project. (ADR 004)
 
 ## Persistence
 
@@ -41,6 +43,7 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - Catalog persists products in the Marten document store; no event sourcing. (vision.md § Bounded contexts)
 - Inventory event-sources the Stock aggregate, one stream per SKU. (vision.md § Bounded contexts, Workshop 001 § 2)
 - Orders event-sources both the Cart and the Order aggregates. (vision.md § Bounded contexts, Workshop 001 § 2)
+- Identity persists customers as a plain EF-Core row per customer, in an `identity` schema; no stream, no projection, no fold. (ADR 009 second amendment, Workshop 002 § 2)
 
 ## Cross-service messaging
 
@@ -66,18 +69,19 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 
 ## Identity
 
-- Identity is stubbed for round one; no deployed Identity service. (ADR 009, context map § Round-one stubs)
-- A customer ID is hardcoded into the frontend and flows through commands as if from a real identity system. (ADR 009)
-- The three deployed services accept the customer-ID shape from the frontend without translation (Conformist). (context map § Integration relationships)
+- Identity is a deployed EF-Core-backed customer registry service, sibling to Catalog/Inventory/Orders; it performs NO authentication or authorization. (ADR 009 second amendment, Workshop 002)
+- Customer identity still arrives ambiently via the `X-Customer-Id` header — realized behind a `useCurrentCustomer` seam in the frontend — rather than a real auth session. (ADR 009, ADR 009 amendment/ADR 015-016 PR)
+- The four deployed services accept the customer-ID shape from the frontend without translation (Conformist). (context map § Integration relationships)
 - Polecat is not used for round one. (ADR 009)
 
 ## Aggregates and process managers
 
-- The Order aggregate IS the process manager via PMvH; no separate saga state stream and no `Wolverine.Saga` base class. (ADR 007)
+- The Order aggregate IS the process manager via PMvH; no separate saga state stream and no `Wolverine.Saga` base class for Order or Cart specifically — neither is a candidate for conversion to a convention saga. (ADR 007, ADR 022)
 - The Order stream tracks progress with `StockReserved` and `PaymentAuthorized` state-flag events. (ADR 007)
 - The Order stream terminates with either `OrderConfirmed` or `OrderCancelled`. (ADR 007)
 - `OrderPaymentTimeout` is a Wolverine self-scheduled message, idempotent via state guards on the Order stream — not via Wolverine inbox dedup. (ADR 007)
 - Process-manager handlers are pure functions, unit-testable without Wolverine or Marten. (ADR 007)
+- Convention `Wolverine.Saga` is used additively elsewhere, never as a PMvH conversion and never re-implementing event sourcing on relational/document storage: Inventory's `Replenishment` (Marten-backed) is the first shipped instance. (ADR 022)
 
 ## Projection lifecycle
 
@@ -144,3 +148,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.4    | 2026-06-16 | Added the **Aggregate and read-model naming** section (ADR 020 + ADR 021): aggregates are domain-named immutable `sealed record` write models (no `*View`/`*Aggregate` suffix, `this with` evolution), the raw aggregate is never served, a public read is a separate `*View` projection, and slice folders are named for the **activity** (verb — `Shopping/`, `Ordering/`) so aggregates keep canonical noun names. Piloted on Cart (`Shopping/` folder + canonical `Cart` aggregate + `CartView` read model); Order/Stock pending. |
 | v1.5    | 2026-06-16 | **Order pilot landed** (implementations/022): the naming-rollout status ticks — Order split into the `Order` write aggregate (also the PMvH state) in an `Ordering/` verb folder + the `OrderStatusView` read model; only `StockLevelView` remains pending its pilot. No rule changed — the convention is unchanged; this records the rollout reaching Order. |
 | v1.6    | 2026-06-16 | **Stock pilot landed** (implementations/024): the naming-rollout status closes — Stock split into the `StockLevel` write aggregate (carrying the reserve/release/commit idempotency state: `Available` + `Reservations`) + the `StockLevelView` read model, with no folder change (`StockLevel` ≠ `…Stock`). All three round-one event-sourced aggregates are now split; the ADR 020 rollout is complete. No rule changed — this records the rollout reaching Stock (and catches the frontmatter `version` up from the v1.5 entry, which had bumped the table but not the header). |
+| v1.7    | 2026-07-02 | **Closes a pairing gap an independent design review (Fable 5) flagged during Saga #2 design:** ADR 022 (convention sagas additive to PMvH) and ADR 009's second amendment (Identity promoted to a deployed EF-Core service, slices 5.1–5.4) each shipped without this file's required paired update (this file's own header rule, line 28/121). No NEW constraint is introduced — this entry syncs the file to constraints that already changed. **Service topology:** three→four deployed services (Identity included). **Persistence:** added Identity's plain-EF-Core-row persistence line. **Identity section:** rewritten — Identity is a deployed registry service, not stubbed; still no authN/authZ. **Aggregates and process managers:** scoped the "no `Wolverine.Saga` base class" rule to Order/Cart specifically (it was never a repo-wide ban — ADR 022 makes convention sagas additive elsewhere) and named Inventory's `Replenishment` as the first shipped instance. |
