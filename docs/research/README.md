@@ -41,6 +41,7 @@ A research doc is a waypoint, not a terminus. Its findings travel:
 | [identity-ef-core-first-class-expansion](identity-ef-core-first-class-expansion.md) | Parking-lot idea — grow Identity into a fuller "Wolverine treats EF Core as first-class" showcase (outbox, `[Entity]`, more published-language/RabbitMQ); low priority, likely lands as a design-return | Active |
 | [wolverine-saga-feasibility](wolverine-saga-feasibility.md) | Spike behind adding CritterMart's first convention `Wolverine.Saga` — two additive homes (Inventory backorder / Marten, Identity email-change / EF Core) and the two plumbing unknowns, resolved from docs (no prototype code) | Active |
 | [critter-stack-release-notes-2026-06-30](critter-stack-release-notes-2026-06-30.md) | Findings from the Jun 2026 JasperFx release-wave blog posts relevant to CritterMart — Marten OCC lock adopt-candidate, and an open question on the CritterWatch 0.9.1→beta.1 jump vs. ADR-017 | Active |
+| [critterwatch-saga-visibility-beta1](critterwatch-saga-visibility-beta1.md) | Closes retro 036's open item — why CritterWatch beta.1 doesn't surface the `EmailChange` saga (Workflow instance view is a pre-1.0 stub; the timeout is scheduled in-memory, absent from the durable Scheduled store). Saga itself fully verified; flags stale "Saga Explorer" refs in demo-runbook § 5c / workshop 002 § 8 | Active |
 
 Keep this table in sync when a research doc is added or its status changes — it is the discoverability payload of this README.
 
