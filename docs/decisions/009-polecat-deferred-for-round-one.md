@@ -4,7 +4,9 @@
 
 ## Context
 
-Polecat is the JasperFx identity stack; CritterCab uses it. CritterMart's Identity bounded context could be implemented as a Polecat-backed deployed service, but the six-day round-one timeline makes that a stretch and pulls focus away from the event-sourcing material the talk is built on.
+CritterMart's Identity bounded context could be implemented as a deployed service with real authN/authZ, but the six-day round-one timeline makes that a stretch and pulls focus away from the event-sourcing material the talk is built on.
+
+> **Correction (2026-07-07).** The original Context paragraph claimed "Polecat is the JasperFx identity stack; CritterCab uses it." That's factually wrong — Polecat is JasperFx's SQL Server-backed document/event store, the SQL Server counterpart to Marten, with no authentication, credential, session, or claims functionality. CritterCab uses Polecat purely as a persistence choice, unrelated to identity or auth. This error was carried into `vision.md`'s Long Road and `docs/context-map/README.md`'s Long Road as "Polecat-backed real authentication"; both are corrected alongside this ADR. The underlying Decision below (defer real auth for round one) still holds — only the mistaken tech attribution is struck.
 
 ## Decision
 

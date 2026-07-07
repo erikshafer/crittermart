@@ -50,7 +50,7 @@ Solid edges are active round-one integrations over RabbitMQ. The dashed edge is 
 
 Relationships that would appear in future rounds and the DDD patterns they would likely take:
 
-- **Polecat-backed authentication.** Distinct from the round-two Identity *registry* promotion ([Workshop 002](../workshops/002-identity-event-model.md), now Open-Host Service + Published Language): a real authN/authZ lifecycle — credentials, sessions, claims — is a separate long-road effort that could sit alongside or absorb the registry. The registry promotion is explicitly a *data store*, not auth (ADR 009); Polecat remains deferred.
+- **Real authentication for Identity.** Distinct from the round-two Identity *registry* promotion ([Workshop 002](../workshops/002-identity-event-model.md), now Open-Host Service + Published Language): a real authN/authZ lifecycle — credentials, sessions, claims — is a separate long-road effort that could sit alongside or absorb the registry. The registry promotion is explicitly a *data store*, not auth (ADR 009). The auth mechanism itself is not yet chosen; ADR 009's 2026-07-07 correction struck an earlier factual error that attributed this to Polecat (a SQL Server document/event store, unrelated to identity/auth).
 - **A Returns BC.** Likely Customer-Supplier with both Orders (for the originating purchase) and Inventory (for restocking); an Anti-Corruption Layer is plausible if the Returns model diverges from Orders' line-item shape.
 - **Promotions with DCB-protected coupon redemption.** Published-Language for the coupon definitions Orders consumes at checkout.
 - **Catalog publishing `ProductPriceChanged` events.** Orders subscribes for repricing in-flight carts; Published-Language for the price-change event shape.
