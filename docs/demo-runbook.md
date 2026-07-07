@@ -405,8 +405,7 @@ needs a fresh boot (reseed) or a larger `-BackorderQuantity`.
 | Surface | What shows |
 |---|---|
 | **Inventory logs** | `Supplier notified: restock crit-rare x7` (Information) on open; `Operator alert: SKU crit-rare went unreplenished, N still short` (Warning) on escalate. |
-| **CritterWatch — Saga Explorer** | the live `Replenishment` saga keyed by SKU, carrying `Outstanding`; gone once it resolves/escalates. This is the route that **lights up the previously-dark Saga Explorer**. |
-| **CritterWatch — Topology / Scheduled** | the `RequestRestock` / `RestockArrived` / `ReplenishmentEscalated` bus messages, plus the scheduled `ReplenishTimeout` in the Durability/Scheduled backlog (like `OrderPaymentTimeout` in [Step 6](#step-6--verify-the-demo-surfaces)). |
+| **CritterWatch — Messaging Explorer** | the `RequestRestock` / `RestockArrived` / `ReplenishmentEscalated` bus messages, plus the scheduled `ReplenishTimeout` in the Durability/Scheduled backlog (like `OrderPaymentTimeout` in [Step 6](#step-6--verify-the-demo-surfaces)). Saga *instances* are not yet surfaced in beta.1 — the Explore → Workflow page is a pre-1.0 stub (observed message flow only, no structural discovery); see [`critterwatch-saga-visibility-beta1.md`](research/critterwatch-saga-visibility-beta1.md). |
 | **Marten** | the saga doc in `inventory.mt_doc_replenishment` (`Id` = SKU, `Outstanding`) while open; **deleted** on completion. |
 
 ---
