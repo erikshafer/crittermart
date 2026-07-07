@@ -83,5 +83,5 @@ Consolidated into **one PR** (workshop amendment + OpenSpec proposal/specs/desig
       timeout → dropped; both HTTP guards (`404`/`409`). **Not verified: CritterWatch's saga-lifecycle
       visual surface** (Workshop 002 § 8, item 10) — no browser automation was available this session;
       flagged in the retro's Outstanding section, not silently skipped.
-- [ ] `openspec archive slices-5-5-5-7-email-change-saga -y` — **post-merge tidy**, not this PR (per
-      `customer-data`/Saga #1 precedent)
+- [x] `openspec archive slices-5-5-5-7-email-change-saga -y` — **post-merge tidy**, not this PR (per
+      `customer-data`/Saga #1 precedent). Done 2026-07-07.
