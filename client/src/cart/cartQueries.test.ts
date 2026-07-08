@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { fetchMyCart, selectCartLineCount, cartKeys } from "@/cart/cartQueries";
 import type { CartView } from "@/cart/cartSchema";
 
-const ctx = { customerId: "customer-demo" };
+const ctx = { token: "jwt-demo", customerId: "customer-demo" };
 
 const openCart = {
   id: "cart-7f3a",

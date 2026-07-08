@@ -4,7 +4,7 @@ namespace CritterMart.Identity.Customers;
 
 // CritterMart's SECOND convention Wolverine.Saga (Workshop 002 slices 5.5-5.7), EF-Core-backed — the direct
 // counterpart to Inventory's Marten-backed Replenishment (src/CritterMart.Inventory/Stock/Replenishment.cs).
-// A DbSet-mapped entity on IdentityDbContext, keyed by CustomerId, deleted on MarkCompleted(). Per ADR 022's
+// A DbSet-mapped entity on CustomerDbContext, keyed by CustomerId, deleted on MarkCompleted(). Per ADR 022's
 // guard, this does relational things the Wolverine way — plain state, StartOrHandle/Handle, TimeoutMessage,
 // MarkCompleted() — and never re-implements event sourcing on SQL.
 //
@@ -63,7 +63,7 @@ public class EmailChange : Saga
     // rejected a conflicting email before this runs, so this is the success path only. The DB unique index
     // (ux_customers_email) remains the true backstop against that guard's own race, exactly as
     // RegisterCustomer's guard is racy on its own.
-    public async Task Handle(ConfirmEmailChange command, IdentityDbContext db)
+    public async Task Handle(ConfirmEmailChange command, CustomerDbContext db)
     {
         var customer = await db.Customers.FindAsync(Id);
         customer!.Email = PendingEmail;

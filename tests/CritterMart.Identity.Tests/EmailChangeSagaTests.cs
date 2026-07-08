@@ -5,7 +5,7 @@ using Xunit;
 namespace CritterMart.Identity.Tests;
 
 // Pure unit tests over the EmailChange saga's StartOrHandle/Handle(EmailChangeTimeout) methods — no
-// database, no host. Mirrors ReplenishmentSagaTests.cs. Handle(ConfirmEmailChange, IdentityDbContext) needs
+// database, no host. Mirrors ReplenishmentSagaTests.cs. Handle(ConfirmEmailChange, CustomerDbContext) needs
 // a real DbContext (it reads/writes the Customer row), so its behavior is covered by
 // EmailChangeSagaIntegrationTests instead — this class covers only what is genuinely pure.
 [Trait("Category", "Unit")]

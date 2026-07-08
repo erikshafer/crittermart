@@ -20,7 +20,7 @@ public static class RequestEmailChangeEndpoint
 
     // Guards mirroring RegisterCustomer.ValidateAsync's railway idiom. Static and self-contained — no saga
     // instance exists yet on the open path, and the re-request path only needs the incoming command.
-    public static async Task<ProblemDetails> ValidateAsync(RequestEmailChange command, IdentityDbContext db)
+    public static async Task<ProblemDetails> ValidateAsync(RequestEmailChange command, CustomerDbContext db)
     {
         var customerExists = await db.Customers.AnyAsync(c => c.Id == command.CustomerId);
         if (!customerExists)

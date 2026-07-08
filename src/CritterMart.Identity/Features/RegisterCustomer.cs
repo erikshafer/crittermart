@@ -25,7 +25,7 @@ public static class RegisterCustomerEndpoint
     // Normalize the email ONCE — trim + lowercase — and reuse the result for the uniqueness check, the
     // stored row, and the published event alike. A registry whose guard `Ada@` could slip past `ada@`
     // would not be a uniqueness guard at all; normalizing is what makes it honest. The DB unique index
-    // on the email column (IdentityDbContext) stores this same normalized value.
+    // on the email column (CustomerDbContext) stores this same normalized value.
     private static string Normalize(string email) => email.Trim().ToLowerInvariant();
 
     // Railway-style guard mirroring PublishProduct.ValidateAsync: a duplicate email is an expected,
@@ -35,7 +35,7 @@ public static class RegisterCustomerEndpoint
     // both pass it before either commits); the unique index on email is the true backstop that rejects
     // the second insert. Catalog needs no such index — a product's SKU IS its Marten document id, so the
     // primary key enforces uniqueness for free; Identity keys on email, NOT the id, so the index earns it.
-    public static async Task<ProblemDetails> ValidateAsync(RegisterCustomer command, IdentityDbContext db)
+    public static async Task<ProblemDetails> ValidateAsync(RegisterCustomer command, CustomerDbContext db)
     {
         var email = Normalize(command.Email);
         var alreadyRegistered = await db.Customers.AnyAsync(c => c.Email == email);
@@ -59,7 +59,7 @@ public static class RegisterCustomerEndpoint
     // CustomerRegistered now lives in CritterMart.Contracts (the shared Published-Language type) — this
     // is when it graduated from Identity-internal (slice 5.4), because Orders now has a handler for it.
     [WolverinePost("/customers")]
-    public static (IResult, CustomerRegistered) Post(RegisterCustomer command, IdentityDbContext db)
+    public static (IResult, CustomerRegistered) Post(RegisterCustomer command, CustomerDbContext db)
     {
         var customer = new Customer
         {

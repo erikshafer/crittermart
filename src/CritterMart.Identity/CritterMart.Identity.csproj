@@ -3,10 +3,16 @@
   <ItemGroup>
     <!-- The persistence-agnostic teaching beat (spike): Wolverine over EF Core (Npgsql) instead of
          Marten, on the SAME shared Postgres as the three event-sourced services. Identity is a data
-         store (ADR 009), not an auth provider — no Polecat, no authN/authZ. -->
+         store (ADR 009) that ALSO — per ADR 023 — becomes the system's auth issuer (below). -->
     <PackageReference Include="WolverineFx.EntityFrameworkCore" />
     <PackageReference Include="WolverineFx.Postgresql" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Real authentication (ADR 023). ASP.NET Core Identity for the user store + credential handling
+         (UserManager/SignInManager), EF-Core-backed on the existing `identity` schema. JwtBearer is
+         referenced here for its bundled Microsoft.IdentityModel.* token-MINTING types (JsonWebTokenHandler,
+         SecurityTokenDescriptor) — Identity mints; it does not gate itself with bearer auth. -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="WolverineFx.Http" />
     <!-- Wolverine runtime + listener health exposed to ASP.NET health checks (ADR 019). -->
     <PackageReference Include="WolverineFx.HealthChecks" />

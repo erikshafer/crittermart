@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using Marten;
@@ -26,14 +27,15 @@ public static class ListMyOrdersEndpoint
     // precedence that already lets /orders/awaiting-payment win.
     [WolverineGet("/orders/mine")]
     public static async Task<IResult> Get(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId, IQuerySession session)
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, IQuerySession session)
     {
-        // A missing/blank header is a malformed request (no identity to resolve the orders) — 400, kept
-        // distinct from the empty-list case below (a customer with no orders). Wolverine binds an absent
-        // header to the parameter's default (null), hence the guard. Mirrors ViewMyCart.cs:30.
-        if (string.IsNullOrWhiteSpace(customerId))
+        // A bad/expired token → 401; no identity at all → 400, kept distinct from the empty-list case below
+        // (a customer with no orders). CustomerIdentity.TryResolve prefers the token's `sub`, dev-only header
+        // fallback. Mirrors ViewMyCart.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
         {
-            return Results.BadRequest("X-Customer-Id header is required.");
+            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
         }
 
         // The customer-keyed query over the existing OrderStatusView documents (served by the non-unique

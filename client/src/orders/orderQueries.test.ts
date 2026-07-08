@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-import { CUSTOMER_ID_HEADER, NotFoundError } from "@/api/client";
+import { NotFoundError } from "@/api/client";
 import { fetchMyOrders, fetchOrder, orderKeys } from "@/orders/orderQueries";
 
-const ctx = { customerId: "customer-demo" };
+const ctx = { token: "jwt-demo", customerId: "customer-demo" };
 
 const wireOrder = {
   id: "ord-7f3a",
@@ -32,7 +32,7 @@ describe("fetchOrder", () => {
     expect(order.total).toBe(49.98);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/orders/ord-7f3a");
-    expect((init.headers as Record<string, string>)[CUSTOMER_ID_HEADER]).toBe("customer-demo");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer jwt-demo");
   });
 
   // The contrast with the cart read: a 404 here is a GENUINE error (an order the SPA just placed must exist),
@@ -61,7 +61,7 @@ describe("fetchMyOrders", () => {
     expect(orders[1].status).toBe("confirmed");
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/orders/mine");
-    expect((init.headers as Record<string, string>)[CUSTOMER_ID_HEADER]).toBe("customer-demo");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer jwt-demo");
   });
 
   // The no-orders domain state is a 200 [] — fetchMyOrders returns the parsed empty array (NOT a NotFoundError

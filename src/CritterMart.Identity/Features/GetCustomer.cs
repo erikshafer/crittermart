@@ -11,7 +11,7 @@ public static class GetCustomerEndpoint
     // The READ side: a straight primary-key lookup against the row — no projection, no read model,
     // because the row IS the read model. FindAsync hits the identity-schema `customers` table.
     [WolverineGet("/customers/{id}")]
-    public static async Task<IResult> Get(string id, IdentityDbContext db)
+    public static async Task<IResult> Get(string id, CustomerDbContext db)
     {
         var customer = await db.Customers.FindAsync(id);
         return customer is null

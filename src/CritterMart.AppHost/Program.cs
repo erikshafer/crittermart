@@ -94,6 +94,12 @@ var orders = builder.AddProject<Projects.CritterMart_Orders>("orders")
     // OrderPaymentTimeout self-message fires and cancels it (Bruun temporal automation, slice 4.7).
     // Default (when unset): 10 minutes (PaymentDeadline.Default in OrderPaymentTimeout.cs).
     .WithEnvironment("Orders__PaymentTimeout", "00:07:00");
+// Auth (ADR 023, slice 5.10): Orders is a RESOURCE SERVER — it validates Identity's JWT OFFLINE against
+// Identity's PUBLIC key, "distributed as configuration" (Jwt:PublicKey), with NO HTTP into Identity. That
+// config-distribution lives in Orders' Program.cs, which reads Jwt:PublicKey and falls back to the shared
+// DEV-ONLY key (CritterMart.ServiceDefaults.DevJwtDefaults) so the demo needs zero key wiring here; prod
+// supplies Jwt__PublicKey/Jwt__Issuer/Jwt__Audience with real key material. The asymmetry is the point:
+// Orders holds only the public key (verify); Identity alone holds the private key (mint).
 
 // Identity — the ONE service that is NOT event-sourced: a deliberately boring EF Core customer
 // registry on the shared Postgres, proving Wolverine's handler model is persistence-agnostic
@@ -146,9 +152,13 @@ var storefront = builder.AddViteApp("storefront", "../../client")
     .WithEnvironment("VITE_CATALOG_URL", catalog.GetEndpoint("http"))
     .WithEnvironment("VITE_INVENTORY_URL", inventory.GetEndpoint("http"))
     .WithEnvironment("VITE_ORDERS_URL", orders.GetEndpoint("http"))
+    // Identity is now browser-facing too (ADR 023, slices 5.8/5.9/5.11): the SPA POSTs register/login/logout
+    // to it and holds the returned JWT. Injected exactly like the other service URLs (ADR 018 — no BFF).
+    .WithEnvironment("VITE_IDENTITY_URL", identity.GetEndpoint("http"))
     .WaitFor(catalog)
     .WaitFor(inventory)
     .WaitFor(orders)
+    .WaitFor(identity)
     // Hold the Vite dev server until the seeder has exited — products are in the catalog before
     // any browser tab can open. WaitForCompletion waits for process exit (any exit code), so a
     // seed hiccup still shows red on the dashboard but the storefront starts regardless.
@@ -164,5 +174,8 @@ var storefrontOrigin = storefront.GetEndpoint("http");
 catalog.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
 inventory.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
 orders.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
+// Identity is browser-facing as of the auth slices (register/login/logout are cross-origin POSTs from the
+// SPA), so it joins the CORS allowlist too.
+identity.WithEnvironment("Cors__AllowedOrigins__0", storefrontOrigin);
 
 builder.Build().Run();

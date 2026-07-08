@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 
 import { useApiContext } from "@/api/client";
 import { useAddToCart } from "@/cart/cartMutations";
+import { useAuth } from "@/identity/useCurrentCustomer";
 
 import { productsQueryOptions } from "./catalogQueries";
 import type { ProductCatalogView } from "./catalogSchema";
@@ -9,8 +11,8 @@ import type { ProductCatalogView } from "./catalogSchema";
 // W1 — Browse / Listing (workshop § 5.1; Narrative 005 Moments 1–2). The storefront landing: the product grid
 // rendered from `GET /products` (slice 1.2), each card carrying the `[ Add to cart ]` that issues `AddToCart`
 // (slice 3.1) — the project's first optimistic mutation. Product *detail* folds from the list payload; there is
-// no `GET /products/{sku}` (Gap #2, deferred). The catalog is public — the X-Customer-Id header rides along but
-// gates nothing.
+// no `GET /products/{sku}` (Gap #2, deferred). The catalog is public — browsing carries no token and needs
+// none (ADR 023); only adding to the cart requires a logged-in customer.
 
 // One $-formatter built once at module load (stable reference, cheaper than per-render). A single price is a
 // display value, so Intl's 2-decimal rounding is exact enough here; the cart sums in integer cents (CartPage).
@@ -22,6 +24,26 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" 
 // the header badge bumps regardless of which card fired.
 function ProductCard({ product }: { product: ProductCatalogView }) {
   const addToCart = useAddToCart();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  // Browse is public, but the cart is customer-keyed (ADR 023: browse anonymously, checkout requires login).
+  // A logged-out shopper who taps "Add to cart" is sent to log in rather than firing a command the resource
+  // server would 401/400 (Narrative 010 Moment 3). A logged-in shopper adds as before.
+  function onAdd() {
+    if (!isAuthenticated) {
+      void navigate({ to: "/login" });
+      return;
+    }
+    // Snapshot name + price from the loaded listing into the command — product data reaches the cart only
+    // via this SPA snapshot, never a Catalog↔Orders call (Narrative 005 Moment 2). `productSnapshot` is the
+    // exact field name the backend binds (retro 018).
+    addToCart.mutate({
+      sku: product.sku,
+      quantity: 1,
+      productSnapshot: { name: product.name, price: product.price },
+    });
+  }
 
   return (
     <li className="flex flex-col rounded-lg border border-border p-5">
@@ -32,21 +54,12 @@ function ProductCard({ product }: { product: ProductCatalogView }) {
 
       <button
         type="button"
-        // Snapshot name + price from the loaded listing into the command — product data reaches the cart only
-        // via this SPA snapshot, never a Catalog↔Orders call (Narrative 005 Moment 2). `productSnapshot` is the
-        // exact field name the backend binds (retro 018).
-        onClick={() =>
-          addToCart.mutate({
-            sku: product.sku,
-            quantity: 1,
-            productSnapshot: { name: product.name, price: product.price },
-          })
-        }
+        onClick={onAdd}
         disabled={addToCart.isPending}
-        aria-label={`Add ${product.name} to cart`}
+        aria-label={isAuthenticated ? `Add ${product.name} to cart` : `Log in to add ${product.name} to cart`}
         className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
       >
-        {addToCart.isPending ? "Adding…" : "Add to cart"}
+        {addToCart.isPending ? "Adding…" : isAuthenticated ? "Add to cart" : "Log in to add"}
       </button>
 
       {addToCart.isError && (
