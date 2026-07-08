@@ -56,8 +56,11 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [020](020-domain-write-models-read-views.md) | Aggregates Are Domain-Named Immutable Write Models; Read Models Are Separate `*View` Projections | Accepted |
 | [021](021-verb-feature-folders.md) | Feature/Slice Folders Named for the Activity (Verb); Domain Types Keep Canonical Noun Names | Accepted |
 | [022](022-convention-sagas-additive-to-pmvh.md) | Convention Sagas Are Additive to PMvH | Accepted |
+| [023](023-real-authentication-for-identity.md) | Real Authentication for Identity via ASP.NET Core Identity + Self-Validated JWT | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
+
+**Note on ADR 009 ↔ ADR 023.** ADR 023 supersedes ADR 009's *authentication-deferral* stance only (real auth is now chosen and mechanism-settled). ADR 009 keeps its `Accepted` status because its **Polecat deferral** and **boring-CRUD-foil** framing still hold — only the "auth stays stubbed" clause retires. ADR 009's third amendment carries the cross-reference.
 
 ## Cross-references
 

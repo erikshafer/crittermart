@@ -1,7 +1,7 @@
 ---
-version: v1.7
+version: v1.8
 status: Active
-date: 2026-07-02
+date: 2026-07-07
 references:
   - docs/vision.md
   - docs/context-map/README.md
@@ -22,6 +22,7 @@ references:
   - docs/decisions/020-domain-write-models-read-views.md
   - docs/decisions/021-verb-feature-folders.md
   - docs/decisions/022-convention-sagas-additive-to-pmvh.md
+  - docs/decisions/023-real-authentication-for-identity.md
   - CLAUDE.md
 ---
 
@@ -49,6 +50,7 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 
 - Cross-service messaging is Wolverine over RabbitMQ for round one. (ADR 003)
 - No synchronous service-to-service HTTP. (context map § Round-one stubs, ADR 001)
+- Auth honors this: the JWT is validated OFFLINE against a config-distributed public key (no call into Identity), and where customer identity crosses a boundary over RabbitMQ (e.g. `ReserveStock`) it rides as message payload, not a token — no auth token travels on the bus. (ADR 023)
 - Handler code is portable across Wolverine transports; transport choice is configuration, not code. (ADR 003)
 - Catalog has no BC-level integration with Inventory or Orders; product fields cross only via the frontend. (context map § Integration relationships)
 - Cross-BC message contracts (the wire records both services exchange) live in the shared `CritterMart.Contracts` project, referenced by both services — the published language of the Orders↔Inventory Customer-Supplier relationship. (ADR 014)
@@ -69,10 +71,13 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 
 ## Identity
 
-- Identity is a deployed EF-Core-backed customer registry service, sibling to Catalog/Inventory/Orders; it performs NO authentication or authorization. (ADR 009 second amendment, Workshop 002)
-- Customer identity still arrives ambiently via the `X-Customer-Id` header — realized behind a `useCurrentCustomer` seam in the frontend — rather than a real auth session. (ADR 009, ADR 009 amendment/ADR 015-016 PR)
-- The four deployed services accept the customer-ID shape from the frontend without translation (Conformist). (context map § Integration relationships)
-- Polecat is not used for round one. (ADR 009)
+- Identity is a deployed EF-Core-backed customer registry service, sibling to Catalog/Inventory/Orders; it is NOT event-sourced (a plain row per customer). (ADR 009 second amendment, Workshop 002)
+- **Auth is decided (ADR 023), not yet built.** Identity gains real authentication via ASP.NET Core Identity — a relational user store that *extends* the boring-CRUD foil (no event sourcing) — and becomes the sole **auth issuer**. (ADR 023, ADR 022)
+- When the auth slices (Workshop 002 §§ 5.8–5.11) ship, Identity mints a self-validated, asymmetrically-signed **JWT** (customer id in the `sub` claim); Catalog/Inventory/Orders verify it OFFLINE via `AddJwtBearer` against Identity's **public key distributed as config** — no HTTP into Identity, per-request or at startup (config, not a fetched JWKS). (ADR 023)
+- No cookie auth and no BFF for cross-service trust; the JWT bearer is the credential the SPA sends to all four services. (ADR 023, ADR 006)
+- Until those slices ship, customer identity still arrives ambiently via the `X-Customer-Id` header — realized behind the `useCurrentCustomer` frontend seam; the `sub` claim replaces the header as the trust boundary once they do. (ADR 009 amendment/ADR 015-016 PR, ADR 023)
+- The four deployed services accept the customer-ID shape without translation (Conformist) — the header shape now, the JWT `sub` claim after ADR 023's slices. (context map § Integration relationships, ADR 023)
+- Polecat is not used. (ADR 009)
 
 ## Aggregates and process managers
 
@@ -149,3 +154,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.5    | 2026-06-16 | **Order pilot landed** (implementations/022): the naming-rollout status ticks — Order split into the `Order` write aggregate (also the PMvH state) in an `Ordering/` verb folder + the `OrderStatusView` read model; only `StockLevelView` remains pending its pilot. No rule changed — the convention is unchanged; this records the rollout reaching Order. |
 | v1.6    | 2026-06-16 | **Stock pilot landed** (implementations/024): the naming-rollout status closes — Stock split into the `StockLevel` write aggregate (carrying the reserve/release/commit idempotency state: `Available` + `Reservations`) + the `StockLevelView` read model, with no folder change (`StockLevel` ≠ `…Stock`). All three round-one event-sourced aggregates are now split; the ADR 020 rollout is complete. No rule changed — this records the rollout reaching Stock (and catches the frontmatter `version` up from the v1.5 entry, which had bumped the table but not the header). |
 | v1.7    | 2026-07-02 | **Closes a pairing gap an independent design review (Fable 5) flagged during Saga #2 design:** ADR 022 (convention sagas additive to PMvH) and ADR 009's second amendment (Identity promoted to a deployed EF-Core service, slices 5.1–5.4) each shipped without this file's required paired update (this file's own header rule, line 28/121). No NEW constraint is introduced — this entry syncs the file to constraints that already changed. **Service topology:** three→four deployed services (Identity included). **Persistence:** added Identity's plain-EF-Core-row persistence line. **Identity section:** rewritten — Identity is a deployed registry service, not stubbed; still no authN/authZ. **Aggregates and process managers:** scoped the "no `Wolverine.Saga` base class" rule to Order/Cart specifically (it was never a repo-wide ban — ADR 022 makes convention sagas additive elsewhere) and named Inventory's `Replenishment` as the first shipped instance. |
+| v1.8    | 2026-07-07 | **Paired with [ADR 023](../decisions/023-real-authentication-for-identity.md)** (real authentication for Identity), per this file's own header rule. **Identity section:** rewritten — auth is now decided (ADR 023), not deferred; Identity gains ASP.NET Core Identity (relational user store, extends the boring-CRUD foil) and becomes the sole auth **issuer** of a self-validated, asymmetrically-signed JWT that Catalog/Inventory/Orders verify OFFLINE via `AddJwtBearer` against a config-distributed public key (no HTTP into Identity; no cookie, no BFF). Current code still uses `X-Customer-Id` until the auth slices (Workshop 002 §§ 5.8–5.11) ship; the `sub` claim replaces it then. Conformist framing kept (header shape now, `sub` claim after). **Cross-service messaging:** added a line noting auth honors no-sync-HTTP (offline validation; identity crosses RabbitMQ as payload, not a token). The auth constraints bind the future slices; they describe a decided target, not yet-enforced code. |
