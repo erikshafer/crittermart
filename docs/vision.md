@@ -26,7 +26,7 @@ CritterMart is a single-seller storefront. That choice rules out several things 
 - No backoffice or admin UI
 - No real payment integration; payment is stubbed
 - No returns, no promotions, no shipping rate calculations, no real-time storefront updates
-- No Polecat for round one; Identity is a real customer-registry service but carries no authentication or authorization — the frontend sends a hardcoded customer id
+- No Polecat for round one; Identity is a real customer-registry service that (in round-one shipped code) still carries no authentication — the frontend sends a hardcoded customer id. Real authentication is now decided as the next increment ([ADR 023](decisions/023-real-authentication-for-identity.md): ASP.NET Core Identity + self-validated JWT), not yet built; see Long road below
 
 Many of these cuts will make excellent follow-up blog posts and future enhancements. Cutting them is what kept the demo, the talk, and the round-one timeline honest.
 
@@ -58,6 +58,6 @@ The code does not need to be polished, comprehensive, or production-grade. It ne
 
 ## Long road
 
-After round one ships, the candidate enhancements are open: backing the Identity service with Polecat for real authentication (the registry service itself already shipped — promoted from stub via Workshop 002), broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, multi-tenant scaffolding, richer frontend interactions. Two post-round-one increments have already landed on this road, both convention sagas proving `Wolverine.Saga` additive to PMvH and its storage backend swappable: the Inventory `Replenishment` saga (slices 2.5–2.7, Marten-backed) and the Identity `EmailChange` saga (slices 5.5–5.7, EF-Core-backed). The next increment is not yet chosen among the candidates above.
+After round one ships, the candidate enhancements are open: giving the Identity service real authentication (the registry service itself already shipped — promoted from stub via Workshop 002; the auth mechanism is now **chosen and modeled** — [ADR 023](decisions/023-real-authentication-for-identity.md): **ASP.NET Core Identity** issuing a self-validated, asymmetrically-signed JWT the other services verify offline, modeled in Workshop 002 §§ 5.8–5.11, implementation the next increment; ADR 009's 2026-07-07 correction earlier struck a factual error attributing this to Polecat, a SQL Server document/event store unrelated to identity), broader async projection use for replay demonstrations, a separate BFF promoting the Wolverine.Http surface, a returns slice, a promotions slice using Dynamic Consistency Boundaries, multi-tenant scaffolding, richer frontend interactions. Two post-round-one increments have already landed on this road, both convention sagas proving `Wolverine.Saga` additive to PMvH and its storage backend swappable: the Inventory `Replenishment` saga (slices 2.5–2.7, Marten-backed) and the Identity `EmailChange` saga (slices 5.5–5.7, EF-Core-backed). The next increment is not yet chosen among the candidates above.
 
 CritterMart is a vehicle. The talk is the destination for round one.
