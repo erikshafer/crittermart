@@ -15,12 +15,16 @@ const DEV_FALLBACKS = {
   catalog: "http://localhost:5101",
   inventory: "http://localhost:5102",
   orders: "http://localhost:5103",
+  // Identity is browser-facing as of the auth slices (register/login/logout — ADR 023). Its dev HTTP
+  // port is 5105 (Properties/launchSettings.json), injected in the AppHost as VITE_IDENTITY_URL.
+  identity: "http://localhost:5105",
 } as const;
 
 const serviceUrlsSchema = z.object({
   catalogUrl: z.url(),
   inventoryUrl: z.url(),
   ordersUrl: z.url(),
+  identityUrl: z.url(),
 });
 
 export type ServiceUrls = z.infer<typeof serviceUrlsSchema>;
@@ -35,4 +39,5 @@ export const serviceUrls: ServiceUrls = serviceUrlsSchema.parse({
   catalogUrl: stripTrailingSlash(import.meta.env.VITE_CATALOG_URL ?? DEV_FALLBACKS.catalog),
   inventoryUrl: stripTrailingSlash(import.meta.env.VITE_INVENTORY_URL ?? DEV_FALLBACKS.inventory),
   ordersUrl: stripTrailingSlash(import.meta.env.VITE_ORDERS_URL ?? DEV_FALLBACKS.orders),
+  identityUrl: stripTrailingSlash(import.meta.env.VITE_IDENTITY_URL ?? DEV_FALLBACKS.identity),
 });

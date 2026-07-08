@@ -16,6 +16,7 @@ import type { CartView } from "@/cart/cartSchema";
 import { CurrentCustomerProvider } from "@/identity/useCurrentCustomer";
 
 const CUSTOMER = "customer-demo";
+const TOKEN = "jwt-demo";
 
 // A cart with one line — the snapshot for the rollback / merge tests.
 const oneLineCart: CartView = {
@@ -73,7 +74,9 @@ describe("addLineToCart", () => {
 function makeWrapper(queryClient: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <CurrentCustomerProvider customerId={CUSTOMER}>{children}</CurrentCustomerProvider>
+      <CurrentCustomerProvider customerId={CUSTOMER} token={TOKEN}>
+        {children}
+      </CurrentCustomerProvider>
     </QueryClientProvider>
   );
 }
@@ -119,7 +122,7 @@ describe("useAddToCart", () => {
     expect(queryClient.getQueryData<CartView>(cartKey)?.lines).toHaveLength(1);
   });
 
-  it("POSTs to the header-keyed URL (/carts/mine) with the X-Customer-Id header and a `productSnapshot` body", async () => {
+  it("POSTs to the header-keyed URL (/carts/mine) with the Authorization bearer token and a `productSnapshot` body", async () => {
     const queryClient = freshClient();
     const fetchMock = vi
       .fn()
@@ -137,7 +140,7 @@ describe("useAddToCart", () => {
     expect(url).toContain("/carts/mine/items"); // header-keyed (change 032), NOT /carts/{customerId}
     expect(url).not.toContain(CUSTOMER); // identity rides the header, never the path
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
     const body = JSON.parse(init.body as string);
     expect(body.productSnapshot).toEqual({ name: "Nebula Newt", price: 18.0 }); // the exact field name the backend binds
   });
@@ -250,7 +253,7 @@ describe("useRemoveCartItem", () => {
     expect(url).toContain("/carts/mine/items/crit-001"); // header-keyed (change 032); only {sku} on the path
     expect(url).not.toContain(CUSTOMER);
     expect(init.method).toBe("DELETE");
-    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
   });
 });
 
@@ -311,7 +314,7 @@ describe("useChangeCartItemQuantity", () => {
     expect(url).toContain("/carts/mine/items/crit-001/quantity"); // header-keyed (change 032); only {sku} on the path
     expect(url).not.toContain(CUSTOMER);
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["X-Customer-Id"]).toBe(CUSTOMER);
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
     expect(JSON.parse(init.body as string)).toEqual({ newQuantity: 5 });
   });
 });

@@ -11,6 +11,9 @@
     <!-- Wolverine 6 Dynamic codegen needs the Roslyn compiler package (ADR 012). -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
+    <!-- Resource-server token verification (ADR 023, slice 5.10): validate Identity's self-signed JWT
+         OFFLINE against its config-distributed public key — no HTTP into Identity. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
 
   <ItemGroup>

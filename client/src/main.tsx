@@ -18,8 +18,9 @@ const queryClient = new QueryClient({
   },
 });
 
-// Provider order: QueryClientProvider (the cache mutations write to) -> CurrentCustomerProvider (the
-// identity seam the shared client reads for the X-Customer-Id header) -> RouterProvider (pages).
+// Provider order: QueryClientProvider (the cache mutations write to) -> CurrentCustomerProvider (the auth
+// seam — seeds the session from the persisted JWT, ADR 023; the shared client reads its token for the
+// Authorization: Bearer header) -> RouterProvider (pages).
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

@@ -21,7 +21,7 @@ public static class ConfirmEmailChangeEndpoint
     // — it falls through to EmailChange.NotFound's silent no-op, which is the more faithful reading of the
     // spec's "silent no-op" than surfacing a 404 (verified empirically: IMessageBus.InvokeAsync does not
     // translate a saga's NotFound into an HTTP 404 — Post below simply completes and returns 200).
-    public static async Task<ProblemDetails> ValidateAsync(ConfirmEmailChange command, IdentityDbContext db)
+    public static async Task<ProblemDetails> ValidateAsync(ConfirmEmailChange command, CustomerDbContext db)
     {
         var saga = await db.EmailChanges.FindAsync(command.CustomerId);
         if (saga is null)

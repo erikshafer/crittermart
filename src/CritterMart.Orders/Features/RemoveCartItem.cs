@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -6,22 +7,22 @@ using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
-// The Customer removes an item from their open cart (Workshop 001 slice 3.2). Identity arrives via
-// the X-Customer-Id header (ADR 009 seam — harmonized with the cart read); the {sku} rides the
-// route and there is no request body, which makes this the project's first DELETE endpoint. As with
-// AddToCart, the customer edits *their* cart; resolving which Cart stream that is, is the server's
-// business (design.md decision 3).
+// The Customer removes an item from their open cart (Workshop 001 slice 3.2). Identity is the authenticated
+// JWT `sub` claim (ADR 023, slice 5.10), dev-only X-Customer-Id header fallback; the {sku} rides the route
+// and there is no request body, which makes this the project's first DELETE endpoint. As with AddToCart, the
+// customer edits *their* cart; resolving which Cart stream that is, is the server's business.
 public static class RemoveCartItemEndpoint
 {
     [WolverineDelete("/carts/mine/items/{sku}")]
     public static async Task<IResult> Delete(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId, string sku, IDocumentSession session)
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, string sku, IDocumentSession session)
     {
-        // Identity rides in the X-Customer-Id header (ADR 009 seam); a missing/blank header is a
-        // malformed request → 400, mirroring ViewMyCart and the cart's other commands.
-        if (string.IsNullOrWhiteSpace(customerId))
+        // A bad/expired token → 401; no identity at all → 400, mirroring ViewMyCart and the cart's other
+        // commands. CustomerIdentity.TryResolve prefers the token's `sub`, dev-only header fallback.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
         {
-            return Results.BadRequest("X-Customer-Id header is required.");
+            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
         }
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart and

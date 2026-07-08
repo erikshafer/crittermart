@@ -25,7 +25,7 @@ public class RegisterCustomerTests
     private async Task ResetAsync()
     {
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         await db.Customers.ExecuteDeleteAsync();
     }
 
@@ -73,7 +73,7 @@ public class RegisterCustomerTests
         var id = await RegisterAsync("grace@example.com", "Grace Hopper");
 
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         var row = await db.Customers.SingleAsync(c => c.Id == id);
         row.Email.ShouldBe("grace@example.com");
         row.DisplayName.ShouldBe("Grace Hopper");
@@ -112,7 +112,7 @@ public class RegisterCustomerTests
         problem.Title.ShouldBe("CustomerAlreadyRegistered");
 
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         var count = await db.Customers.CountAsync(c => c.Email == "ada@example.com");
         count.ShouldBe(1);
     }
@@ -132,7 +132,7 @@ public class RegisterCustomerTests
         async Task InsertAsync(string displayName)
         {
             using var scope = _fixture.Host.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
             db.Customers.Add(new Customer
             {
                 Id = Guid.NewGuid().ToString(),

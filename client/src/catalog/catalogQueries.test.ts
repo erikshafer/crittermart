@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 
 import { fetchProducts, catalogKeys } from "@/catalog/catalogQueries";
 
-const ctx = { customerId: "customer-demo" };
+const ctx = { token: "jwt-demo", customerId: "customer-demo" };
 
 const wireProducts = [
   { sku: "crit-001", name: "Cosmic Critter Plush", description: "a plush gremlin", price: 24.99 },

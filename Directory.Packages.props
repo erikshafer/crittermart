@@ -40,10 +40,19 @@
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.16.0" />
   </ItemGroup>
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
-       (the persistence-agnostic teaching beat; a data store per ADR 009, NOT an auth provider).
-       .NET 10 / EF Core 10 line. -->
+       (the persistence-agnostic teaching beat; a data store per ADR 009). .NET 10 / EF Core 10 line. -->
   <ItemGroup>
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+  </ItemGroup>
+  <!-- Real authentication for Identity (ADR 023). ASP.NET Core Identity is the user store + credential
+       handling (UserManager/SignInManager) on the same EF-Core/`identity` schema; JwtBearer provides BOTH
+       the resource servers' offline token validation AND — via its bundled Microsoft.IdentityModel.* stack
+       (JsonWebTokenHandler, SecurityTokenDescriptor) — Identity's token MINTING, so issuer and validator
+       share one IdentityModel version line (no standalone JsonWebTokens pin to skew). .NET 10 line, pinned
+       with the aspnetcore runtime (10.0.9). -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.0.0-beta.1 targets
        WolverineFx(.Marten) 6.16.0, which is why the Wolverine block above is pinned to 6.16.0 (see that

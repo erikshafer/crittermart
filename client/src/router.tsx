@@ -1,9 +1,12 @@
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
+import { RequireAuth } from "@/components/RequireAuth";
 import { RouteNotFound } from "@/components/RouteNotFound";
 import { BrowsePage } from "@/catalog/BrowsePage";
 import { CartPage } from "@/cart/CartPage";
+import { LoginPage } from "@/identity/LoginPage";
+import { RegisterPage } from "@/identity/RegisterPage";
 import { MyOrdersPage } from "@/orders/MyOrdersPage";
 import { OrderConfirmationPage } from "@/orders/OrderConfirmationPage";
 import { OrderStatusPage } from "@/orders/OrderStatusPage";
@@ -28,21 +31,42 @@ const browseRoute = createRoute({
   component: BrowsePage,
 });
 
-// W2 — Cart Review. Renders the customer's open cart from GET /carts/mine.
+// Auth screens (ADR 023, Narrative 010). Public routes — the login/register forms themselves need no session.
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/login",
+  component: LoginPage,
+});
+
+const registerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/register",
+  component: RegisterPage,
+});
+
+// W2 — Cart Review. Renders the customer's open cart from GET /carts/mine. GATED (ADR 023): the cart is
+// customer-keyed, so an unauthenticated visitor is redirected to /login by RequireAuth.
 const cartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cart",
-  component: CartPage,
+  component: () => (
+    <RequireAuth>
+      <CartPage />
+    </RequireAuth>
+  ),
 });
 
 // "My Orders" list (Narrative 005 Moment 6; workshop § 5.1 Gap #3). Reads GET /orders/mine (customer-keyed)
 // and lists the customer's orders newest-first, each row linking into the W4 track screen. A literal /orders
-// segment, distinct from the /orders/$orderId param routes below — the matcher resolves the bare path here and
-// /orders/<id> to W4/W3.
+// segment, distinct from the /orders/$orderId param routes below. GATED (ADR 023).
 const myOrdersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/orders",
-  component: MyOrdersPage,
+  component: () => (
+    <RequireAuth>
+      <MyOrdersPage />
+    </RequireAuth>
+  ),
 });
 
 // W3 — Order Confirmation (Narrative 005 Moment 4). Reached by navigate() after [ Place Order ]'s POST /orders
@@ -54,7 +78,11 @@ const orderConfirmationRoute = createRoute({
   path: "/orders/$orderId/confirmation",
   component: function OrderConfirmationRoute() {
     const { orderId } = orderConfirmationRoute.useParams();
-    return <OrderConfirmationPage orderId={orderId} />;
+    return (
+      <RequireAuth>
+        <OrderConfirmationPage orderId={orderId} />
+      </RequireAuth>
+    );
   },
 });
 
@@ -68,12 +96,18 @@ const orderTrackingRoute = createRoute({
   path: "/orders/$orderId",
   component: function OrderTrackingRoute() {
     const { orderId } = orderTrackingRoute.useParams();
-    return <OrderStatusPage orderId={orderId} />;
+    return (
+      <RequireAuth>
+        <OrderStatusPage orderId={orderId} />
+      </RequireAuth>
+    );
   },
 });
 
 const routeTree = rootRoute.addChildren([
   browseRoute,
+  loginRoute,
+  registerRoute,
   cartRoute,
   myOrdersRoute,
   orderConfirmationRoute,

@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -7,24 +8,25 @@ using Wolverine.Http;
 namespace CritterMart.Orders.Features;
 
 // The Customer changes the quantity of an item in their open cart (Workshop 001 slice 3.3).
-// Identity arrives via the X-Customer-Id header (ADR 009 seam — harmonized with the cart read);
-// the {sku} stays on the route and the new absolute quantity rides the body. The {sku}-on-the-route
+// Identity is the authenticated JWT `sub` claim (ADR 023, slice 5.10), dev-only X-Customer-Id header
+// fallback; the {sku} stays on the route and the new absolute quantity rides the body. The {sku}-on-the-route
 // + body shape still mirrors Catalog's change-price (POST /products/{sku}/price) — a command-shaped
-// POST to the thing being changed (design.md decision 3).
+// POST to the thing being changed.
 public record ChangeCartItemQuantity(int NewQuantity);
 
 public static class ChangeCartItemQuantityEndpoint
 {
     [WolverinePost("/carts/mine/items/{sku}/quantity")]
     public static async Task<IResult> Post(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId, string sku,
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, string sku,
         ChangeCartItemQuantity command, IDocumentSession session)
     {
-        // Identity rides in the X-Customer-Id header (ADR 009 seam); a missing/blank header is a
-        // malformed request → 400, mirroring ViewMyCart and the cart's other commands.
-        if (string.IsNullOrWhiteSpace(customerId))
+        // A bad/expired token → 401; no identity at all → 400, mirroring ViewMyCart and the cart's other
+        // commands. CustomerIdentity.TryResolve prefers the token's `sub`, dev-only header fallback.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
         {
-            return Results.BadRequest("X-Customer-Id header is required.");
+            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
         }
 
         // Malformed input, not a state conflict: zero or negative is never a valid quantity.

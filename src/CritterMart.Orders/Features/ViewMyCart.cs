@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -15,21 +16,22 @@ namespace CritterMart.Orders.Features;
 // closing the pre-frontend audit's blocking Gap #1. No new event, projection, or index.
 public static class ViewMyCartEndpoint
 {
-    // Identity rides in the X-Customer-Id header — the round-one stand-in for an authenticated claim
-    // behind the useCurrentCustomer seam (design.md Decision 1; the Polecat promotion swaps the
-    // header for a claim with call sites unchanged). A literal route segment, so /carts/mine wins
+    // Identity is now the authenticated JWT `sub` claim (ADR 023, slice 5.10), with the round-one
+    // X-Customer-Id header surviving only as a dev-only fallback (the layered cutover — the seam the
+    // useCurrentCustomer promotion swapped, now realized). A literal route segment, so /carts/mine wins
     // over /carts/{cartId} by ASP.NET Core route precedence — the same precedence that already lets
     // /carts/awaiting-activity win.
     [WolverineGet("/carts/mine")]
     public static async Task<IResult> Get(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId, IQuerySession session)
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, IQuerySession session)
     {
-        // A missing/blank header is a malformed request (no identity to resolve a cart) — 400, kept
-        // distinct from the 404 that means "this customer has no open cart" (design.md Decision 5).
-        // Wolverine binds an absent header to the parameter's default (null), hence the guard.
-        if (string.IsNullOrWhiteSpace(customerId))
+        // A bad/expired token → 401; no identity at all → 400 (unchanged), kept distinct from the 404 that
+        // means "this customer has no open cart" (design.md Decision 5). CustomerIdentity.TryResolve prefers
+        // the token's `sub` and falls back to the dev-only header.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
         {
-            return Results.BadRequest("X-Customer-Id header is required.");
+            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
         }
 
         // The partial-unique open-cart index (Program.cs:74) guarantees at most one open cart per

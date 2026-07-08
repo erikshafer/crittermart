@@ -1,6 +1,10 @@
+using System.Security.Cryptography;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.ServiceDefaults;
 using JasperFx.Events;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using JasperFx.Events.Projections;
 using JasperFx.OpenTelemetry;
 using Marten;
@@ -160,6 +164,41 @@ builder.Host.UseWolverine(opts =>
     opts.Policies.UseDurableLocalQueues();
 });
 
+// ── Resource-server token verification (ADR 023, slice 5.10) ──────────────────────────────────────
+// Orders trusts a caller's identity by validating Identity's self-signed JWT ENTIRELY OFFLINE — signature,
+// issuer, audience, lifetime — against Identity's PUBLIC key, distributed as CONFIGURATION. There is NO
+// Authority/MetadataAddress set, which is precisely what keeps validation offline: no JWKS fetch, no HTTP
+// into Identity, per-request or at startup (the load-bearing demonstration that ADR 001's no-sync-HTTP rule
+// survives real auth). The public key comes from Jwt:PublicKey (dev fallback = the shared dev key, so the
+// demo works with zero wiring); the private half stays with Identity alone — Orders can verify, never mint.
+var jwtPublicKey = RSA.Create();
+jwtPublicKey.ImportFromPem(builder.Configuration["Jwt:PublicKey"] ?? DevJwtDefaults.DevPublicKeyPem);
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // MapInboundClaims = false: keep `sub` readable AS `sub` (the default handler otherwise remaps it to
+        // ClaimTypes.NameIdentifier). Paired with Identity minting via JsonWebTokenHandler, `sub` stays `sub`
+        // end to end, so CustomerIdentity.TryResolve can read http.User.FindFirst("sub").
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new RsaSecurityKey(jwtPublicKey),
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? DevJwtDefaults.Issuer,
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"] ?? DevJwtDefaults.Audience,
+            ValidateLifetime = true
+        };
+    });
+
+// Registered so UseAuthorization can run; endpoints are NOT blanket-[Authorize]'d (that would reject the
+// dev-only X-Customer-Id fallback the layered cutover keeps — CustomerIdentity enforces "must have an
+// identity" per endpoint instead).
+builder.Services.AddAuthorization();
+
 builder.Services.AddWolverineHttp();
 
 // Expose the Wolverine runtime + listener health to ASP.NET health checks (ADR 019). The bus check
@@ -213,6 +252,12 @@ if (app.Environment.IsDevelopment())
 // SPA call this service's endpoints cross-origin (ADR 006/015). No-op for same-origin and
 // Origin-less requests (e.g. Alba integration tests), so it is safe in every host.
 app.UseCors();
+
+// Token verification (ADR 023, slice 5.10): populate http.User from a valid Bearer token so the customer-
+// keyed endpoints can source the customer id from the `sub` claim (CustomerIdentity.TryResolve). Placed
+// after CORS and before endpoint mapping, per the standard ASP.NET middleware order.
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapWolverineEndpoints();
 

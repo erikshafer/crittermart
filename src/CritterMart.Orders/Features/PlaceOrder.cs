@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
@@ -29,13 +30,15 @@ public static class PlaceOrderEndpoint
     // order, so both cascades are null (Wolverine skips null cascading messages).
     [WolverinePost("/orders")]
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId,
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader,
         IDocumentSession session, [FromServices] PaymentDeadline deadline)
     {
-        // A missing/blank header is a malformed request — 400, consistent with GET /orders/mine and
-        // GET /carts/mine (ADR 009; the Polecat promotion swaps the header for a claim).
-        if (string.IsNullOrWhiteSpace(customerId))
-            return (Results.BadRequest("X-Customer-Id header is required."), null, null);
+        // Identity is the authenticated JWT `sub` claim (ADR 023, slice 5.10), dev-only X-Customer-Id header
+        // fallback. A bad/expired token → 401; no identity at all → 400 (consistent with GET /orders/mine and
+        // GET /carts/mine). CustomerIdentity.TryResolve encodes the precedence.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
+            return (failure ?? Results.BadRequest("X-Customer-Id header is required."), null, null);
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no

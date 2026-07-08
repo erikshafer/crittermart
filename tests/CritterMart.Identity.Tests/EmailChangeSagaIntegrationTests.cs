@@ -26,7 +26,7 @@ public class EmailChangeSagaIntegrationTests
     private async Task ResetAsync()
     {
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         await db.EmailChanges.ExecuteDeleteAsync();
         await db.Customers.ExecuteDeleteAsync();
     }
@@ -45,14 +45,14 @@ public class EmailChangeSagaIntegrationTests
     private async Task<EmailChange?> LoadSagaAsync(string customerId)
     {
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         return await db.EmailChanges.FindAsync(customerId);
     }
 
     private async Task<string> ReadEmailAsync(string customerId)
     {
         using var scope = _fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
         return (await db.Customers.SingleAsync(c => c.Id == customerId)).Email;
     }
 

@@ -1,3 +1,4 @@
+using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -70,16 +71,17 @@ public static class AddToCartEndpoint
     // checks — so they cascade null, which Wolverine skips.
     [WolverinePost("/carts/mine/items")]
     public static async Task<(IResult, DeliveryMessage<CartActivityTimeout>?)> Post(
-        [FromHeader(Name = "X-Customer-Id")] string? customerId,
+        HttpContext http,
+        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader,
         AddToCart command, IDocumentSession session, CartActivityDeadline deadline)
     {
-        // Identity rides in the X-Customer-Id header — the ADR 009 useCurrentCustomer seam, the same
-        // transport the cart READ (GET /carts/mine) already uses. A missing/blank header is a malformed
-        // request (no identity to resolve a cart) → 400, mirroring ViewMyCart. The header is the round-one
-        // stand-in for the authenticated claim Polecat will provide; the route no longer carries identity.
-        if (string.IsNullOrWhiteSpace(customerId))
+        // Identity is now the authenticated JWT `sub` claim (ADR 023, slice 5.10) — validated offline by
+        // AddJwtBearer — with the round-one X-Customer-Id header surviving only as a dev-only fallback (the
+        // layered cutover). A bad/expired token → 401; no identity at all → 400 (unchanged, mirroring
+        // ViewMyCart). CustomerIdentity.TryResolve encodes that precedence; the route carries no identity.
+        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
         {
-            return (Results.BadRequest("X-Customer-Id header is required."), null);
+            return (failure ?? Results.BadRequest("X-Customer-Id header is required."), null);
         }
 
         // The Cart stream is keyed by cartId, but the command knows only the customer, so
