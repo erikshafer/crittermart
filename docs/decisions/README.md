@@ -57,6 +57,7 @@ ADRs are append-only. A later ADR may **supersede** an earlier one (mark the old
 | [021](021-verb-feature-folders.md) | Feature/Slice Folders Named for the Activity (Verb); Domain Types Keep Canonical Noun Names | Accepted |
 | [022](022-convention-sagas-additive-to-pmvh.md) | Convention Sagas Are Additive to PMvH | Accepted |
 | [023](023-real-authentication-for-identity.md) | Real Authentication for Identity via ASP.NET Core Identity + Self-Validated JWT | Accepted |
+| [024](024-dcb-coupon-redemption-in-orders.md) | DCB-Protected Coupon Redemption in Orders; Promotions Contributes Coupon Definitions | Accepted |
 
 Keep this table in sync when an ADR is added or its status changes — it is the discoverability payload of this README.
 

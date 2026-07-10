@@ -1,7 +1,7 @@
 ---
-version: v1.8
+version: v1.9
 status: Active
-date: 2026-07-07
+date: 2026-07-10
 references:
   - docs/vision.md
   - docs/context-map/README.md
@@ -23,6 +23,7 @@ references:
   - docs/decisions/021-verb-feature-folders.md
   - docs/decisions/022-convention-sagas-additive-to-pmvh.md
   - docs/decisions/023-real-authentication-for-identity.md
+  - docs/decisions/024-dcb-coupon-redemption-in-orders.md
   - CLAUDE.md
 ---
 
@@ -45,6 +46,7 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - Inventory event-sources the Stock aggregate, one stream per SKU. (vision.md § Bounded contexts, Workshop 001 § 2)
 - Orders event-sources both the Cart and the Order aggregates. (vision.md § Bounded contexts, Workshop 001 § 2)
 - Identity persists customers as a plain EF-Core row per customer, in an `identity` schema; no stream, no projection, no fold. (ADR 009 second amendment, Workshop 002 § 2)
+- Orders opts into Marten's DCB schema (`tags TEXT[]` column + GIN index on its `mt_events`) to enforce the **global per-coupon redemption cap**: redemption events are tagged by `CouponId`, and the cap is checked via `FetchForWritingByTags` across order streams (`DcbConcurrencyException` on the breaching race). DCB is store-scoped, so the cap lives in the Orders store; Promotions contributes coupon **definitions** only, and a standalone Promotions service is deferred. This is decided (ADR 024), not yet built. (ADR 024, ADR 002)
 
 ## Cross-service messaging
 
@@ -137,10 +139,10 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 - No vendor portal, vendor identity, marketplace listings, or multi-channel sales. (vision.md § What this deliberately is not)
 - No backoffice or admin UI. (vision.md § What this deliberately is not)
 - No real payment integration; payment is stubbed inside Orders. (vision.md § What this deliberately is not, context map § Round-one stubs)
-- No returns, no promotions, no shipping rate calculations, no real-time storefront updates. (vision.md § What this deliberately is not)
+- No returns, no shipping rate calculations, no real-time storefront updates. **Promotions** now has a chosen DCB coupon-redemption increment realized inside Orders ([ADR 024](../decisions/024-dcb-coupon-redemption-in-orders.md)) — definitions-only, standalone service deferred; still design-only (no code yet). (vision.md § What this deliberately is not, context map § Round-one stubs)
 - No live coding in the demo. (CLAUDE.md § Do Not — round one)
 - No collapse back to a monolith without an explicit ADR reversing ADR 001. (CLAUDE.md § Do Not — round one)
-- Long-road items (Polecat-backed Identity, Returns BC, Promotions with DCB, async daemon coverage, separate BFF, multi-tenant scaffolding) are deferred. (vision.md § Long road, context map § Long road)
+- Long-road items (Polecat-backed Identity, Returns BC, async daemon coverage, separate BFF, multi-tenant scaffolding) are deferred; **Promotions with DCB is chosen** ([ADR 024](../decisions/024-dcb-coupon-redemption-in-orders.md)) — realized inside Orders (see Persistence), with the standalone Promotions service still deferred. (vision.md § Long road, context map § Long road)
 
 ## Document History
 
@@ -155,3 +157,4 @@ This file is the AI session-runner's orientation surface: a flat imperative list
 | v1.6    | 2026-06-16 | **Stock pilot landed** (implementations/024): the naming-rollout status closes — Stock split into the `StockLevel` write aggregate (carrying the reserve/release/commit idempotency state: `Available` + `Reservations`) + the `StockLevelView` read model, with no folder change (`StockLevel` ≠ `…Stock`). All three round-one event-sourced aggregates are now split; the ADR 020 rollout is complete. No rule changed — this records the rollout reaching Stock (and catches the frontmatter `version` up from the v1.5 entry, which had bumped the table but not the header). |
 | v1.7    | 2026-07-02 | **Closes a pairing gap an independent design review (Fable 5) flagged during Saga #2 design:** ADR 022 (convention sagas additive to PMvH) and ADR 009's second amendment (Identity promoted to a deployed EF-Core service, slices 5.1–5.4) each shipped without this file's required paired update (this file's own header rule, line 28/121). No NEW constraint is introduced — this entry syncs the file to constraints that already changed. **Service topology:** three→four deployed services (Identity included). **Persistence:** added Identity's plain-EF-Core-row persistence line. **Identity section:** rewritten — Identity is a deployed registry service, not stubbed; still no authN/authZ. **Aggregates and process managers:** scoped the "no `Wolverine.Saga` base class" rule to Order/Cart specifically (it was never a repo-wide ban — ADR 022 makes convention sagas additive elsewhere) and named Inventory's `Replenishment` as the first shipped instance. |
 | v1.8    | 2026-07-07 | **Paired with [ADR 023](../decisions/023-real-authentication-for-identity.md)** (real authentication for Identity), per this file's own header rule. **Identity section:** rewritten — auth is now decided (ADR 023), not deferred; Identity gains ASP.NET Core Identity (relational user store, extends the boring-CRUD foil) and becomes the sole auth **issuer** of a self-validated, asymmetrically-signed JWT that Catalog/Inventory/Orders verify OFFLINE via `AddJwtBearer` against a config-distributed public key (no HTTP into Identity; no cookie, no BFF). Current code still uses `X-Customer-Id` until the auth slices (Workshop 002 §§ 5.8–5.11) ship; the `sub` claim replaces it then. Conformist framing kept (header shape now, `sub` claim after). **Cross-service messaging:** added a line noting auth honors no-sync-HTTP (offline validation; identity crosses RabbitMQ as payload, not a token). The auth constraints bind the future slices; they describe a decided target, not yet-enforced code. |
+| v1.9    | 2026-07-10 | **Paired with [ADR 024](../decisions/024-dcb-coupon-redemption-in-orders.md)** (DCB-protected coupon redemption in Orders), per this file's own header rule. **Persistence:** added a line — Orders opts into Marten's DCB schema (`tags TEXT[]` + GIN index on its `mt_events`) to enforce the global per-coupon **redemption cap** via `FetchForWritingByTags` across order streams; DCB is store-scoped, so the cap lives in the Orders store and Promotions contributes coupon **definitions** only (standalone service deferred). **Round-one explicit deferrals:** retired "Promotions with DCB" from the deferred long-road list (now chosen) and forward-marked the "no promotions" non-goal line — both point at ADR 024 and note the increment is definitions-only inside Orders, still design-only (no code). No topology, no new service, no Polecat, no version bump — ADR 024 operates within ADRs 001/002/007/009/012. The DCB constraint binds the future Promotions slices; it describes a decided target, not yet-enforced code. |
