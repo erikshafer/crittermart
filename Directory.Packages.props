@@ -31,13 +31,13 @@
        6.16.0, so Dependabot's stranded 6.13.x bumps (#94/#99) are now obsolete. -->
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.16.0" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.17.1" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.17.1" />
   </ItemGroup>
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
        (the persistence-agnostic teaching beat; a data store per ADR 009). .NET 10 / EF Core 10 line. -->
