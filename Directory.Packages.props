@@ -42,7 +42,7 @@
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
        (the persistence-agnostic teaching beat; a data store per ADR 009). .NET 10 / EF Core 10 line. -->
   <ItemGroup>
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
   <!-- Real authentication for Identity (ADR 023). ASP.NET Core Identity is the user store + credential
        handling (UserManager/SignInManager) on the same EF-Core/`identity` schema; JwtBearer provides BOTH
