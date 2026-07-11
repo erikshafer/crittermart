@@ -58,7 +58,7 @@
        WolverineFx(.Marten) 6.16.0, which is why the Wolverine block above is pinned to 6.16.0 (see that
        comment). Bump the two together, never apart. -->
   <ItemGroup>
-    <PackageVersion Include="CritterWatch" Version="1.0.0-beta.1" />
+    <PackageVersion Include="CritterWatch" Version="1.0.0-beta.2" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.1" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-beta.1) transitively pulls MessagePack 2.5.302, which has a
