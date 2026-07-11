@@ -74,7 +74,7 @@
   </ItemGroup>
   <!-- Test packages -->
   <ItemGroup>
-    <PackageVersion Include="Alba" Version="8.5.2" />
+    <PackageVersion Include="Alba" Version="8.5.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.13.0" />
