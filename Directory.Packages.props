@@ -59,7 +59,7 @@
        comment). Bump the two together, never apart. -->
   <ItemGroup>
     <PackageVersion Include="CritterWatch" Version="1.0.0-beta.1" />
-    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.1" />
+    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.2" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-beta.1) transitively pulls MessagePack 2.5.302, which has a
        high-severity CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version
