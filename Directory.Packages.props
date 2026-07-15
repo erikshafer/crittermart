@@ -30,19 +30,19 @@
        runbook. This supersedes the prior "held at 6.12.0, no 6.13.x" pin: beta.1 ships against GA Wolverine
        6.16.0, so Dependabot's stranded 6.13.x bumps (#94/#99) are now obsolete. -->
   <ItemGroup>
-    <PackageVersion Include="WolverineFx" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.16.0" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.16.0" />
+    <PackageVersion Include="WolverineFx" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.19.0" />
   </ItemGroup>
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
        (the persistence-agnostic teaching beat; a data store per ADR 009). .NET 10 / EF Core 10 line. -->
   <ItemGroup>
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
   <!-- Real authentication for Identity (ADR 023). ASP.NET Core Identity is the user store + credential
        handling (UserManager/SignInManager) on the same EF-Core/`identity` schema; JwtBearer provides BOTH
@@ -74,7 +74,7 @@
   </ItemGroup>
   <!-- Test packages -->
   <ItemGroup>
-    <PackageVersion Include="Alba" Version="8.5.2" />
+    <PackageVersion Include="Alba" Version="8.5.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.13.0" />
