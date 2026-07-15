@@ -1,9 +1,10 @@
+using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using Marten;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
@@ -18,25 +19,18 @@ namespace CritterMart.Orders.Features;
 // reason BrowseProducts projects a DTO is an id→sku rename this read does not need).
 public static class ListMyOrdersEndpoint
 {
-    // Identity rides in the X-Customer-Id header — the round-one stand-in for an authenticated claim behind
-    // the useCurrentCustomer seam (ADR 009; the Polecat promotion swaps the header for a claim with call sites
-    // unchanged). This mirrors GET /carts/mine exactly (ViewMyCart.cs:23) and consciously supersedes the
-    // workshop Gap #3 sketch GET /orders?customerId= (a modeling-time query-string form): keeping identity in
-    // the header, not the URL, means a customer can't read another's orders by editing a query param. A literal
-    // route segment, so /orders/mine wins over /orders/{orderId} by ASP.NET Core route precedence — the same
+    // Identity is the authenticated JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover;
+    // this realizes the ADR 009 seam's promise — the claim replaced the header with call sites unchanged).
+    // This mirrors GET /carts/mine exactly (ViewMyCart.cs) and consciously supersedes the workshop Gap #3
+    // sketch GET /orders?customerId= (a modeling-time query-string form): keeping identity in the token,
+    // not the URL, means a customer can't read another's orders by editing a query param. A literal route
+    // segment, so /orders/mine wins over /orders/{orderId} by ASP.NET Core route precedence — the same
     // precedence that already lets /orders/awaiting-payment win.
+    [Authorize]
     [WolverineGet("/orders/mine")]
-    public static async Task<IResult> Get(
-        HttpContext http,
-        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, IQuerySession session)
+    public static async Task<IResult> Get(ClaimsPrincipal user, IQuerySession session)
     {
-        // A bad/expired token → 401; no identity at all → 400, kept distinct from the empty-list case below
-        // (a customer with no orders). CustomerIdentity.TryResolve prefers the token's `sub`, dev-only header
-        // fallback. Mirrors ViewMyCart.
-        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
-        {
-            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
-        }
+        var customerId = user.CustomerId();
 
         // The customer-keyed query over the existing OrderStatusView documents (served by the non-unique
         // OrderStatusView.CustomerId index, Program.cs). Ordered newest-first by placedAt (the genesis
@@ -50,7 +44,7 @@ public static class ListMyOrdersEndpoint
             .ToListAsync();
 
         // Enrich with customer display name (slice 5.3): one LocalCustomerView load for the whole list
-        // (all orders share the same customerId from the header — one scan, not N). Degrades to null
+        // (all orders share the same customerId from the token — one scan, not N). Degrades to null
         // when the local model is absent (PL eventually consistent). No call to Identity.
         var customer = await session.LoadAsync<LocalCustomerView>(customerId);
         var enriched = orders.Select(o => EnrichedOrderView.From(o, customer?.DisplayName)).ToList();

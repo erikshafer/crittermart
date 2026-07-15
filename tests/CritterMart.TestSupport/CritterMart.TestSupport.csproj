@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Shared test seam for minting dev JWTs (ADR 023 hard cutover): every suite that drives a
+    customer-keyed Orders endpoint needs an Authorization: Bearer token, so the mint helper lives
+    once, here, instead of per test project. JwtBearer is referenced (not a standalone
+    Microsoft.IdentityModel.JsonWebTokens pin) so this project rides the SAME IdentityModel version
+    line as the services — see the pin note in Directory.Packages.props.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CritterMart.ServiceDefaults\CritterMart.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

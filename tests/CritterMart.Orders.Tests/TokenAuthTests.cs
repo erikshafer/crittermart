@@ -2,11 +2,9 @@ using System.Security.Cryptography;
 using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Shopping;
-using CritterMart.ServiceDefaults;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using Shouldly;
 using Xunit;
 
@@ -14,7 +12,9 @@ namespace CritterMart.Orders.Tests;
 
 // Slice 5.10 — verify a token at a resource server (ADR 023). Orders validates Identity's JWT OFFLINE against
 // the config-distributed public key (here the dev key) — signature/issuer/audience/lifetime — and sources the
-// customer id from `sub`. The layered cutover keeps the X-Customer-Id header as a dev-only fallback.
+// customer id from `sub`. Post-hard-cutover, `sub` is the SOLE trust boundary: the customer-keyed endpoints
+// are [Authorize]'d, so a request with no valid token — including one waving the retired X-Customer-Id
+// header — is rejected with 401 before any handler runs. Minting lives in the shared JwtTestTokens seam.
 [Collection("orders")]
 [Trait("Category", "Integration")]
 public class TokenAuthTests
@@ -32,40 +32,13 @@ public class TokenAuthTests
         await store.Advanced.Clean.DeleteAllEventDataAsync();
     }
 
-    // Mint a token exactly as Identity does — dev PRIVATE key, dev issuer/audience — so the Orders host
-    // (falling back to the dev PUBLIC key) validates it offline. `signingKeyPem`/`issuer` are overridable so
-    // the failure tests can produce a wrong-signature / wrong-issuer token.
-    private static string MintToken(
-        string customerId, TimeSpan lifetime, string? signingKeyPem = null, string? issuer = null)
-    {
-        // NOT disposed: IdentityModel's CryptoProviderFactory caches a SignatureProvider keyed by the key
-        // material and reuses it across calls with the same dev key — disposing this RSA (via `using`) would
-        // leave that cached provider holding a disposed key, throwing ObjectDisposedException on the NEXT
-        // mint with the same key. The production JwtTokenIssuer likewise holds its RSA for the process
-        // lifetime. Test-lived instances are fine to let the GC reclaim.
-        var rsa = RSA.Create();
-        rsa.ImportFromPem(signingKeyPem ?? DevJwtDefaults.DevPrivateKeyPem);
-        var now = DateTime.UtcNow;
-        var descriptor = new SecurityTokenDescriptor
-        {
-            Issuer = issuer ?? DevJwtDefaults.Issuer,
-            Audience = DevJwtDefaults.Audience,
-            IssuedAt = now,
-            NotBefore = now,
-            Expires = now.Add(lifetime),
-            Claims = new Dictionary<string, object> { ["sub"] = customerId },
-            SigningCredentials = new SigningCredentials(new RsaSecurityKey(rsa), SecurityAlgorithms.RsaSha256)
-        };
-        return new JsonWebTokenHandler().CreateToken(descriptor);
-    }
-
-    // Happy path: a valid Bearer token authenticates the request as its `sub`. No X-Customer-Id header is
-    // sent — the cart is created and read purely off the token's claim, proving `sub` is the trust boundary.
+    // Happy path: a valid Bearer token authenticates the request as its `sub`. The cart is created and
+    // read purely off the token's claim, proving `sub` is the trust boundary.
     [Fact]
     public async Task a_valid_token_sources_the_customer_id_from_the_sub_claim()
     {
         await ResetOrdersAsync();
-        var token = MintToken("customer-tok", TimeSpan.FromHours(1));
+        var token = JwtTestTokens.MintToken("customer-tok", TimeSpan.FromHours(1));
 
         await _fixture.Host.Scenario(_ =>
         {
@@ -93,7 +66,8 @@ public class TokenAuthTests
     {
         await ResetOrdersAsync();
         using var wrongKey = RSA.Create(2048);
-        var forged = MintToken("customer-tok", TimeSpan.FromHours(1), wrongKey.ExportPkcs8PrivateKeyPem());
+        var forged = JwtTestTokens.MintToken(
+            "customer-tok", TimeSpan.FromHours(1), wrongKey.ExportPkcs8PrivateKeyPem());
 
         await _fixture.Host.Scenario(_ =>
         {
@@ -109,7 +83,7 @@ public class TokenAuthTests
     public async Task an_expired_token_is_rejected_locally_with_401()
     {
         await ResetOrdersAsync();
-        var expired = MintToken("customer-tok", TimeSpan.FromHours(-1)); // expires before now
+        var expired = JwtTestTokens.MintToken("customer-tok", TimeSpan.FromHours(-1)); // expires before now
 
         await _fixture.Host.Scenario(_ =>
         {
@@ -119,10 +93,26 @@ public class TokenAuthTests
         });
     }
 
-    // Layered cutover: with NO Bearer token, the dev-only X-Customer-Id header still resolves identity.
-    // (This is the fallback the seeder, the existing tests, and demo-traffic depend on this PR.)
+    // Hard cutover — a request with NO token at all is 401'd by [Authorize] before any handler runs.
+    // (Pre-cutover this was the endpoints' "no identity → 400"; absent credentials are an AUTHENTICATION
+    // failure now that the token is the only identity transport.)
     [Fact]
-    public async Task the_x_customer_id_fallback_still_resolves_identity()
+    public async Task a_request_with_no_token_is_rejected_with_401()
+    {
+        await ResetOrdersAsync();
+
+        await _fixture.Host.Scenario(_ =>
+        {
+            _.Get.Url("/carts/mine");
+            _.StatusCodeShouldBe(401);
+        });
+    }
+
+    // Hard cutover — the INVERSION of the layered cutover's fallback test: the retired X-Customer-Id
+    // header must no longer resolve an identity. A header-only request is rejected with 401 and no cart
+    // is created for the named customer — the header is dead as a trust boundary.
+    [Fact]
+    public async Task the_retired_x_customer_id_header_no_longer_resolves_identity()
     {
         await ResetOrdersAsync();
 
@@ -130,16 +120,16 @@ public class TokenAuthTests
         {
             _.Post.Json(new AddToCart("crit-001", 1, CosmicCritterPlush)).ToUrl("/carts/mine/items");
             _.WithRequestHeader("X-Customer-Id", "customer-hdr");
-            _.StatusCodeShouldBe(201);
+            _.StatusCodeShouldBe(401);
         });
 
-        var result = await _fixture.Host.Scenario(_ =>
+        // No Cart stream was started for the header-named customer — verified through the read model
+        // with a VALID token for that same id.
+        await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/carts/mine");
-            _.WithRequestHeader("X-Customer-Id", "customer-hdr");
-            _.StatusCodeShouldBe(200);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-hdr"));
+            _.StatusCodeShouldBe(404); // no open cart — the header-only POST appended nothing
         });
-
-        result.ReadAsJson<CartView>()!.CustomerId.ShouldBe("customer-hdr");
     }
 }

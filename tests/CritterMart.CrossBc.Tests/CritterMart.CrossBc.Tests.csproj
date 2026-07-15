@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\src\CritterMart.Orders\CritterMart.Orders.csproj" />
     <ProjectReference Include="..\..\src\CritterMart.Inventory\CritterMart.Inventory.csproj" Aliases="InventoryApp" />
     <ProjectReference Include="..\..\src\CritterMart.Contracts\CritterMart.Contracts.csproj" />
+    <ProjectReference Include="..\CritterMart.TestSupport\CritterMart.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

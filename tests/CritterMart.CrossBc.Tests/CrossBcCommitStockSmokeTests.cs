@@ -3,6 +3,7 @@ using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -38,7 +39,7 @@ public class CrossBcCommitStockSmokeTests
         {
             _.Post.Json(new AddToCart("crit-020", 3, new ProductSnapshot("Galactic Gecko", 15.00m)))
                 .ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "commit-customer");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("commit-customer"));
             _.StatusCodeShouldBe(201);
         });
 
@@ -54,7 +55,7 @@ public class CrossBcCommitStockSmokeTests
                 var result = await _fixture.OrdersHost.Scenario(_ =>
                 {
                     _.Post.Url("/orders");
-                    _.WithRequestHeader("X-Customer-Id", "commit-customer");
+                    _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("commit-customer"));
                     _.StatusCodeShouldBe(201);
                 });
                 orderId = result.ReadAsJson<PlaceOrderResponse>()!.OrderId;

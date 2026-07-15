@@ -1,6 +1,7 @@
 using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -30,7 +31,7 @@ public class ChangeCartItemQuantityTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
@@ -49,7 +50,7 @@ public class ChangeCartItemQuantityTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new ChangeCartItemQuantity(3)).ToUrl("/carts/mine/items/crit-001/quantity");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(204);
         });
 
@@ -82,7 +83,7 @@ public class ChangeCartItemQuantityTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new ChangeCartItemQuantity(0)).ToUrl("/carts/mine/items/crit-001/quantity");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(400);
         });
 
@@ -110,7 +111,7 @@ public class ChangeCartItemQuantityTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new ChangeCartItemQuantity(3)).ToUrl("/carts/mine/items/crit-001/quantity");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(409);
         });
     }
@@ -124,23 +125,23 @@ public class ChangeCartItemQuantityTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new ChangeCartItemQuantity(3)).ToUrl("/carts/mine/items/crit-001/quantity");
-            _.WithRequestHeader("X-Customer-Id", "nobody");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("nobody"));
             _.StatusCodeShouldBe(409);
         });
     }
 
-    // Harmonized identity transport (change 032): a quantity-change with no X-Customer-Id header is
-    // a malformed request — no identity to resolve a cart — and is rejected with 400 before the
-    // quantity guard or open-cart resolution, mirroring the cart read and the other cart commands.
+    // Hard cutover (ADR 023): a quantity-change with no Bearer token is rejected with 401 by [Authorize]
+    // before the quantity guard or open-cart resolution runs — unauthenticated, mirroring the cart read
+    // and the other cart commands (the pre-cutover "missing header → 400" died with the header).
     [Fact]
-    public async Task changing_quantity_without_an_identity_header_returns_400()
+    public async Task changing_quantity_without_a_token_returns_401()
     {
         await ResetOrdersAsync();
 
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new ChangeCartItemQuantity(3)).ToUrl("/carts/mine/items/crit-001/quantity");
-            _.StatusCodeShouldBe(400);
+            _.StatusCodeShouldBe(401);
         });
     }
 }

@@ -4,7 +4,7 @@ namespace CritterMart.Orders.Customers;
 // in the Orders service's own store — NOT shared with Identity, NOT obtained via a synchronous
 // call into Identity (ADR 001 forbids sync service-to-service HTTP). It is populated by
 // CustomerRegisteredHandler when a CustomerRegistered Published-Language event arrives from
-// RabbitMQ, and is keyed by the customer's id (same value as the X-Customer-Id header).
+// RabbitMQ, and is keyed by the customer's id (same value as the authenticated JWT `sub` claim).
 //
 // Intentionally minimal: Orders only needs DisplayName for the read-time enrichment in
 // GET /orders/{orderId} and GET /orders/mine. Email and registeredAt stay in Identity.

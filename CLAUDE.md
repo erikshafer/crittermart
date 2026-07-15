@@ -264,7 +264,7 @@ This is the only path override in round one. Other Critter Stack reference archi
 
 ### Architectural non-negotiables
 
-- Four separate services (Catalog, Inventory, Orders, Identity); Identity is a real EF-Core-backed customer registry (Open-Host Service + Published Language) **and** the system's auth issuer — it uses ASP.NET Core Identity + mints a self-validated JWT the other services verify offline against a config-distributed public key (ADR 023). The frontend now authenticates and sends `Authorization: Bearer`; the `sub` claim is the trust boundary. `X-Customer-Id` survives only as a dev-only fallback on Orders (DEBT-tracked for removal). AuthZ (roles/policies) is still deferred (ADR 009/023)
+- Four separate services (Catalog, Inventory, Orders, Identity); Identity is a real EF-Core-backed customer registry (Open-Host Service + Published Language) **and** the system's auth issuer — it uses ASP.NET Core Identity + mints a self-validated JWT the other services verify offline against a config-distributed public key (ADR 023). The `sub` claim is the **sole** customer trust boundary: the `X-Customer-Id` fallback is fully retired (hard cutover — Orders' customer-keyed endpoints are blanket-`[Authorize]`'d; unauthenticated → 401). AuthZ (roles/policies) is still deferred (ADR 009/023)
 - Cross-service communication via Wolverine over RabbitMQ; no synchronous service-to-service HTTP
 - Shared PostgreSQL with schema-per-service
 - Process Manager via Handlers pattern for the Order aggregate (ADR 007); convention `Wolverine.Saga` is an additive counterpart used elsewhere (Inventory's `Replenishment`, slices 2.5–2.7), not a replacement

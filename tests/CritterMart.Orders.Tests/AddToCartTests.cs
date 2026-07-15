@@ -1,6 +1,7 @@
 using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -33,7 +34,7 @@ public class AddToCartTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
@@ -170,7 +171,7 @@ public class AddToCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-001", 1, null!)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(400);
         });
 
@@ -191,7 +192,7 @@ public class AddToCartTests
         {
             _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("", 24.99m)))
                 .ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(400);
         });
     }
@@ -206,26 +207,26 @@ public class AddToCartTests
         {
             _.Post.Json(new AddToCart("crit-001", 1, new ProductSnapshot("Cosmic Critter Plush", -1m)))
                 .ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(400);
         });
     }
 
-    // Harmonized identity transport (change 032): an add with a VALID snapshot but no X-Customer-Id
-    // header is rejected with 400 — the snapshot Validate guard passes, so the header guard in the
-    // handler is what fires (no identity to resolve/create a cart), mirroring the cart read.
+    // Hard cutover (ADR 023): an add with a VALID snapshot but no Bearer token is rejected with 401 by
+    // [Authorize] before any guard or handler runs — an unauthenticated request, not a malformed one
+    // (the pre-cutover "missing header → 400" died with the header).
     [Fact]
-    public async Task adding_without_an_identity_header_returns_400()
+    public async Task adding_without_a_token_returns_401()
     {
         await ResetOrdersAsync();
 
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart("crit-001", 1, CosmicCritterPlush)).ToUrl("/carts/mine/items");
-            _.StatusCodeShouldBe(400);
+            _.StatusCodeShouldBe(401);
         });
 
-        // The short-circuit appended nothing: the (header-less) request created no cart at all.
+        // The middleware short-circuit appended nothing: the token-less request created no cart at all.
         var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
         await using var session = store.LightweightSession();
         var carts = await session.Query<CartView>().ToListAsync();

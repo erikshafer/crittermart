@@ -188,8 +188,10 @@ Invoke-RestMethod "$inv/stock/$sku"
 |---|---|---|
 | `/products` (Catalog) | POST | `{ sku, name, description, price }` |
 | `/stock/{sku}/receipts` (Inventory) | POST | `{ quantity }` |
-| `/carts/mine/items` (Orders) | POST | `{ sku, quantity, productSnapshot: { name, price } }` + header `X-Customer-Id` |
-| `/orders` (Orders) | POST | *(no body)* — identity from header `X-Customer-Id`; returns `{ orderId }`. Missing/blank header → **400**. |
+| `/register` (Identity) | POST | `{ email, displayName, password }` — mints the shopper the next row logs in as |
+| `/login` (Identity) | POST | `{ email, password }` — returns `{ token, customerId }`; the token rides every Orders call |
+| `/carts/mine/items` (Orders) | POST | `{ sku, quantity, productSnapshot: { name, price } }` + header `Authorization: Bearer <token>` |
+| `/orders` (Orders) | POST | *(no body)* — identity from the token's `sub` claim; returns `{ orderId }`. Missing/invalid token → **401**. |
 
 ---
 
@@ -217,16 +219,22 @@ Invoke-RestMethod "$inv/stock/$sku"
 > [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga).
 
 ```powershell
-$ord="http://localhost:5103"; $cust="demo-buyer"; $sku="crit-001"
+$ord="http://localhost:5103"; $idn="http://localhost:5105"; $sku="crit-001"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
 
+# Mint a shopper (ADR 023 hard cutover: Authorization: Bearer is the ONLY identity transport — the
+# X-Customer-Id header is retired). Register a throwaway account, log in, capture the JWT.
+$em="demo-buyer-$(Get-Random)@demo.crittermart.local"; $pw="DemoPass1!"
+Invoke-RestMethod "$idn/register" -Method Post -ContentType application/json -Body (J @{ email=$em; displayName="Demo Buyer"; password=$pw }) | Out-Null
+$auth=@{ Authorization="Bearer $((Invoke-RestMethod "$idn/login" -Method Post -ContentType application/json -Body (J @{ email=$em; password=$pw })).token)" }
+
 # Add to cart (productSnapshot is the cart's only product truth — the cart never reads Catalog)
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } `
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth `
   -Body (J @{ sku=$sku; quantity=2; productSnapshot=@{ name="Cosmic Critter Plush"; price=24.99 } })
 
-# Place the order — identity rides the X-Customer-Id HEADER; there is NO request body (a missing header is a 400).
+# Place the order — identity is the token's `sub` claim; there is NO request body (missing/invalid token → 401).
 # This ONE call cascades the whole cross-BC saga.
-$orderId = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+$orderId = (Invoke-RestMethod "$ord/orders" -Method Post -Headers $auth).orderId
 "orderId = $orderId"
 
 # Poll to terminal status. The saga runs async over RabbitMQ, BUT the demo Payment__AuthDelay=3min holds the
@@ -235,8 +243,8 @@ $orderId = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer
 $o=$null; for ($i=0; $i -lt 50; $i++){ Start-Sleep -Seconds 5; $o=Invoke-RestMethod "$ord/orders/$orderId"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status = $($o.status)"
 
-# The 'My Orders' list (header-keyed read, GET /orders/mine)
-Invoke-RestMethod "$ord/orders/mine" -Headers @{ "X-Customer-Id"=$cust }
+# The 'My Orders' list (token-keyed read, GET /orders/mine)
+Invoke-RestMethod "$ord/orders/mine" -Headers $auth
 ```
 
 **Expected:** `status = confirmed` (after the ~3-min `AuthDelay` window); the order walked
@@ -262,13 +270,18 @@ order succeeds. If you disabled auto-seed, run [Step 3](#step-3--seed-data-auto-
 manual seed first, seeding `crit-rare` at 3.)
 
 ```powershell
-$ord="http://localhost:5103"
+$ord="http://localhost:5103"; $idn="http://localhost:5105"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
-$cust="demo-fail"; $sku="crit-rare"
+$sku="crit-rare"
+
+# Mint a shopper (Bearer-only identity — see Step 4).
+$em="demo-fail-$(Get-Random)@demo.crittermart.local"; $pw="DemoPass1!"
+Invoke-RestMethod "$idn/register" -Method Post -ContentType application/json -Body (J @{ email=$em; displayName="Demo Fail"; password=$pw }) | Out-Null
+$auth=@{ Authorization="Bearer $((Invoke-RestMethod "$idn/login" -Method Post -ContentType application/json -Body (J @{ email=$em; password=$pw })).token)" }
 
 # Order 4 of the 3 seeded crit-rare units → the reservation refuses the whole order.
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=4; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
-$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth -Body (J @{ sku=$sku; quantity=4; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers $auth).orderId
 # This path cancels FAST: the reservation refuses before any payment step, so Payment__AuthDelay never applies.
 $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
@@ -286,13 +299,18 @@ total **over $200** → the stub declines. `crit-deluxe` is auto-seeded at 1000 
 $224.91** clears the threshold (8 = $199.92 would *not*).
 
 ```powershell
-$ord="http://localhost:5103"
+$ord="http://localhost:5103"; $idn="http://localhost:5105"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
-$cust="demo-decline"; $sku="crit-deluxe"
+$sku="crit-deluxe"
+
+# Mint a shopper (Bearer-only identity — see Step 4).
+$em="demo-decline-$(Get-Random)@demo.crittermart.local"; $pw="DemoPass1!"
+Invoke-RestMethod "$idn/register" -Method Post -ContentType application/json -Body (J @{ email=$em; displayName="Demo Decline"; password=$pw }) | Out-Null
+$auth=@{ Authorization="Bearer $((Invoke-RestMethod "$idn/login" -Method Post -ContentType application/json -Body (J @{ email=$em; password=$pw })).token)" }
 
 # 9 × $24.99 = $224.91, over the $200 threshold → payment will decline (relies on the auto-seeded crit-deluxe).
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=9; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
-$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth -Body (J @{ sku=$sku; quantity=9; productSnapshot=@{ name="Deluxe Critter"; price=24.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers $auth).orderId
 # This path settles AFTER Payment__AuthDelay=3min (the stub waits, then declines), so budget the poll past 3 min.
 $o=$null; for ($i=0;$i -lt 50;$i++){ Start-Sleep -Seconds 5; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "status=$($o.status) reason=$($o.cancelReason)"
@@ -379,13 +397,17 @@ pwsh docs/demo-traffic.ps1 -Backorder -Cover
 **Or drive each beat by hand:**
 
 ```powershell
-$ord="http://localhost:5103"; $inv="http://localhost:5102"; $sku="crit-rare"
+$ord="http://localhost:5103"; $inv="http://localhost:5102"; $idn="http://localhost:5105"; $sku="crit-rare"
 function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
-$cust="demo-backorder"
+
+# Mint a shopper (Bearer-only identity — see Step 4).
+$em="demo-backorder-$(Get-Random)@demo.crittermart.local"; $pw="DemoPass1!"
+Invoke-RestMethod "$idn/register" -Method Post -ContentType application/json -Body (J @{ email=$em; displayName="Demo Backorder"; password=$pw }) | Out-Null
+$auth=@{ Authorization="Bearer $((Invoke-RestMethod "$idn/login" -Method Post -ContentType application/json -Body (J @{ email=$em; password=$pw })).token)" }
 
 # open: order 10 of the 3 seeded crit-rare → refuses (stock_unavailable) AND opens the saga (outstanding 7)
-Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id"=$cust } -Body (J @{ sku=$sku; quantity=10; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
-$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers @{ "X-Customer-Id"=$cust }).orderId
+Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth -Body (J @{ sku=$sku; quantity=10; productSnapshot=@{ name="Rare Critter"; price=49.99 } })
+$id = (Invoke-RestMethod "$ord/orders" -Method Post -Headers $auth).orderId
 $o=$null; for ($i=0;$i -lt 25;$i++){ Start-Sleep -Milliseconds 800; $o=Invoke-RestMethod "$ord/orders/$id"; if ($o.status -in 'confirmed','cancelled'){break} }
 "order: status=$($o.status) reason=$($o.cancelReason)"   # → cancelled / stock_unavailable
 
@@ -511,17 +533,23 @@ trace/metric screenshots **before** this step. Vite `node` workers may linger (s
 Portable equivalent of the happy path (bash/curl):
 
 ```bash
-CAT=http://localhost:5101; INV=http://localhost:5102; ORD=http://localhost:5103
-CUST=demo-buyer; SKU=crit-001
+CAT=http://localhost:5101; INV=http://localhost:5102; ORD=http://localhost:5103; IDN=http://localhost:5105
+SKU=crit-001
 curl -s -X POST $CAT/products -H 'content-type: application/json' \
   -d '{"sku":"crit-001","name":"Cosmic Critter Plush","description":"A plush from the cosmos.","price":24.99}'
 curl -s -X POST $INV/stock/$SKU/receipts -H 'content-type: application/json' -d '{"quantity":1000}'
-curl -s -X POST $ORD/carts/mine/items -H 'content-type: application/json' -H "X-Customer-Id: $CUST" \
+# Mint a shopper (Bearer-only identity — ADR 023): register a throwaway account, log in, capture the JWT.
+EM="demo-buyer-$RANDOM@demo.crittermart.local"; PW='DemoPass1!'
+curl -s -X POST $IDN/register -H 'content-type: application/json' \
+  -d "{\"email\":\"$EM\",\"displayName\":\"Demo Buyer\",\"password\":\"$PW\"}" > /dev/null
+TOKEN=$(curl -s -X POST $IDN/login -H 'content-type: application/json' \
+  -d "{\"email\":\"$EM\",\"password\":\"$PW\"}" | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -X POST $ORD/carts/mine/items -H 'content-type: application/json' -H "Authorization: Bearer $TOKEN" \
   -d '{"sku":"crit-001","quantity":2,"productSnapshot":{"name":"Cosmic Critter Plush","price":24.99}}'
-# /orders takes NO body — identity is the X-Customer-Id header (a missing header is a 400).
-ORDER=$(curl -s -X POST $ORD/orders -H "X-Customer-Id: $CUST")
+# /orders takes NO body — identity is the token's `sub` claim (a missing/invalid token is a 401).
+ORDER=$(curl -s -X POST $ORD/orders -H "Authorization: Bearer $TOKEN")
 echo "$ORDER"   # -> {"orderId":"..."}
-# then GET $ORD/orders/<orderId> until status=confirmed (~3 min under the demo Payment__AuthDelay); GET $ORD/orders/mine -H "X-Customer-Id: $CUST"
+# then GET $ORD/orders/<orderId> until status=confirmed (~3 min under the demo Payment__AuthDelay); GET $ORD/orders/mine -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -544,6 +572,14 @@ echo "$ORDER"   # -> {"orderId":"..."}
   AppHost on the **`inventory`** resource) shortens the saga's escalate deadline from the unset 2-min default
   so the escalate beat is demoable at speaking pace. **Remove that AppHost line after the talk** to restore
   the production-faithful 2-min default. The backorder/replenishment route itself is [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga).
+- **Last verified (Bearer-only identity):** 2026-07-14 on the hard-cutover branch — full live pass on the
+  Aspire stack after retiring the `X-Customer-Id` fallback. The migrated `demo-traffic.ps1` registered a
+  throwaway shopper, logged in, and placed 3 Bearer-authenticated orders; a hand-driven register → login →
+  add-to-cart → change-quantity → checkout journey confirmed end-to-end (`status=confirmed` after the 3-min
+  `AuthDelay`, stock `available 1000→995 / committed 5`, `customerName` enriched from `LocalCustomerView`).
+  Every fallback probe was rejected: header-only add/view/place/list, token-less, and garbage-token calls all
+  `401`; the anonymous automation reads (`/orders/awaiting-payment`) still serve. SPA served 200 (auth flow
+  untouched this pass). CritterWatch console not exercised (trial expired 2026-07-10).
 - **Last verified (saga demo affordances):** 2026-06-30 on `chore/saga-demo-affordances` — the [§ 5c](#step-5c--backorder--replenishment-the-inventory-saga)
   Replenishment-saga route driven live on the full Aspire stack (auto-seeded `crit-rare` = 3): **open** (saga
   doc present in `inventory.mt_doc_replenishment` with `Outstanding = 7`), **escalate** (after the

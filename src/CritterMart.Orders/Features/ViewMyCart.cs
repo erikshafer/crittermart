@@ -1,8 +1,9 @@
+using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
@@ -16,23 +17,16 @@ namespace CritterMart.Orders.Features;
 // closing the pre-frontend audit's blocking Gap #1. No new event, projection, or index.
 public static class ViewMyCartEndpoint
 {
-    // Identity is now the authenticated JWT `sub` claim (ADR 023, slice 5.10), with the round-one
-    // X-Customer-Id header surviving only as a dev-only fallback (the layered cutover — the seam the
-    // useCurrentCustomer promotion swapped, now realized). A literal route segment, so /carts/mine wins
+    // Identity is the authenticated JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover):
+    // a missing/bad/expired token is a 401 decided by JwtBearer before the handler — kept distinct from
+    // the 404 that means "this customer has no open cart". A literal route segment, so /carts/mine wins
     // over /carts/{cartId} by ASP.NET Core route precedence — the same precedence that already lets
     // /carts/awaiting-activity win.
+    [Authorize]
     [WolverineGet("/carts/mine")]
-    public static async Task<IResult> Get(
-        HttpContext http,
-        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, IQuerySession session)
+    public static async Task<IResult> Get(ClaimsPrincipal user, IQuerySession session)
     {
-        // A bad/expired token → 401; no identity at all → 400 (unchanged), kept distinct from the 404 that
-        // means "this customer has no open cart" (design.md Decision 5). CustomerIdentity.TryResolve prefers
-        // the token's `sub` and falls back to the dev-only header.
-        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
-        {
-            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
-        }
+        var customerId = user.CustomerId();
 
         // The partial-unique open-cart index (Program.cs:74) guarantees at most one open cart per
         // customer, so FirstOrDefault is "the one." A checked-out (4.1) or abandoned (3.4) cart has

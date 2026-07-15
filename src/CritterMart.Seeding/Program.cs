@@ -94,10 +94,13 @@ foreach (var item in seed)
     }
 }
 
-// Register the demo customer with a deterministic id that matches the SPA's X-Customer-Id stub
-// ("customer-demo" in client/src/identity/useCurrentCustomer.tsx). Passing the explicit id lets
-// Identity use it verbatim (RegisterCustomer.Id? field, slice 5.4 — the seeder's id becomes the
-// LocalCustomerView key in Orders once CustomerRegistered is delivered via RabbitMQ). Idempotent:
+// Register the demo customer with a deterministic, human-readable id ("customer-demo" — originally
+// matching the SPA's now-retired X-Customer-Id stub, kept because a stable id makes demo data easy
+// to talk about). Passing the explicit id lets Identity use it verbatim (RegisterCustomer.Id? field,
+// slice 5.4 — the seeder's id becomes the LocalCustomerView key in Orders once CustomerRegistered is
+// delivered via RabbitMQ). This is the PASSWORDLESS admin path (POST /customers), so customer-demo
+// has no login credentials — a browsing SPA visitor registers their own shopper via /register, and
+// demo-traffic.ps1 does the same per run (ADR 023: Bearer is the only identity transport). Idempotent:
 // a duplicate email → 409 CustomerAlreadyRegistered → skip, mirroring the product seed pattern.
 DemoCustomer[] customers =
 [

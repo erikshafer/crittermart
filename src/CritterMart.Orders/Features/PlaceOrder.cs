@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
 using Marten;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
@@ -12,9 +14,9 @@ using Contracts = CritterMart.Contracts;
 namespace CritterMart.Orders.Features;
 
 // The Customer checks out their open cart, turning it into an order (Workshop 001 slice 4.1).
-// customerId rides the X-Customer-Id header — the same identity transport as GET /orders/mine and
-// GET /carts/mine (ADR 009). The cart's snapshotted lines + computed total are frozen onto a new
-// Order stream. This is the project's first multi-stream atomic write.
+// customerId is the authenticated JWT `sub` claim — the same identity transport as GET /orders/mine
+// and GET /carts/mine (ADR 023 hard cutover). The cart's snapshotted lines + computed total are
+// frozen onto a new Order stream. This is the project's first multi-stream atomic write.
 
 // The orderId handed back so the caller can read the order at GET /orders/{orderId}.
 public record PlaceOrderResponse(string OrderId);
@@ -28,17 +30,16 @@ public static class PlaceOrderEndpoint
     // goes out, and the payment deadline is set in the same step that placed the order (the Bruun
     // temporal automation's starting gun; Workshop slice 4.1 writes-to). On a rejection there is no
     // order, so both cascades are null (Wolverine skips null cascading messages).
+    [Authorize]
     [WolverinePost("/orders")]
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
-        HttpContext http,
-        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader,
+        ClaimsPrincipal user,
         IDocumentSession session, [FromServices] PaymentDeadline deadline)
     {
-        // Identity is the authenticated JWT `sub` claim (ADR 023, slice 5.10), dev-only X-Customer-Id header
-        // fallback. A bad/expired token → 401; no identity at all → 400 (consistent with GET /orders/mine and
-        // GET /carts/mine). CustomerIdentity.TryResolve encodes the precedence.
-        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
-            return (failure ?? Results.BadRequest("X-Customer-Id header is required."), null, null);
+        // Identity is the authenticated JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover):
+        // a missing/bad/expired token is a 401 decided by JwtBearer before this handler runs — consistent
+        // with GET /orders/mine and GET /carts/mine.
+        var customerId = user.CustomerId();
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart uses.
         // A cart that was already checked out has IsOpen=false, so a repeat PlaceOrder finds no

@@ -21,5 +21,6 @@
     <Project Path="tests/CritterMart.Identity.Tests/CritterMart.Identity.Tests.csproj" />
     <Project Path="tests/CritterMart.Inventory.Tests/CritterMart.Inventory.Tests.csproj" />
     <Project Path="tests/CritterMart.Orders.Tests/CritterMart.Orders.Tests.csproj" />
+    <Project Path="tests/CritterMart.TestSupport/CritterMart.TestSupport.csproj" />
   </Folder>
 </Solution>

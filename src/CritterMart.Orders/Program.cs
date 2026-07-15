@@ -180,7 +180,7 @@ builder.Services
     {
         // MapInboundClaims = false: keep `sub` readable AS `sub` (the default handler otherwise remaps it to
         // ClaimTypes.NameIdentifier). Paired with Identity minting via JsonWebTokenHandler, `sub` stays `sub`
-        // end to end, so CustomerIdentity.TryResolve can read http.User.FindFirst("sub").
+        // end to end, so CustomerIdentity.CustomerId() can read user.FindFirst("sub").
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -194,9 +194,10 @@ builder.Services
         };
     });
 
-// Registered so UseAuthorization can run; endpoints are NOT blanket-[Authorize]'d (that would reject the
-// dev-only X-Customer-Id fallback the layered cutover keeps — CustomerIdentity enforces "must have an
-// identity" per endpoint instead).
+// The six customer-keyed endpoints are [Authorize]'d (ADR 023 hard cutover — the dev-only X-Customer-Id
+// fallback is retired): JwtBearer rejects a missing/invalid/expired token with 401 before any handler runs.
+// The id-keyed and automation reads (/carts/{cartId}, /orders/{orderId}, the awaiting-* todo lists) stay
+// anonymous — they carry no customer identity to trust.
 builder.Services.AddAuthorization();
 
 builder.Services.AddWolverineHttp();
@@ -253,9 +254,10 @@ if (app.Environment.IsDevelopment())
 // Origin-less requests (e.g. Alba integration tests), so it is safe in every host.
 app.UseCors();
 
-// Token verification (ADR 023, slice 5.10): populate http.User from a valid Bearer token so the customer-
-// keyed endpoints can source the customer id from the `sub` claim (CustomerIdentity.TryResolve). Placed
-// after CORS and before endpoint mapping, per the standard ASP.NET middleware order.
+// Token verification (ADR 023): populate the request's ClaimsPrincipal from a valid Bearer token so the
+// [Authorize]'d customer-keyed endpoints can source the customer id from the `sub` claim
+// (CustomerIdentity.CustomerId()). Placed after CORS and before endpoint mapping, per the standard
+// ASP.NET middleware order.
 app.UseAuthentication();
 app.UseAuthorization();
 

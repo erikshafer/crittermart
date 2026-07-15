@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CritterMart.Orders\CritterMart.Orders.csproj" />
+    <ProjectReference Include="..\CritterMart.TestSupport\CritterMart.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
