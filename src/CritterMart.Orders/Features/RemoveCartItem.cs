@@ -1,29 +1,24 @@
+using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
 // The Customer removes an item from their open cart (Workshop 001 slice 3.2). Identity is the authenticated
-// JWT `sub` claim (ADR 023, slice 5.10), dev-only X-Customer-Id header fallback; the {sku} rides the route
-// and there is no request body, which makes this the project's first DELETE endpoint. As with AddToCart, the
-// customer edits *their* cart; resolving which Cart stream that is, is the server's business.
+// JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover); the {sku} rides the route and there is
+// no request body, which makes this the project's first DELETE endpoint. As with AddToCart, the customer
+// edits *their* cart; resolving which Cart stream that is, is the server's business.
 public static class RemoveCartItemEndpoint
 {
+    [Authorize]
     [WolverineDelete("/carts/mine/items/{sku}")]
-    public static async Task<IResult> Delete(
-        HttpContext http,
-        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader, string sku, IDocumentSession session)
+    public static async Task<IResult> Delete(ClaimsPrincipal user, string sku, IDocumentSession session)
     {
-        // A bad/expired token → 401; no identity at all → 400, mirroring ViewMyCart and the cart's other
-        // commands. CustomerIdentity.TryResolve prefers the token's `sub`, dev-only header fallback.
-        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
-        {
-            return failure ?? Results.BadRequest("X-Customer-Id header is required.");
-        }
+        var customerId = user.CustomerId();
 
         // Resolve the customer's open cart — the same indexed Cart query AddToCart and
         // PlaceOrder use. No open cart → nothing to edit.

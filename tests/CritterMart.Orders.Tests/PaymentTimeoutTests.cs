@@ -2,6 +2,7 @@ using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -183,13 +184,13 @@ public class PaymentTimeoutTests
         {
             _.Post.Json(new AddToCart(Plush.Sku, Plush.Quantity, CosmicCritterPlush))
                 .ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "customer-V");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-V"));
             _.StatusCodeShouldBe(201);
         });
         var placed = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Url("/orders");
-            _.WithRequestHeader("X-Customer-Id", "customer-V");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-V"));
             _.StatusCodeShouldBe(201);
         });
         var orderId = placed.ReadAsJson<PlaceOrderResponse>()!.OrderId;

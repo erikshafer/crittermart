@@ -1,6 +1,7 @@
 using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -41,7 +42,7 @@ public class CartAbandonmentTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
@@ -131,7 +132,7 @@ public class CartAbandonmentTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Url("/orders");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(201);
         });
 

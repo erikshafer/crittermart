@@ -3,6 +3,7 @@ using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -39,7 +40,7 @@ public class CrossBcReserveStockSmokeTests
         {
             _.Post.Json(new AddToCart("crit-001", 2, new ProductSnapshot("Cosmic Critter Plush", 24.99m)))
                 .ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(201);
         });
 
@@ -58,7 +59,7 @@ public class CrossBcReserveStockSmokeTests
                 var result = await _fixture.OrdersHost.Scenario(_ =>
                 {
                     _.Post.Url("/orders");
-                    _.WithRequestHeader("X-Customer-Id", "customer-X");
+                    _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
                     _.StatusCodeShouldBe(201);
                 });
                 orderId = result.ReadAsJson<PlaceOrderResponse>()!.OrderId;

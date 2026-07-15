@@ -1,6 +1,7 @@
 using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -9,7 +10,7 @@ using Xunit;
 namespace CritterMart.Orders.Tests;
 
 // Slice 3.5 — "View my open cart" (GET /carts/mine). The read counterpart to the customer-keyed
-// write side: resolves the customer's single open CartView by identity (X-Customer-Id header), with
+// write side: resolves the customer's single open CartView by identity (the JWT `sub` claim), with
 // no cartId. Closes the pre-frontend audit's blocking Gap #1 over the existing open-cart index.
 [Collection("orders")]
 [Trait("Category", "Integration")]
@@ -34,7 +35,7 @@ public class ViewMyCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
     }
@@ -44,7 +45,7 @@ public class ViewMyCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Url("/orders");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
     }
@@ -64,7 +65,7 @@ public class ViewMyCartTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/carts/mine");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(200);
         });
 
@@ -87,7 +88,7 @@ public class ViewMyCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/carts/mine");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(404);
         });
     }
@@ -107,22 +108,23 @@ public class ViewMyCartTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/carts/mine");
-            _.WithRequestHeader("X-Customer-Id", "customer-X");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-X"));
             _.StatusCodeShouldBe(404);
         });
     }
 
-    // design.md Decision 5: a missing X-Customer-Id is a malformed request (no identity to resolve a
-    // cart) — 400, kept distinct from the 404 that means "no open cart."
+    // Hard cutover (ADR 023): a token-less request is 401'd by [Authorize] — unauthenticated, kept
+    // distinct from the 404 that means "no open cart." (Supersedes design.md Decision 5's "missing
+    // header → 400": absent credentials stopped being a malformed request when the header retired.)
     [Fact]
-    public async Task viewing_my_cart_without_an_identity_header_returns_400()
+    public async Task viewing_my_cart_without_a_token_returns_401()
     {
         await ResetOrdersAsync();
 
         await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/carts/mine");
-            _.StatusCodeShouldBe(400);
+            _.StatusCodeShouldBe(401);
         });
     }
 }

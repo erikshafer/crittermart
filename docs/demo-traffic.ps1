@@ -10,6 +10,10 @@
   order kicks off the full cross-BC saga (reserve -> authorize -> commit -> confirm) over
   RabbitMQ, so a steady run paints continuous, real message traffic onto the monitoring surfaces.
 
+  The run first registers a throwaway shopper with Identity (POST /register) and logs in
+  (POST /login) — every Orders call then carries that shopper's JWT as Authorization: Bearer,
+  the same trust boundary the SPA uses (ADR 023; the X-Customer-Id header is retired).
+
   Most orders are happy-path confirms (1 unit at the catalog price). Every Nth order (-DeclineEvery,
   default 5) instead snapshots a single unit at -DeclinePrice ($250 default, above the AppHost's $200
   Payment:DeclineOverAmount), so the order total trips the payment-decline affordance and exercises
@@ -63,6 +67,11 @@
   Inventory service base URL — used by -Backorder to read stock and (with -Cover) post the receipt.
   Default http://localhost:5102 (the pinned demo port).
 
+.PARAMETER IdentityUrl
+  Identity service base URL — the script registers a fresh throwaway shopper there (POST /register) and
+  logs in (POST /login) to mint the JWT every Orders call carries (ADR 023: the X-Customer-Id header is
+  retired; Authorization: Bearer is the only identity transport). Default http://localhost:5105.
+
 .EXAMPLE
   ./demo-traffic.ps1
   12 orders, ~1.5s apart, a decline every 5th.
@@ -94,10 +103,31 @@ param(
     [string]$BackorderSku = "crit-rare",
     [int]$BackorderQuantity = 10,
     [string]$OrdersUrl = "http://localhost:5103",
-    [string]$InventoryUrl = "http://localhost:5102"
+    [string]$InventoryUrl = "http://localhost:5102",
+    [string]$IdentityUrl = "http://localhost:5105"
 )
 
 function ConvertTo-CompactJson($value) { $value | ConvertTo-Json -Compress -Depth 6 }
+
+# ───── Identity (ADR 023 hard cutover): mint a real JWT for this run ─────
+# Orders only trusts `Authorization: Bearer` — the `sub` claim is the customer. Register a fresh throwaway
+# shopper per run (a unique email can't collide with earlier runs, and a brand-new customer can never inherit
+# a half-finished cart a Ctrl+C'd run left open), then log in for its token. Registration also publishes
+# CustomerRegistered over RabbitMQ, so Orders' LocalCustomerView enriches this run's orders with the display
+# name — the same journey a real shopper takes.
+function New-DemoShopper([string]$Prefix) {
+    $tag = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $email = "$Prefix-$tag@demo.crittermart.local"
+    $password = 'DemoTraffic1!'
+    Invoke-RestMethod "$IdentityUrl/register" -Method Post -ContentType application/json `
+        -Body (ConvertTo-CompactJson @{ email = $email; displayName = "Demo Shopper $tag"; password = $password }) | Out-Null
+    $login = Invoke-RestMethod "$IdentityUrl/login" -Method Post -ContentType application/json `
+        -Body (ConvertTo-CompactJson @{ email = $email; password = $password })
+    [pscustomobject]@{
+        CustomerId = $login.customerId
+        Headers    = @{ Authorization = "Bearer $($login.token)" }
+    }
+}
 
 # ───── Backorder scenario (-Backorder) — drive the Inventory Replenishment saga (slices 2.5–2.7) ─────
 # Random happy traffic only touches the 1000-unit crit-001/crit-deluxe SKUs, so it never shortfalls and the
@@ -129,13 +159,13 @@ if ($Backorder) {
     }
 
     $outstanding = $BackorderQuantity - $available
-    $customer = "backorder-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $shopper = New-DemoShopper 'backorder'
 
     # Place the over-stock order. The cart trusts productSnapshot (never reads Catalog/Inventory) so the order
     # is accepted; the refusal happens later at the cross-BC reservation gate, which is what opens the saga.
-    Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id" = $customer } `
+    Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers $shopper.Headers `
         -Body (ConvertTo-CompactJson @{ sku = $BackorderSku; quantity = $BackorderQuantity; productSnapshot = @{ name = 'Rare Critter'; price = 49.99 } }) | Out-Null
-    $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -Headers @{ "X-Customer-Id" = $customer }).orderId
+    $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -Headers $shopper.Headers).orderId
     Write-Host ("  placed order {0} for {1} x{2} (available {3}) -> reservation will refuse" -f $orderId.Substring(0, 8), $BackorderSku, $BackorderQuantity, $available)
 
     # The refusal is fast (no payment step) — poll briefly for the cancel. It confirms the shortfall path ran,
@@ -182,6 +212,11 @@ $catalog = @(
 
 Write-Host "demo-traffic -> $OrdersUrl  (Ctrl+C to stop)" -ForegroundColor Cyan
 
+# One credentialed shopper for the whole run: each iteration's PlaceOrder checks the cart out (IsOpen=false),
+# so the next add starts a fresh cart for the same customer — sequential add→place never crosses streams.
+$shopper = New-DemoShopper 'traffic'
+Write-Host "  shopper $($shopper.CustomerId.Substring(0, 8)) registered + logged in (Bearer)" -ForegroundColor DarkCyan
+
 $i = 0
 while ($Continuous -or $i -lt $Count) {
     $i++
@@ -193,13 +228,12 @@ while ($Continuous -or $i -lt $Count) {
     # snapshotted unit price above the threshold instead. The cart trusts the productSnapshot price
     # (it never reads Catalog), so the frozen order total = price -> payment_declined.
     $price = if ($decline) { $DeclinePrice } else { $product.price }
-    $customer = "traffic-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     try {
-        Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers @{ "X-Customer-Id" = $customer } `
+        Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers $shopper.Headers `
             -Body (ConvertTo-CompactJson @{ sku = $product.sku; quantity = 1; productSnapshot = @{ name = $product.name; price = $price } }) | Out-Null
-        # POST /orders resolves identity from the X-Customer-Id HEADER (PR #87) — there is no
-        # request body; a missing header is a 400. (The cart POST above already sends the header.)
-        $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -Headers @{ "X-Customer-Id" = $customer }).orderId
+        # POST /orders resolves identity from the Bearer token's `sub` claim (ADR 023 hard cutover) —
+        # there is no request body; a missing/invalid token is a 401. (The cart POST sends the same token.)
+        $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -Headers $shopper.Headers).orderId
         $kind = if ($decline) { 'DECLINE' } else { 'happy  ' }
         Write-Host ("[{0,4}] {1}  {2}  {3}  price={4:N2}" -f $i, $kind, $orderId.Substring(0, 8), $product.sku, $price)
     }

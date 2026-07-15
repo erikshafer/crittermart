@@ -14,8 +14,8 @@ namespace CritterMart.Identity.Features;
 //
 // The optional Id field (slice 5.4 / seeder): when the caller supplies an explicit id the server
 // uses it verbatim; when absent (the default) the server mints a UUID. This lets the seeder
-// register "customer-demo" with a deterministic id that matches the SPA's X-Customer-Id stub
-// without requiring every caller to supply an id.
+// register "customer-demo" with a deterministic, human-readable id for demo data (originally to
+// match the SPA's retired X-Customer-Id stub) without requiring every caller to supply an id.
 public record RegisterCustomer(string Email, string DisplayName, string? Id = null);
 
 public record RegisterCustomerResponse(string Id);

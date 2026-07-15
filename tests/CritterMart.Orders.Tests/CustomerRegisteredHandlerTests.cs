@@ -3,6 +3,7 @@ using CritterMart.Orders.Customers;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -41,14 +42,14 @@ public class CustomerRegisteredHandlerTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Url("/orders");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
@@ -152,7 +153,7 @@ public class CustomerRegisteredHandlerTests
     }
 
     // GET /orders/mine enriches every row with the same CustomerName (one LocalCustomerView load for
-    // the whole list — all orders share customerId from the X-Customer-Id header).
+    // the whole list — all orders share customerId from the token's `sub` claim).
     [Fact]
     public async Task GET_orders_mine_returns_customer_name_when_local_model_is_present()
     {
@@ -167,7 +168,7 @@ public class CustomerRegisteredHandlerTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/orders/mine");
-            _.WithRequestHeader("X-Customer-Id", "customer-mine");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer("customer-mine"));
             _.StatusCodeShouldBe(200);
         });
 

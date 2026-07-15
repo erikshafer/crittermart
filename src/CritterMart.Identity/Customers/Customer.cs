@@ -5,9 +5,9 @@ namespace CritterMart.Identity.Customers;
 // Orders persist EVENTS. There is no stream, no projection, no fold — just a mutable row that EF
 // Core's change tracker writes.
 //
-// Id is a string (not a Guid) to line up with the storefront's X-Customer-Id seam (ADR 009): a
-// future lookup could resolve that header against this table without a type change. For round one it
-// is a server-minted opaque id and nothing reads it back through the seam yet.
+// Id is a string (not a Guid) — originally to line up with the storefront's X-Customer-Id seam
+// (ADR 009), now the value the JWT `sub` claim carries end to end (ADR 023): the same string keys
+// the ASP.NET Core Identity user, this row, and Orders' LocalCustomerView.
 public class Customer
 {
     public string Id { get; set; } = string.Empty;

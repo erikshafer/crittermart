@@ -2,6 +2,7 @@ using Alba;
 using CritterMart.Orders.Features;
 using CritterMart.Orders.Ordering;
 using CritterMart.Orders.Shopping;
+using CritterMart.TestSupport;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -11,7 +12,7 @@ namespace CritterMart.Orders.Tests;
 
 // "My Orders" — the customer-keyed order list (GET /orders/mine; workshop § 5.1 Gap #3, closed; OpenSpec
 // change list-my-orders). The list counterpart to the single-order W4 track read: it resolves the customer's
-// orders BY identity (X-Customer-Id header, no orderId) over the existing OrderStatusView documents, ordered
+// orders BY identity (the JWT `sub` claim, no orderId) over the existing OrderStatusView documents, ordered
 // newest-first. Mirrors ViewMyCartTests — the sibling customer-keyed read in this service.
 [Collection("orders")]
 [Trait("Category", "Integration")]
@@ -36,7 +37,7 @@ public class ListMyOrdersTests
         await _fixture.Host.Scenario(_ =>
         {
             _.Post.Json(new AddToCart(sku, quantity, snapshot)).ToUrl("/carts/mine/items");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
     }
@@ -51,7 +52,7 @@ public class ListMyOrdersTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Post.Url("/orders");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(201);
         });
 
@@ -66,7 +67,7 @@ public class ListMyOrdersTests
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/orders/mine");
-            _.WithRequestHeader("X-Customer-Id", customerId);
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
             _.StatusCodeShouldBe(expectedStatus);
         });
 
@@ -161,17 +162,17 @@ public class ListMyOrdersTests
         cancelled.CancelReason.ShouldBe(CancelReason.StockUnavailable);
     }
 
-    // A missing X-Customer-Id is a malformed request (no identity to resolve the orders) — 400, kept distinct
-    // from the empty-list case above. Mirrors ViewMyCart's no-identity guard.
+    // Hard cutover (ADR 023): a token-less request is 401'd by [Authorize] — unauthenticated, kept
+    // distinct from the empty-list case above. Mirrors ViewMyCart's no-token rejection.
     [Fact]
-    public async Task listing_my_orders_without_an_identity_header_returns_400()
+    public async Task listing_my_orders_without_a_token_returns_401()
     {
         await ResetOrdersAsync();
 
         await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url("/orders/mine");
-            _.StatusCodeShouldBe(400);
+            _.StatusCodeShouldBe(401);
         });
     }
 }

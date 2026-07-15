@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Shopping;
 using Marten;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
@@ -8,9 +10,9 @@ using Wolverine.Http;
 
 namespace CritterMart.Orders.Features;
 
-// The Customer adds an item to their cart (Workshop 001 slice 3.1). Identity arrives via the
-// X-Customer-Id header (ADR 009 seam — harmonized with the cart read GET /carts/mine); the product
-// name + price are snapshotted on the command (no Catalog read).
+// The Customer adds an item to their cart (Workshop 001 slice 3.1). Identity is the authenticated JWT
+// `sub` claim (ADR 023 hard cutover — see CustomerIdentity); the product name + price are snapshotted
+// on the command (no Catalog read).
 public record AddToCart(string Sku, int Quantity, ProductSnapshot ProductSnapshot);
 
 // The cartId handed back so the caller can read the cart at GET /carts/{cartId}.
@@ -69,20 +71,16 @@ public static class AddToCartEndpoint
     // fire-and-check (design.md Decision 1) one scheduled timeout per cart suffices: subsequent
     // adds and edits just append events whose timestamps ARE the activity record the fired timeout
     // checks — so they cascade null, which Wolverine skips.
+    [Authorize]
     [WolverinePost("/carts/mine/items")]
     public static async Task<(IResult, DeliveryMessage<CartActivityTimeout>?)> Post(
-        HttpContext http,
-        [FromHeader(Name = "X-Customer-Id")] string? customerIdHeader,
+        ClaimsPrincipal user,
         AddToCart command, IDocumentSession session, CartActivityDeadline deadline)
     {
-        // Identity is now the authenticated JWT `sub` claim (ADR 023, slice 5.10) — validated offline by
-        // AddJwtBearer — with the round-one X-Customer-Id header surviving only as a dev-only fallback (the
-        // layered cutover). A bad/expired token → 401; no identity at all → 400 (unchanged, mirroring
-        // ViewMyCart). CustomerIdentity.TryResolve encodes that precedence; the route carries no identity.
-        if (!CustomerIdentity.TryResolve(http, customerIdHeader, out var customerId, out var failure))
-        {
-            return (failure ?? Results.BadRequest("X-Customer-Id header is required."), null);
-        }
+        // Identity is the authenticated JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover):
+        // JwtBearer validated the token offline and rejected a missing/bad/expired one with 401 before this
+        // handler ran. The route carries no identity.
+        var customerId = user.CustomerId();
 
         // The Cart stream is keyed by cartId, but the command knows only the customer, so
         // resolve the customer's open cart first (design.md decision 2). The partial unique
