@@ -35,4 +35,4 @@ The methodology for facilitating, simulating, or planning an Event Modeling work
 
 ## Current population
 
-Two workshops have landed: `001-crittermart-event-model.md` (the round-one cross-BC event model covering all four BCs) and `002-identity-event-model.md` (the Identity BC, promoted from round-one stub to a kept EF-Core registry — Open-Host Service + Published Language).
+Three workshops have landed: `001-crittermart-event-model.md` (the round-one cross-BC event model covering all four BCs), `002-identity-event-model.md` (the Identity BC, promoted from round-one stub to a kept EF-Core registry — Open-Host Service + Published Language), and `003-promotions-event-model.md` (the Promotions concept per ADR 024 — coupon definitions as configuration-as-events plus DCB-protected redemption at Orders checkout; slices 6.1–6.4, modeled-not-built).
