@@ -159,7 +159,7 @@ describe("CartPage", () => {
     expect(init.method).toBe("DELETE");
   });
 
-  it("[ Place Order ] POSTs an empty body to /orders with X-Customer-Id header and disables while placing (checkout fires PlaceOrder)", async () => {
+  it("[ Place Order ] POSTs an empty body to /orders with the bearer token and disables while placing (checkout fires PlaceOrder)", async () => {
     // A never-settling POST keeps the mutation pending: usePlaceOrder's onSuccess navigate (to a route absent
     // from this throwaway router) never fires, so the durable evidence is the command call + the pending state.
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
@@ -179,5 +179,102 @@ describe("CartPage", () => {
     expect(JSON.parse(init.body as string)).toEqual({});
     // The button enters its pending state (no optimistic guess; it waits for the server).
     expect(screen.getByRole("button", { name: "Placing…" })).toBeDisabled();
+  });
+
+  // ── Slice 6.2: the coupon field ─────────────────────────────────────────────────────────────────
+
+  // A fetch that serves the cart on GET /carts, the given coupon validation on GET /coupons/.../validate, and
+  // a 204 on any command. Routing by URL keeps the coupon read from being answered with the cart payload.
+  function stubCartAndCoupon(cart: unknown, coupon: unknown) {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method && init.method !== "GET") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (String(url).includes("/coupons/")) {
+        return Promise.resolve(new Response(JSON.stringify(coupon), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(cart), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("applies a valid coupon and previews the discounted Subtotal / Discount / Total (advisory)", async () => {
+    stubCartAndCoupon(openCart, { code: "FLASH20", status: "valid", discountPercent: 20 });
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.type(screen.getByLabelText("Coupon code"), "FLASH20");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    // The applied chip + the priced breakdown: $103.98 − 20% ($20.80) = $83.18, all in integer cents.
+    expect(await screen.findByText("Discount (FLASH20)")).toBeInTheDocument();
+    // Scope to the summary <dt> — the table also has a per-line "Subtotal" column header.
+    expect(screen.getByText("Subtotal", { selector: "dt" })).toBeInTheDocument();
+    expect(screen.getByText("−$20.80")).toBeInTheDocument();
+    expect(screen.getByText("$83.18")).toBeInTheDocument();
+  });
+
+  it("shows an inline error for an invalid code and applies no discount", async () => {
+    stubCartAndCoupon(openCart, { code: "BOGUS", status: "invalid", discountPercent: null });
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.type(screen.getByLabelText("Coupon code"), "BOGUS");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByText("This code isn't valid.")).toBeInTheDocument();
+    // Nothing held: no discount line, the full total stands.
+    expect(screen.queryByText(/^Discount \(/)).not.toBeInTheDocument();
+    expect(screen.getByText("$103.98")).toBeInTheDocument();
+  });
+
+  it("shows the 'no longer available' error for an advisorily-exhausted coupon", async () => {
+    stubCartAndCoupon(openCart, { code: "FLASH20", status: "exhausted", discountPercent: null });
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.type(screen.getByLabelText("Coupon code"), "FLASH20");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByText("This coupon is no longer available.")).toBeInTheDocument();
+  });
+
+  it("[ Place Order ] carries the applied coupon as ?couponCode= (advisory preview is not a guard)", async () => {
+    // Cart + coupon on GET; a never-settling POST /orders keeps the placement pending (its onSuccess navigate
+    // targets a route absent from this throwaway router), so the durable evidence is the command URL.
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST" && String(url).includes("/orders")) {
+        return new Promise<Response>(() => {});
+      }
+      if (String(url).includes("/coupons/")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ code: "FLASH20", status: "valid", discountPercent: 20 }), {
+            status: 200,
+          }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify(openCart), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.type(screen.getByLabelText("Coupon code"), "FLASH20");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await screen.findByText("Discount (FLASH20)");
+
+    await userEvent.click(screen.getByRole("button", { name: "Place Order" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "POST"),
+      ).toBeDefined(),
+    );
+    const orderCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit)?.method === "POST",
+    ) as [string, RequestInit];
+    expect(orderCall[0]).toMatch(/\/orders\?couponCode=FLASH20$/);
   });
 });

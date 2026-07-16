@@ -8,8 +8,8 @@ import type { OrderStatusView } from "./orderSchema";
 import { formatPlacedAt, humanizeCancelReason, humanizeStatus } from "./orderStatusJourney";
 
 // "My Orders" — the order-history list (workshop § 5.1 Gap #3, closed; Narrative 005 Moment 6). The list
-// counterpart to W4's single-order tracking: it reads `GET /orders/mine` (customer-keyed, the X-Customer-Id
-// header behind the useCurrentCustomer seam — the same identity transport as `GET /carts/mine`) and renders
+// counterpart to W4's single-order tracking: it reads `GET /orders/mine` (customer-keyed, the `Authorization:
+// Bearer` token behind the useCurrentCustomer seam — the same identity transport as `GET /carts/mine`) and renders
 // the customer's orders newest-first, each row a `<Link>` into the W4 `/orders/$orderId` track screen. It
 // reuses the order read contract wholesale (`OrderListSchema` = `z.array(OrderStatusViewSchema)`) and the pure
 // presentation helpers W4 already owns (`formatPlacedAt`, `humanizeStatus`, `humanizeCancelReason`) — its only

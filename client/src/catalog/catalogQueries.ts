@@ -11,8 +11,9 @@ import { ProductCatalogListSchema, type ProductCatalogView } from "./catalogSche
 // Query-key factory (tanstack `qk-factory-pattern`). The catalog list is **public** — Catalog gates nothing
 // on identity — so unlike `cartKeys.mine(customerId)`, the catalog key carries **no customer id**: the result
 // does not depend on who is asking (`qk-include-dependencies` keys by the result's *true* dependencies, and
-// the product list has none beyond "the catalog"). The X-Customer-Id header still rides along on the request
-// (the shared client always sets it), but it is not part of the cache key because it does not vary the result.
+// the product list has none beyond "the catalog"). The `Authorization: Bearer` token still rides along when the
+// shopper is signed in (the shared client attaches it), but it is not part of the cache key because it does not
+// vary the result — and Catalog's public reads work signed-out, with no auth header at all.
 export const catalogKeys = {
   all: ["catalog"] as const,
   products: () => [...catalogKeys.all, "products"] as const,

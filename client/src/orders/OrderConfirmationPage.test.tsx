@@ -24,6 +24,19 @@ const placedOrder = {
   total: 103.98,
   placedAt: "2026-06-16T14:02:00+00:00",
   cancelReason: null,
+  // No coupon: discount 0, subtotal == total, no code (slice 6.3 pricing fields, now parsed by the schema).
+  subtotal: 103.98,
+  discount: 0,
+  couponCode: null,
+};
+
+// The same order redeemed with FLASH20 (20% off): the discounted total, a non-zero discount, and the code.
+const discountedOrder = {
+  ...placedOrder,
+  total: 83.18,
+  subtotal: 103.98,
+  discount: 20.8,
+  couponCode: "FLASH20",
 };
 
 // OrderConfirmationPage now renders a router <Link> ("Track this order" → W4), so it needs router context. A
@@ -76,6 +89,23 @@ describe("OrderConfirmationPage", () => {
     // Total is read straight off the view (server-computed — NOT recomputed from lines), formatted to USD.
     expect(screen.getByText("$103.98")).toBeInTheDocument();
     expect(screen.getByText("ord-7f3a")).toBeInTheDocument();
+  });
+
+  it("renders the Subtotal / Discount (CODE) / Total breakdown when the order redeemed a coupon (slice 6.2 W3)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(discountedOrder), { status: 200 })),
+    );
+
+    renderConfirmation();
+    await screen.findByText("Order placed");
+
+    // The full breakdown: pre-discount subtotal, the code-labelled discount, and the discounted total.
+    expect(screen.getByText("Subtotal")).toBeInTheDocument();
+    expect(screen.getByText("$103.98")).toBeInTheDocument();
+    expect(screen.getByText("Discount (FLASH20)")).toBeInTheDocument();
+    expect(screen.getByText("−$20.80")).toBeInTheDocument();
+    expect(screen.getByText("$83.18")).toBeInTheDocument();
   });
 
   it("renders a genuine error state when the order read fails (a 404 is NOT an empty domain state here)", async () => {

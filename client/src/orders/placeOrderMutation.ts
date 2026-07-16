@@ -24,24 +24,28 @@ import { cartKeys } from "@/cart/cartQueries";
 // confirmation screen must follow up with the OrderStatusView read.
 export const PlaceOrderResponseSchema = z.object({ orderId: z.string() });
 
-// The place-order mutation hook. Identity transport (frontend SKILL Convention 4): `POST /orders` is now
-// **header-keyed** — identity rides the `X-Customer-Id` header set by the shared client, matching every
-// other customer-keyed endpoint (GET /orders/mine, GET /carts/mine). The body is empty: the order's
-// contents are NOT sent (the server resolves the customer's open cart, Narrative 005 Moment 4).
-// `mutate()` takes no variables — the customer comes from the seam.
+// The place-order mutation hook. Identity transport (frontend SKILL Convention 4): `POST /orders` is
+// **bearer-keyed** — identity rides the `Authorization: Bearer` token the shared client sets from the auth
+// seam (ADR 023 hard cutover; the `sub` claim is the trust boundary), matching every other customer-keyed
+// endpoint (GET /orders/mine, GET /carts/mine). The body is empty: the order's contents are NOT sent (the
+// server resolves the customer's open cart, Narrative 005 Moment 4).
+//
+// Slice 6.2 adds ONE optional variable: `mutate(couponCode)`. When the customer applied a coupon on W2, its
+// code rides checkout as the `?couponCode=` QUERY parameter the DCB redemption path reads (slice 6.3 — a
+// query param, not a body field, so the bodyless checkout contract is preserved; retro 039). `mutate()` with
+// no argument is the unchanged no-coupon checkout. The customer still comes from the seam either way.
 export function usePlaceOrder() {
   const ctx = useApiContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: () =>
-      postCommand(
-        `${serviceUrls.ordersUrl}/orders`,
-        {},
-        ctx,
-        PlaceOrderResponseSchema,
-      ),
+    mutationFn: (couponCode?: string) => {
+      const url = couponCode
+        ? `${serviceUrls.ordersUrl}/orders?couponCode=${encodeURIComponent(couponCode)}`
+        : `${serviceUrls.ordersUrl}/orders`;
+      return postCommand(url, {}, ctx, PlaceOrderResponseSchema);
+    },
 
     // onSuccess — NOT onMutate. There is nothing optimistic to apply; the order is placed only once the server
     // confirms it. Reset the cart (the checked-out cart is no longer the customer's open cart → `GET /carts/mine`

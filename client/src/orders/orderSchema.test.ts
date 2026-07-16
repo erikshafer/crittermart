@@ -17,6 +17,10 @@ const wireOrder = {
   total: 103.98,
   placedAt: "2026-06-16T14:02:00+00:00",
   cancelReason: null,
+  // No-coupon order (slice 6.3 pricing fields, now required by the schema): subtotal == total, no discount.
+  subtotal: 103.98,
+  discount: 0,
+  couponCode: null,
 };
 
 describe("OrderStatusViewSchema", () => {

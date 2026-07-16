@@ -22,6 +22,10 @@ function viewAt(status: OrderStatus): OrderStatusView {
     total: 0,
     placedAt: "2026-06-16T14:02:00+00:00",
     cancelReason: null,
+    // Pricing fields (slice 6.3): the type requires them; the poll/stepper derivations don't read them.
+    subtotal: 0,
+    discount: 0,
+    couponCode: null,
   };
 }
 

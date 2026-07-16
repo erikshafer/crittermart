@@ -1,3 +1,4 @@
+import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -6,16 +7,26 @@ import { usePlaceOrder } from "@/orders/placeOrderMutation";
 
 import { cartQueryOptions } from "./cartQueries";
 import { useChangeCartItemQuantity, useRemoveCartItem } from "./cartMutations";
+import { useValidateCoupon } from "./couponQueries";
 import type { CartLine } from "./cartSchema";
 
 // W2 — Cart Review (workshop § 5.1). The storefront's cart screen: it renders the customer's open cart on a
-// cold load by binding the slice-3.5 read `GET /carts/mine` (identity carried ambiently in the X-Customer-Id
-// header via the useCurrentCustomer seam — frontend SKILL Convention 4), and lets the customer edit it in
-// place. Each line carries a [-] N [+] quantity stepper (slice 3.3 `ChangeCartItemQuantity`) and an [x] remove
-// (slice 3.2 `RemoveCartItem`), each an OPTIMISTIC mutation (Convention 3): the row updates instantly, then
-// reconciles against the refetched CartView. The header badge and the Total derive from the same cart query,
-// so they update for free. [ Place Order ] (slice 4.1) issues PlaceOrder and navigates to W3 confirmation —
-// the one cart command where optimism STOPS (usePlaceOrder is non-optimistic; @/orders/placeOrderMutation).
+// cold load by binding the slice-3.5 read `GET /carts/mine` (identity carried by the `Authorization: Bearer`
+// token the shared client sets from the useCurrentCustomer seam — frontend SKILL Convention 4, ADR 023), and
+// lets the customer edit it in place. Each line carries a [-] N [+] quantity stepper (slice 3.3
+// `ChangeCartItemQuantity`) and an [x] remove (slice 3.2 `RemoveCartItem`), each an OPTIMISTIC mutation
+// (Convention 3): the row updates instantly, then reconciles against the refetched CartView. The header badge
+// and the Total derive from the same cart query, so they update for free.
+//
+// Slice 6.2 adds the COUPON affordance: a coupon field fires the advisory `GET /coupons/{code}/validate`
+// (CouponField, below), and an applied code previews a Subtotal / Discount / Total breakdown — the discount
+// priced CLIENT-SIDE against the cart total (the server never sees cart money on that read). The applied code
+// is UI-held (a reload forgets it — accepted round-one behavior) and rides checkout as the `?couponCode=`
+// query param. The advisory preview is NEVER a guard: the checkout DCB append is the sole authority, so a
+// previewed discount can still lose the race at [ Place Order ].
+//
+// [ Place Order ] (slice 4.1) issues PlaceOrder (with the applied coupon, if any) and navigates to W3
+// confirmation — the one cart command where optimism STOPS (usePlaceOrder is non-optimistic).
 
 // One $-formatter, built once at module load (cheaper than per-render, stable reference).
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -109,9 +120,124 @@ function CartRow({ line }: { line: CartLine }) {
   );
 }
 
+// The applied coupon, held in UI state (Workshop 003 §5.1 — a reload forgets it, accepted round-one behavior).
+// Only the code + percent are held; the dollar discount is DERIVED from the live cart total, so it stays
+// correct as the customer edits quantities after applying (no stale cached amount).
+type AppliedCoupon = { code: string; discountPercent: number };
+
+// W2 coupon field (slice 6.2). Before a coupon is applied it shows an input + Apply that fires the advisory
+// validate query; a `valid` answer lifts the coupon to the parent (which prices + previews it), while
+// `invalid` / `exhausted` render an inline error and hold nothing. Once applied it shows the granted code +
+// percent with a Remove that clears it. The query is ADVISORY — it can be stale, and it never gates checkout;
+// the parent still passes the code to [ Place Order ], where the DCB append is the sole authority.
+function CouponField({
+  applied,
+  onApply,
+  onRemove,
+}: {
+  applied: AppliedCoupon | null;
+  onApply: (coupon: AppliedCoupon) => void;
+  onRemove: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const validate = useValidateCoupon();
+
+  // Applied state: show the granted coupon + Remove. No input while a coupon is active — remove first to swap.
+  if (applied) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-accent/40 px-3 py-2 text-sm">
+        <span className="flex items-center gap-2">
+          <span aria-hidden="true" className="text-emerald-600 dark:text-emerald-400">
+            ✓
+          </span>
+          <span>
+            <span className="font-medium">{applied.code}</span> — {applied.discountPercent}% off
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            onRemove();
+            setCode("");
+            validate.reset();
+          }}
+          className="text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  // Not applied: the two advisory failure answers become inline copy (Workshop 003 §5.1); a network failure is
+  // a third, honest fallback. `validate.data` is the last check's result — it drives the error until re-applied.
+  const result = validate.data;
+  const errorMessage =
+    result?.status === "invalid"
+      ? "This code isn't valid."
+      : result?.status === "exhausted"
+        ? "This coupon is no longer available."
+        : validate.isError
+          ? "We couldn't check that code. Please try again."
+          : null;
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = code.trim();
+    if (!trimmed || validate.isPending) return;
+    validate.mutate(trimmed, {
+      onSuccess: (validation) => {
+        // Only a `valid` answer holds; invalid/exhausted fall through to the inline error above.
+        if (validation.status === "valid" && validation.discountPercent != null) {
+          onApply({ code: validation.code, discountPercent: validation.discountPercent });
+        }
+      },
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-2">
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1">
+          <label htmlFor="coupon-code" className="text-sm font-medium">
+            Coupon code
+          </label>
+          <input
+            id="coupon-code"
+            type="text"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={errorMessage ? true : undefined}
+            aria-describedby={errorMessage ? "coupon-error" : undefined}
+            placeholder="e.g. FLASH20"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={!code.trim() || validate.isPending}
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+        >
+          {validate.isPending ? "Checking…" : "Apply"}
+        </button>
+      </div>
+      {errorMessage && (
+        <p id="coupon-error" role="alert" className="text-sm text-destructive">
+          {errorMessage}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export function CartPage() {
   const ctx = useApiContext();
   const { data: cart, isPending, isError, refetch } = useQuery(cartQueryOptions(ctx));
+  // The applied coupon, UI-held (Workshop 003 §5.1). null until Apply succeeds; cleared by Remove. Rides
+  // checkout as `?couponCode=`. Reset would happen on reload — accepted round-one behavior.
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   // Non-optimistic checkout: on success it resets the cart and navigates to W3 (@/orders/placeOrderMutation).
   // Lives here only as the button's wiring — the [ Place Order ] control renders in the populated-cart branch.
   const placeOrder = usePlaceOrder();
@@ -166,6 +292,14 @@ export function CartPage() {
   }
 
   const totalCents = lines.reduce((sum, line) => sum + lineSubtotalCents(line), 0);
+  // Advisory discount preview (slice 6.2), priced CLIENT-SIDE: the applied percent against the live cart total,
+  // in integer cents so the previewed Total stays penny-exact and consistent with the displayed line subtotals.
+  // This mirrors the server's `Math.Round(subtotal × pct / 100, 2)` (PlaceOrder.RedeemWithDcbAsync) — but it is
+  // only a preview against the CURRENT cart; the authoritative discount is priced server-side at checkout.
+  const discountCents = appliedCoupon
+    ? Math.round((totalCents * appliedCoupon.discountPercent) / 100)
+    : 0;
+  const payableCents = totalCents - discountCents;
 
   return (
     <section className="space-y-6">
@@ -203,16 +337,42 @@ export function CartPage() {
             <CartRow key={line.sku} line={line} />
           ))}
         </tbody>
-        <tfoot>
-          <tr>
-            <th scope="row" colSpan={4} className="py-3 pr-4 text-right font-semibold">
-              Total
-            </th>
-            <td className="py-3 pr-4 text-right font-semibold tabular-nums">{formatCents(totalCents)}</td>
-            <td aria-hidden="true" />
-          </tr>
-        </tfoot>
       </table>
+
+      {/* Coupon + order summary (slice 6.2 W2 delta). The coupon field previews an advisory discount; the
+          totals below show a Subtotal / Discount (CODE) / Total breakdown when a coupon is applied, or the plain
+          single Total otherwise — the discounted total is priced client-side from the applied percent. The
+          summary replaced the table's old <tfoot> Total row so the coupon affordance and the totals read as one
+          block; the per-line "Subtotal" column in the table is unrelated (that is each line's own subtotal). */}
+      <div className="ml-auto w-full max-w-xs space-y-4">
+        <CouponField applied={appliedCoupon} onApply={setAppliedCoupon} onRemove={() => setAppliedCoupon(null)} />
+
+        <dl className="space-y-1 text-sm">
+          {appliedCoupon ? (
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Subtotal</dt>
+                <dd className="tabular-nums">{formatCents(totalCents)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Discount ({appliedCoupon.code})</dt>
+                <dd className="tabular-nums text-emerald-600 dark:text-emerald-400">
+                  −{formatCents(discountCents)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 border-t border-border pt-1 text-base font-semibold">
+                <dt>Total</dt>
+                <dd className="tabular-nums">{formatCents(payableCents)}</dd>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-between gap-4 text-base font-semibold">
+              <dt>Total</dt>
+              <dd className="tabular-nums">{formatCents(totalCents)}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
 
       {/* [ Place Order ] (slice 4.1 → W3). NON-optimistic (Convention 3's exception): the click fires
           PlaceOrder, and only on the server's success does usePlaceOrder reset the cart + navigate to the
@@ -223,7 +383,10 @@ export function CartPage() {
       <div className="flex flex-col items-end gap-2">
         <button
           type="button"
-          onClick={() => placeOrder.mutate()}
+          // Slice 6.2: the applied coupon code (if any) rides checkout as `?couponCode=`; `appliedCoupon?.code`
+          // is `undefined` when none is applied → the unchanged no-coupon POST /orders. The advisory preview
+          // never guards — a previewed discount can still lose the DCB race and come back CouponExhausted.
+          onClick={() => placeOrder.mutate(appliedCoupon?.code)}
           disabled={placeOrder.isPending}
           className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >

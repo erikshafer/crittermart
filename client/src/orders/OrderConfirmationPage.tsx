@@ -80,10 +80,38 @@ export function OrderConfirmationPage({ orderId }: { orderId: string }) {
             {humanizeStatus(order.status)}
           </dd>
         </div>
-        <div className="flex items-center justify-between gap-4 py-2">
-          <dt className="text-muted-foreground">Total</dt>
-          <dd className="text-right font-semibold tabular-nums">{usd.format(order.total)}</dd>
-        </div>
+        {/* Pricing (slice 6.2 W3 delta). When the order redeemed a coupon (`discount > 0`) the summary shows
+            the full breakdown — Subtotal, the named Discount line, then the discounted Total — so the customer
+            sees WHERE the total came from. A no-coupon order (`discount === 0`, `subtotal === total`) renders
+            the plain single Total exactly as before, so the common path is unchanged. All three are server-
+            computed values read straight off the view (the checkout did the arithmetic — this screen never
+            reprices). The code label comes from `couponCode`; the `?? ""` guards the theoretical case of a
+            discount with a null code (never emitted together by the backend). */}
+        {order.discount > 0 ? (
+          <>
+            <div className="flex items-center justify-between gap-4 py-2">
+              <dt className="text-muted-foreground">Subtotal</dt>
+              <dd className="text-right tabular-nums">{usd.format(order.subtotal)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-2">
+              <dt className="text-muted-foreground">
+                Discount{order.couponCode ? ` (${order.couponCode})` : ""}
+              </dt>
+              <dd className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                −{usd.format(order.discount)}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t border-border py-2">
+              <dt className="text-muted-foreground">Total</dt>
+              <dd className="text-right font-semibold tabular-nums">{usd.format(order.total)}</dd>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-between gap-4 py-2">
+            <dt className="text-muted-foreground">Total</dt>
+            <dd className="text-right font-semibold tabular-nums">{usd.format(order.total)}</dd>
+          </div>
+        )}
       </dl>
 
       <div className="text-center">
