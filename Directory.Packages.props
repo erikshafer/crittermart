@@ -18,17 +18,20 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
   </ItemGroup>
-  <!-- Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2).
-       PINNED AT 6.16.0 to match the CritterWatch line installed below. CritterWatch 1.0.0-beta.1 is
-       compiled against WolverineFx(.Marten) 6.16.0; running a HIGHER WolverineFx than the version
-       CritterWatch targets throws a startup TypeLoadException in Wolverine.Marten's projection-distribution
-       internals (EventSubscriptionAgentFamily.TryRebuildRegisteredProjectionAsync). There is only one
-       Wolverine.Marten per process, so the console and the four services must share the exact version
-       CritterWatch was built against. Bump these ONLY in lockstep with a CritterWatch release
-       (CritterWatch + Wolverine.CritterWatch + WolverineFx.* move together, never apart) — diagnosed
-       2026-06-24 (CW alpha.3 / 6.12.0), updated 2026-06-30 (CW beta.1 / 6.16.0); see the dependency-update
-       runbook. This supersedes the prior "held at 6.12.0, no 6.13.x" pin: beta.1 ships against GA Wolverine
-       6.16.0, so Dependabot's stranded 6.13.x bumps (#94/#99) are now obsolete. -->
+  <!-- Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2). Currently 6.19.0.
+       COUPLING NOTE — the app deliberately leads CritterWatch by one minor. CritterWatch 1.0.0-beta.4
+       (installed below) is compiled against WolverineFx(.Marten) 6.18.0. Running a HIGHER WolverineFx than
+       the version CritterWatch targets throws a startup TypeLoadException in Wolverine.Marten's
+       projection-distribution internals (EventSubscriptionAgentFamily.TryRebuildRegisteredProjectionAsync);
+       there is only one Wolverine.Marten per process, so a live CritterWatch console needs the EXACT version
+       it was built against. We accept a 1-minor lead here (app 6.19.0 > CW-target 6.18.0) as a DELIBERATE
+       owner call (2026-07-16): the 6.19.0 fixes are wanted (DLQ-batch recovery GH-3413, uuid aggregate-id
+       route typing GH-3420, per-server connection-budget OTel gauges GH-3397), and the console is non-bootable
+       anyway (trial expired 2026-07-10), so the TypeLoadException is LATENT, not active. When the trial renews,
+       either take a CritterWatch release that targets 6.19.0+ (snap back to exact lockstep) or drop these to
+       6.18.0. Do NOT push WolverineFx PAST 6.19.0 without re-opening this decision. History: diagnosed
+       2026-06-24 (CW alpha.3 / 6.12.0), CW beta.1 / 6.16.0 (2026-06-30), owner bump to 6.19.0 + CW beta.4 /
+       6.18.0-target (2026-07-16). See the dependency-update runbook (docs/skills/updating-critter-stack-dependencies). -->
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.19.0" />
     <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.19.0" />
@@ -54,17 +57,18 @@
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
   </ItemGroup>
-  <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.0.0-beta.1 targets
-       WolverineFx(.Marten) 6.16.0, which is why the Wolverine block above is pinned to 6.16.0 (see that
-       comment). Bump the two together, never apart. -->
+  <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.0.0-beta.4 is compiled
+       against WolverineFx(.Marten) 6.18.0. The Wolverine block above deliberately leads at 6.19.0 (see that
+       comment for the coupling rule and the owner call). Normally bump the two in lockstep; the current
+       1-minor lead is an accepted, documented exception while the console is trial-blocked. -->
   <ItemGroup>
-    <PackageVersion Include="CritterWatch" Version="1.0.0-beta.1" />
-    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.1" />
+    <PackageVersion Include="CritterWatch" Version="1.0.0-beta.4" />
+    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.4" />
   </ItemGroup>
-  <!-- CritterWatch (still as of 1.0.0-beta.1) transitively pulls MessagePack 2.5.302, which has a
+  <!-- CritterWatch (still as of 1.0.0-beta.4) transitively pulls MessagePack 2.5.302, which has a
        high-severity CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version
-       bump CritterWatch has not yet taken. Re-verified unaddressed on 1.0.0-beta.1 (2026-06-30; was
-       2.5.301 on alpha.3). Suppress until an upstream CritterWatch release moves to MessagePack 3.x. -->
+       bump CritterWatch has not yet taken. Re-verified unaddressed on 1.0.0-beta.4 (2026-07-16; was
+       2.5.302 on beta.1, 2.5.301 on alpha.3). Suppress until an upstream CritterWatch release moves to MessagePack 3.x. -->
   <ItemGroup>
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
   </ItemGroup>
