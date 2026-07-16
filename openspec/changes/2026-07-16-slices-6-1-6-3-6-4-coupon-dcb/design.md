@@ -9,18 +9,25 @@ non-obvious call — how a tagged redemption event composes with a brand-new ord
 
 ## Verified API surface (Marten 9.15.1, resolved transitively via WolverineFx 6.19.0)
 
-Confirmed present in the pinned `Marten.dll` and against current Marten DCB docs — **not** the Polecat-flavored
+Confirmed by a spike test against Marten 9.15.1 + real Postgres (see decision 2) — **not** the Polecat-flavored
 symbols the installed `marten-advanced-dynamic-consistency-boundary` / `-cross-stream-operations` skills show
 (`docs/skills/DEBT.md` row 3; those name `[BoundaryModel]`, `IEventBoundary<T>`, `EventTagQuery.For(…)` — do
-not use them here):
+not use them here). Namespaces: `JasperFx.Events.Tags` (`EventTagQuery`), `JasperFx.Events.Aggregation`
+(`[BoundaryAggregate]`), `JasperFx.Events` (`Event.WithTag`, `IEventStoreOperations.{BuildEvent,FetchForWritingByTags}`),
+`Marten.Exceptions` (`DcbConcurrencyException`):
 
-- `opts.Events.EnableDcb()` — opt-in; triggers the `tags TEXT[]` column + GIN index on `orders.mt_events`.
-- `opts.Events.TagEvent<T>(e => new[]{ … })` for declarative tagging, and/or per-event
-  `var evt = session.Events.BuildEvent(data); evt.WithTag(couponId);` for strong-typed tags.
-- `new EventTagQuery().Or<CouponId>(couponId)` → `session.Events.FetchForWritingByTags<CouponUsage>(query)`,
-  returning a boundary with `.Aggregate` (nullable), `.LastSeenSequence`, and `.AppendOne(evt)`.
-- `SaveChangesAsync()` throws `DcbConcurrencyException` (`ex.Query`, `ex.LastSeenSequence`) when a matching
-  tagged event lands inside the boundary between the read and the commit.
+- **`opts.Events.RegisterTagType<CouponId>("coupon").ForAggregate<CouponUsage>()` is the entire DCB config** —
+  registering the strong-typed tag against its boundary aggregate is what triggers the tags schema on
+  `orders.mt_events` (`ApplyAllDatabaseChangesOnStartup` creates it). There is **no** separate `EnableDcb()`
+  call — the spike confirmed the registration alone suffices. `CouponId` is a `record CouponId(string Value)`
+  (a wrapper record around a primitive; string is supported).
+- `CouponUsage` is a `[BoundaryAggregate]` (identity-less) class with mutable `NetCount` + void `Apply(...)`.
+- Per-event tag: `var evt = session.Events.BuildEvent(data); evt.WithTag(new CouponId(couponId));` then
+  `session.Events.Append(orderId, evt)` to land it on the order stream.
+- `new EventTagQuery().Or<CouponId>(new CouponId(couponId))` → `session.Events.FetchForWritingByTags<CouponUsage>(query)`,
+  returning a boundary with `.Aggregate` (nullable) and `.LastSeenSequence`.
+- `SaveChangesAsync()` throws `DcbConcurrencyException` when a matching tagged event lands inside the boundary
+  between the read and the commit.
 - ADR 024 verified 9.11.0; the resolved assembly has since moved to 9.15.1. DCB only gets more first-class in
   later 9.x, so this is a re-confirmation, not a re-decision. No Wolverine/Marten version bump.
 
@@ -34,32 +41,42 @@ not use them here):
    003 §§4/7 drew; keeping them separate types prevents a downstream reader from treating the queryable view
    as the cap authority.
 
-2. **Append mechanics (Workshop 003 §8 item 1) — SPIKE-CONFIRMED at slice-6.3 start, then locked here.**
-   Intent (ADR 024): the tagged `CouponRedeemed` lives on the **real new order stream**, in the same
-   transaction as `OrderPlaced`; the DCB boundary provides only the cap assertion at `SaveChangesAsync`. Two
-   candidate mechanics, to be disambiguated by a throwaway integration spike **before** writing the handler,
-   because the Marten DCB docs show `boundary.AppendOne(evt)` without an explicit stream and do not show a
-   `StartStream` composition:
-   - **(a)** `session.Events.StartStream<Order>(orderId, orderPlaced)`, then build the `CouponRedeemed`,
-     `WithTag(couponId)` it, and append it to the same order stream (`StartStream` overload / `Append`) — the
-     boundary read from `FetchForWritingByTags` supplies the concurrency assertion the shared
-     `SaveChangesAsync` enforces.
-   - **(b)** `boundary.AppendOne(taggedRedeemed)` for the tagged event and `StartStream` for `OrderPlaced`,
-     both flushed by one `SaveChangesAsync`, if the boundary requires the tagged append to route through it.
-   The spike asserts three things against a real Postgres (Testcontainers): the two events land on the **same**
-   order stream; the cap holds under a forced concurrent append (`DcbConcurrencyException` thrown); and a
-   non-coupon `PlaceOrder` opens no boundary. Whichever mechanic the spike proves is recorded as the locked
-   decision in the slice-6.3 code comment and the retro — no guessing in the shipped handler.
+2. **Append mechanics (Workshop 003 §8 item 1) — SPIKE-CONFIRMED, mechanic (a) LOCKED.** A throwaway
+   integration spike (`DcbCouponSpike`, deleted after confirmation) ran against real Postgres and proved:
+   `session.Events.StartStream<Order>(orderId, orderPlaced)` for the order genesis; then
+   `var evt = session.Events.BuildEvent(new CouponRedeemed(...)); evt.WithTag(new CouponId(couponId));
+   session.Events.Append(orderId, evt);` to land the **tagged** redemption on the **same** order stream; with
+   `session.Events.FetchForWritingByTags<CouponUsage>(query)` read beforehand supplying the concurrency
+   assertion the shared `SaveChangesAsync` enforces. The spike confirmed all three properties: the tagged
+   event lands on the real order stream (not a tag-derived synthetic one — that is what `boundary.AppendOne`
+   would do, so it is **not** used); a forced concurrent append makes the loser's `SaveChangesAsync` throw
+   `DcbConcurrencyException`; and the net count holds at the cap. Mechanic (b) (`boundary.AppendOne`) is
+   rejected — it auto-routes by tag, off the order stream, contradicting ADR 024's "real order streams" intent.
 
-3. **The `DcbConcurrencyException` retry seats handler-local, not as a Wolverine retry policy (Workshop 003
-   §8 item 1).** The loser of a race must **re-decide against fresh state**, not blindly replay the same
-   append — a Wolverine `OnException().RetryOnce()` would re-run the whole endpoint including the cart
-   resolution and re-open the boundary, which is heavier and re-reads the cart needlessly. Instead the
-   redemption decision is a small local method wrapped in a bounded `for`/`try` (one retry): on
-   `DcbConcurrencyException` it re-reads the boundary once and re-evaluates the cap; a still-full cap becomes
-   the `CouponExhausted` rejection. One retry is sufficient because the second read is post-commit-consistent
-   for the winning append; a persistent race would need cap-many losers, none of which can succeed past the
-   cap. Bounded, not a `while(true)`.
+3. **The redemption path is the canonical Marten "reload and retry" loop with a fresh session per attempt
+   (Workshop 003 §8 item 1).** DCB optimistic concurrency is **cap-blind**: `FetchForWritingByTags` arms an
+   assertion on the coupon's whole tag-set, so *any* concurrent redemption invalidates a commit — even when
+   both racers are safely under the cap. A bare pre-check therefore **under-admits** under a burst (verified by
+   the concurrency test: 6 racers at cap 3 let only **1** through, not 3 — the cap never *exceeds*, but
+   throughput collapses). Marten's own DCB guide answers this with reload-and-retry, and that is what the
+   workshop's "the losing handler retries" language describes. Implemented in `RedeemWithDcbAsync`:
+   - Each attempt opens a **fresh `LightweightSession`** (a session whose `SaveChangesAsync` threw is dirty and
+     cannot be reused), re-reads `FetchForWritingByTags<CouponUsage>`, re-checks the cap (`NetCount >= cap` →
+     `409 CouponExhausted`, no stream), appends the priced `OrderPlaced` + tagged `CouponRedeemed` +
+     `CartCheckedOut`, and commits.
+   - On `DcbConcurrencyException` it **`continue`s** — a loser still under the cap succeeds on the next read;
+     only a genuinely-full cap yields `CouponExhausted`. Bounded at 25 attempts (converges in ~cap rounds; each
+     round commits at least one).
+   - Because this path controls its own commit it does **not** ride `AutoApplyTransactions` (which owns the
+     injected session's post-handler commit and would re-throw the caught exception). Cascades therefore
+     publish through `IMessageBus` **after** the commit — a post-commit send, acceptable because the order is
+     durably placed and `ReserveStock` / the payment timeout are at-least-once safety nets. **The no-coupon
+     path is untouched**: it keeps the injected session + tuple-return + transactional outbox (slice 4.1
+     byte-for-byte).
+
+   No ASP.NET exception mapping is needed — the loop catches every `DcbConcurrencyException` and returns a
+   `409` explicitly, so none escapes. Exactly `cap` redemptions ever succeed, under sequential *or* concurrent
+   load.
 
 4. **`PlaceOrder` stays one endpoint; the coupon path is an internal branch.** No second command, no separate
    redemption endpoint — the coupon rides the existing `POST /orders` with an optional `couponCode` on the

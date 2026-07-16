@@ -84,6 +84,26 @@ builder.Services.AddMarten(opts =>
         // records the latest activity timestamp; the awaiting-activity endpoint adds the window on read.
         opts.Projections.Add<CartsAwaitingActivityProjection>(ProjectionLifecycle.Inline);
 
+        // ── Promotions / DCB (Workshop 003 slices 6.1/6.3/6.4; ADR 024) ─────────────────────────────
+        // CouponView — the coupon DEFINITION read model (ADR 020, slice 6.1): a DEDICATED inline snapshot
+        // over each coupon stream, resolving a carried couponCode to its discount + cap at checkout.
+        // Configuration-as-events realized: the seeder appends CouponDefined via POST /coupons.
+        opts.Projections.Snapshot<CritterMart.Orders.Promotions.CouponView>(SnapshotLifecycle.Inline);
+
+        // The DCB registration (slice 6.3): the strong-typed CouponId tag, associated to the CouponUsage
+        // boundary aggregate. This single call is the ENTIRE DCB opt-in — it triggers the tag schema on
+        // orders.mt_events (ApplyAllDatabaseChangesOnStartup creates it) and lets FetchForWritingByTags<CouponUsage>
+        // aggregate the net redemption count across every order stream carrying the tag. Spike-confirmed against
+        // Marten 9.15.1 (no separate EnableDcb()). NOT the Polecat-flavored skill surface (DEBT row 3).
+        opts.Events.RegisterTagType<CritterMart.Orders.Promotions.CouponId>("coupon")
+            .ForAggregate<CritterMart.Orders.Promotions.CouponUsage>();
+
+        // CouponUsageView — the ADVISORY per-coupon usage read model (slice 6.3): a MULTI-stream inline
+        // projection folding CouponRedeemed (+1) / CouponRedemptionReleased (−1) across all order streams,
+        // keyed by couponId. Inline (no async daemon runs — an async advisory view would sit empty). Distinct
+        // from the never-persisted CouponUsage DCB boundary state, which is the write-time cap authority.
+        opts.Projections.Add<CritterMart.Orders.Promotions.CouponUsageViewProjection>(ProjectionLifecycle.Inline);
+
         // The round-one ASYNC projection teaser (ADR 008, slice 3.4): registered with the async
         // lifecycle but NO AddAsyncDaemon anywhere — the daily abandonment report stays empty
         // until an on-demand rebuild materializes it from the events. That emptiness is the
@@ -109,6 +129,15 @@ builder.Services.AddMarten(opts =>
         // serves the customer-keyed list query. NOT unique — a customer has many orders (unlike the cart's
         // one-open-cart invariant, which is the write-side partial-unique index on the Cart aggregate above).
         opts.Schema.For<OrderStatusView>().Index(x => x.CustomerId);
+
+        // Coupon codes are unique (Workshop 003 slice 6.1): a unique index on CouponView.Code backstops
+        // the DefineCoupon pre-check under a race — the open-cart partial-unique-index precedent, minus the
+        // predicate (a coupon code has no open/closed state; it is simply unique). Codes never change, so
+        // uniqueness holds across the append-only definition streams.
+        opts.Schema.For<CritterMart.Orders.Promotions.CouponView>().Index(x => x.Code, idx =>
+        {
+            idx.IsUnique = true;
+        });
 
         // The consumer-local customer read model (slice 5.4): a plain Marten document upserted by
         // CustomerRegisteredHandler when the CustomerRegistered Published-Language event arrives from

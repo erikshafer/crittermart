@@ -32,9 +32,7 @@ public class CustomerRegisteredHandlerTests
 
     private async Task ResetAsync()
     {
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await store.Advanced.Clean.DeleteAllDocumentsAsync();
-        await store.Advanced.Clean.DeleteAllEventDataAsync();
+        await _fixture.ResetAllDataAsync();
     }
 
     private async Task<string> PlaceAnOrderAsync(string customerId, string sku, int quantity, ProductSnapshot snapshot)

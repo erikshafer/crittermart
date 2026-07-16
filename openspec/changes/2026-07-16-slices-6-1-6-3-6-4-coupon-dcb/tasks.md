@@ -21,7 +21,7 @@
 - [ ] Modify `src/CritterMart.Orders/Ordering/Order.cs` — fold `Subtotal`/`Discount`/`Total` + `CouponId?` from `CouponRedeemed`
 - [ ] Modify `src/CritterMart.Orders/Ordering/OrderStatusView.cs` — add `Subtotal`/`Discount`/`CouponCode?`; fold from `OrderPlaced`
 - [ ] Modify `src/CritterMart.Orders/Features/PlaceOrder.cs` — optional `couponCode`; resolve `CouponView`; open `FetchForWritingByTags<CouponUsage>`; cap check; tagged `CouponRedeemed` in-transaction; handler-local one-retry on `DcbConcurrencyException`; breach → `409 CouponExhausted`; unknown → `409 CouponInvalid`; no-coupon path unchanged
-- [ ] Modify `src/CritterMart.Orders/Program.cs` — `opts.Events.EnableDcb()`; tag `CouponRedeemed`/`CouponRedemptionReleased` (`TagEvent`/`WithTag`); register `CouponUsage` (live) + `Snapshot<CouponUsageView>(Inline)`
+- [ ] Modify `src/CritterMart.Orders/Program.cs` — `opts.Events.RegisterTagType<CouponId>("coupon").ForAggregate<CouponUsage>()` (spike-confirmed sole DCB config); per-event `WithTag`; register `Snapshot<CouponUsageView>(Inline)`
 
 ### Slice 6.4 — Release redemption on cancellation
 

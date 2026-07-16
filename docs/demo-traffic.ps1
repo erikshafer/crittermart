@@ -98,6 +98,8 @@ param(
     [switch]$Continuous,
     [int]$DeclineEvery = 5,
     [double]$DeclinePrice = 250.0,
+    [int]$CouponEvery = 0,
+    [string]$CouponCode = "WELCOME10",
     [switch]$Backorder,
     [switch]$Cover,
     [string]$BackorderSku = "crit-rare",
@@ -231,11 +233,16 @@ while ($Continuous -or $i -lt $Count) {
     try {
         Invoke-RestMethod "$OrdersUrl/carts/mine/items" -Method Post -ContentType application/json -Headers $shopper.Headers `
             -Body (ConvertTo-CompactJson @{ sku = $product.sku; quantity = 1; productSnapshot = @{ name = $product.name; price = $price } }) | Out-Null
-        # POST /orders resolves identity from the Bearer token's `sub` claim (ADR 023 hard cutover) —
-        # there is no request body; a missing/invalid token is a 401. (The cart POST sends the same token.)
-        $orderId = (Invoke-RestMethod "$OrdersUrl/orders" -Method Post -Headers $shopper.Headers).orderId
-        $kind = if ($decline) { 'DECLINE' } else { 'happy  ' }
-        Write-Host ("[{0,4}] {1}  {2}  {3}  price={4:N2}" -f $i, $kind, $orderId.Substring(0, 8), $product.sku, $price)
+        # POST /orders resolves identity from the Bearer token's `sub` claim (ADR 023 hard cutover) — there is
+        # no request body. An optional ?couponCode applies a discount (slice 6.3): every -CouponEvery'th order
+        # redeems -CouponCode (default WELCOME10, high-cap so a sustained run never exhausts it). To demo the
+        # FLASH20 cap/race by hand, see the runbook's coupon step — not this scripted everyday traffic.
+        $coupon = ($CouponEvery -gt 0) -and ($i % $CouponEvery -eq 0)
+        $ordersUri = if ($coupon) { "$OrdersUrl/orders?couponCode=$CouponCode" } else { "$OrdersUrl/orders" }
+        $orderId = (Invoke-RestMethod $ordersUri -Method Post -Headers $shopper.Headers).orderId
+        $kind = if ($decline) { 'DECLINE' } elseif ($coupon) { 'COUPON ' } else { 'happy  ' }
+        $suffix = if ($coupon) { "  coupon=$CouponCode" } else { '' }
+        Write-Host ("[{0,4}] {1}  {2}  {3}  price={4:N2}{5}" -f $i, $kind, $orderId.Substring(0, 8), $product.sku, $price, $suffix)
     }
     catch {
         Write-Host ("[{0,4}] error: {1}" -f $i, $_.Exception.Message) -ForegroundColor Yellow

@@ -27,7 +27,7 @@ The system SHALL allow a coupon to be defined as an event-sourced fact (configur
 
 ### Requirement: Redeem a coupon under a global cap at checkout
 
-The system SHALL enforce a **global per-coupon redemption cap** at checkout using a Dynamic Consistency Boundary in the Orders store, such that a coupon is redeemed at most `cap` times across all orders, ever. When `PlaceOrder` carries a `couponCode` that resolves through `CouponView` to a `CouponDefined`, the system SHALL open the DCB boundary `FetchForWritingByTags<CouponUsage>(new EventTagQuery().Or<CouponId>(couponId))`, compute the boundary's net redemption count (redemptions minus releases across every tagged event), and — while that net count is less than `cap` — append a `CouponRedeemed { orderId, couponId, discount }` tagged with the strong-typed `CouponId` to the new order stream, in the same transaction as `OrderPlaced`, where `discount` is the order subtotal multiplied by `discountPercent / 100`. When a concurrent redemption lands a matching tagged event inside the boundary between the read and the commit, `SaveChangesAsync` SHALL throw `DcbConcurrencyException`; the system SHALL retry the decision once against a fresh boundary read, so that of two orders racing for the last slot exactly one is created. When the net redemption count already equals `cap`, the system SHALL reject the placement with a `409 CouponExhausted` response, create no order stream, and append no event — the customer keeps their cart and decides. When the `couponCode` resolves to no definition, the system SHALL reject the placement with a `409 CouponInvalid` response and create no order stream. When `PlaceOrder` carries no `couponCode`, no boundary is opened and slice 4.1's behavior is unchanged (see `order-lifecycle`).
+The system SHALL enforce a **global per-coupon redemption cap** at checkout using a Dynamic Consistency Boundary in the Orders store, such that a coupon is redeemed at most `cap` times across all orders, ever. When `PlaceOrder` carries a `couponCode` that resolves through `CouponView` to a `CouponDefined`, the system SHALL open the DCB boundary `FetchForWritingByTags<CouponUsage>(new EventTagQuery().Or<CouponId>(couponId))`, compute the boundary's net redemption count (redemptions minus releases across every tagged event), and — while that net count is less than `cap` — append a `CouponRedeemed { orderId, couponId, discount }` tagged with the strong-typed `CouponId` to the new order stream, in the same transaction as `OrderPlaced`, where `discount` is the order subtotal multiplied by `discountPercent / 100`. When a concurrent redemption lands a matching tagged event inside the boundary between the read and the commit, the losing commit SHALL throw `DcbConcurrencyException` and its entire transaction (the order stream included) SHALL roll back; the system SHALL retry the redemption against a fresh boundary read (DCB optimistic concurrency is cap-blind, so a bare check under-admits under load). A retried redemption still below the cap SHALL succeed; only a genuinely-full cap SHALL yield a `409 CouponExhausted`. In total exactly `cap` redemptions SHALL succeed, under sequential or concurrent load. When the net redemption count already equals `cap`, the system SHALL reject the placement with a `409 CouponExhausted` response, create no order stream, and append no event — the customer keeps their cart and decides. When the `couponCode` resolves to no definition, the system SHALL reject the placement with a `409 CouponInvalid` response and create no order stream. When `PlaceOrder` carries no `couponCode`, no boundary is opened and slice 4.1's behavior is unchanged (see `order-lifecycle`).
 
 #### Scenario: Redeem a coupon below the cap
 
@@ -47,9 +47,16 @@ The system SHALL enforce a **global per-coupon redemption cap** at checkout usin
 
 - **GIVEN** `CouponDefined { code: "FLASH20", cap: 3 }` with a net redemption count of `2`
 - **WHEN** two customers issue `PlaceOrder { couponCode: "FLASH20" }` concurrently and both boundary reads see net count `2`
-- **THEN** one transaction commits the third redemption and the other's `SaveChangesAsync` throws `DcbConcurrencyException`
-- **AND** the losing handler retries into a fresh boundary read, finds net count `3` equal to the cap, and rejects that placement with `409 CouponExhausted`
+- **THEN** one transaction commits the third redemption and the other's commit throws `DcbConcurrencyException`, rolling its whole transaction back (no order stream)
+- **AND** the losing placement retries against a fresh boundary read, finds the net count now at the cap, and is rejected with a `409 CouponExhausted`
 - **AND** exactly one of the two racing orders exists afterward
+
+#### Scenario: Concurrent redemptions never exceed the cap
+
+- **GIVEN** `CouponDefined { code: "FLASH20", cap: 3 }` with no redemptions yet
+- **WHEN** six customers issue `PlaceOrder { couponCode: "FLASH20" }` concurrently
+- **THEN** exactly three placements succeed with `201` and the other three are rejected with `409`
+- **AND** the coupon's net redemption count is exactly `3` — the cap held under the burst
 
 #### Scenario: Reject an unknown code at checkout
 

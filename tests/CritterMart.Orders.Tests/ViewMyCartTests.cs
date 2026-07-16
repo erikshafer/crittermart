@@ -25,9 +25,7 @@ public class ViewMyCartTests
 
     private async Task ResetOrdersAsync()
     {
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await store.Advanced.Clean.DeleteAllDocumentsAsync();
-        await store.Advanced.Clean.DeleteAllEventDataAsync();
+        await _fixture.ResetAllDataAsync();
     }
 
     private async Task AddAsync(string customerId, string sku, int quantity, ProductSnapshot snapshot)

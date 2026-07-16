@@ -157,6 +157,13 @@ The canonical seed set (matches the three order routes below):
 | `crit-rare` | Rare Critter | $49.99 | 3 | [Step 5a](#5a--insufficient-stock-stock_unavailable) insufficient-stock cancel (order **>3** to trigger) |
 | `crit-deluxe` | Deluxe Critter | $24.99 | 1000 | [Step 5b](#5b--payment-declined-payment_declined--the-compensation-beat) payment-decline cancel (seeded high for sustained traffic) |
 
+The seeder also defines the demo **coupon** set (Workshop 003 slice 6.1, via `POST /coupons`):
+
+| Code | Discount | Cap | Used by |
+|---|---|---|---|
+| `FLASH20` | 20% off | **3** | [Step 5d](#step-5d--redeem-a-coupon-dcb-cap--the-race) the DCB cap + race (order **4** → `409 CouponExhausted`; cancel one → slot returns). Do **not** raise the cap. |
+| `WELCOME10` | 10% off | 100000 | everyday discounted-order traffic (`demo-traffic.ps1 -CouponEvery`), a high cap so a sustained run never exhausts it |
+
 **Disable auto-seed** (to seed by hand, or to demo an empty store): set `SEEDING_ENABLED=false` on the
 `seeder` resource (e.g. add `.WithEnvironment("SEEDING_ENABLED","false")` in the AppHost, or export it),
 and the seeder logs that it skipped and exits without seeding.
@@ -429,6 +436,64 @@ needs a fresh boot (reseed) or a larger `-BackorderQuantity`.
 | **Inventory logs** | `Supplier notified: restock crit-rare x7` (Information) on open; `Operator alert: SKU crit-rare went unreplenished, N still short` (Warning) on escalate. |
 | **CritterWatch — Messaging Explorer** | the `RequestRestock` / `RestockArrived` / `ReplenishmentEscalated` bus messages, plus the scheduled `ReplenishTimeout` in the Durability/Scheduled backlog (like `OrderPaymentTimeout` in [Step 6](#step-6--verify-the-demo-surfaces)). Saga *instances* are not yet surfaced in beta.1 — the Explore → Workflow page is a pre-1.0 stub (observed message flow only, no structural discovery); see [`critterwatch-saga-visibility-beta1.md`](research/critterwatch-saga-visibility-beta1.md). |
 | **Marten** | the saga doc in `inventory.mt_doc_replenishment` (`Id` = SKU, `Outstanding`) while open; **deleted** on completion. |
+
+---
+
+## Step 5d — Redeem a coupon (DCB cap + the race)
+
+CritterMart's **first Dynamic Consistency Boundary** (ADR 024, Workshop 003 slices 6.1/6.3/6.4): a coupon is
+redeemable at most **N times, ever, across all orders** — an invariant no single order stream could enforce.
+The seeded **`FLASH20`** (20% off, **cap 3**) is the flash-sale coupon; driving it to its cap by hand is the
+demo. The coupon rides checkout as an optional `?couponCode=` on `POST /orders`; an undiscounted order (no
+code) is [Step 4](#step-4--drive-an-order-happy-path) unchanged.
+
+```powershell
+$ord = "http://localhost:5103"; $idp = "http://localhost:5105"
+function J($o){ $o | ConvertTo-Json -Compress -Depth 6 }
+# Place one FLASH20 order per fresh shopper; returns the HTTP status (201 = redeemed, 409 = refused).
+function Place-Coupon($code) {
+  $email = "flash-$([guid]::NewGuid().ToString('N').Substring(0,8))@crittermart.com"
+  Invoke-RestMethod "$idp/register" -Method Post -ContentType application/json -Body (J @{ email=$email; password='Demo!pass1'; displayName='Flash Shopper' }) | Out-Null
+  $auth = @{ Authorization = "Bearer $((Invoke-RestMethod "$idp/login" -Method Post -ContentType application/json -Body (J @{ email=$email; password='Demo!pass1' })).token)" }
+  Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth -Body (J @{ sku='crit-001'; quantity=1; productSnapshot=@{ name='Cosmic Critter Plush'; price=24.99 } }) | Out-Null
+  try { $r = Invoke-WebRequest "$ord/orders?couponCode=$code" -Method Post -Headers $auth; "  $($r.StatusCode)  redeemed  order $(( $r.Content | ConvertFrom-Json).orderId.Substring(0,8))" }
+  catch { "  $([int]$_.Exception.Response.StatusCode)  refused   $code exhausted" }
+}
+1..3 | ForEach-Object { Place-Coupon 'FLASH20' }   # three succeed → the cap is now full
+Place-Coupon 'FLASH20'                             # the fourth → 409 CouponExhausted
+```
+
+**Expected:** the first **3** print `201 redeemed`; the **4th** prints `409 refused` — the cap held. Each
+redeemed order's `GET /orders/{id}` shows `subtotal 24.99`, `discount 5.00`, `total 19.99`, `couponCode FLASH20`.
+
+**The slot returns on cancellation (slice 6.4).** Cancel a redeemed order and its slot goes back to the pool —
+a failed sale never permanently burns a flash-sale slot. Easiest live route: place a FLASH20 order whose total
+clears the `$200` decline threshold (e.g. `quantity=9` at `price=24.99` → `$224.91` before discount), let it
+decline (~3-min `AuthDelay`), and its `CouponRedemptionReleased` frees the slot — a **5th** FLASH20 order then
+succeeds where the 4th was refused. (Any cancel route works: stock-unavailable via `crit-rare`, or timeout.)
+
+**The race (the talk's money moment).** Two shoppers reaching for the *same last slot* both see room, both
+redeem, and exactly **one** wins — the loser's commit hits `DcbConcurrencyException`, retries into the now-full
+cap, and gets `409`. To force it, drive `FLASH20` to cap-1 (two orders), then fire two `Place-Coupon 'FLASH20'`
+in parallel (`Start-Job`/`Start-ThreadJob`): exactly one returns `201`, the other `409`. The integration test
+`CouponTests.concurrent_redemptions_never_exceed_the_cap` pins this (6 racers, cap 3 → exactly 3 survive).
+
+**What to watch:**
+
+| Surface | What shows |
+|---|---|
+| **Marten** | the coupon definition in `orders.mt_doc_couponview` (`FLASH20` → cap 3); the tagged `CouponRedeemed` / `CouponRedemptionReleased` events on **order** streams in `orders.mt_events` (the `tags` column carries the `CouponId`); the advisory net count in `orders.mt_doc_couponusageview`. |
+| **CritterWatch — event append metric** | `CouponDefined` / `CouponRedeemed` / `CouponRedemptionReleased` in the `marten.event.append` counter (tagged by event type). |
+| **The order view** | `GET /orders/{id}` on a redeemed order returns the `subtotal` / `discount` / `couponCode` breakdown; the 4th (refused) order was never created. |
+
+> ### ⚙️ The `FLASH20` cap is a demo knob
+>
+> `FLASH20`'s **cap 3** is deliberately tiny so the breach + race are hand-demonstrable. The seeder
+> (`src/CritterMart.Seeding/Program.cs`) defines it; **do not raise the cap** or the breach stops being
+> reachable by hand. `WELCOME10` (cap 100000) is the everyday-discount counterpart for sustained traffic
+> (`demo-traffic.ps1 -CouponEvery 3`). Unlike the payment/timeout knobs, the coupon set is real domain data
+> (configuration-as-events), not a runtime toggle — it survives as `CouponDefined` events, so a reseed
+> re-establishes it and a re-run is idempotent (duplicate code → 409 → skip).
 
 ---
 

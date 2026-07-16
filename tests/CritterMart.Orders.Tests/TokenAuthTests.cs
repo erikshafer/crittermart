@@ -27,9 +27,7 @@ public class TokenAuthTests
 
     private async Task ResetOrdersAsync()
     {
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await store.Advanced.Clean.DeleteAllDocumentsAsync();
-        await store.Advanced.Clean.DeleteAllEventDataAsync();
+        await _fixture.ResetAllDataAsync();
     }
 
     // Happy path: a valid Bearer token authenticates the request as its `sub`. The cart is created and

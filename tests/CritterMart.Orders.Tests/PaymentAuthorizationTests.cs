@@ -29,9 +29,7 @@ public class PaymentAuthorizationTests
 
     private async Task ResetOrdersAsync()
     {
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await store.Advanced.Clean.DeleteAllDocumentsAsync();
-        await store.Advanced.Clean.DeleteAllEventDataAsync();
+        await _fixture.ResetAllDataAsync();
     }
 
     // Seed an order at the stock gate is unnecessary — we seed a freshly placed order and let the

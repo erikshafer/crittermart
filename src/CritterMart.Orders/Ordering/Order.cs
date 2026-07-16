@@ -26,13 +26,27 @@ public sealed record Order(
     string CustomerId,
     string Status,
     IReadOnlyList<OrderLine> Lines,
-    decimal Total)
+    decimal Total,
+    string? CouponId = null)
 {
     // Genesis: the customer checked out their open cart (PlaceOrder starts the stream as
     // StartStream<Order>(orderId, new OrderPlaced(...))). The placed order awaits confirmation; the
-    // cart's snapshotted lines + computed total are frozen on and never re-priced.
+    // cart's snapshotted lines + computed total are frozen on and never re-priced. Total is the DISCOUNTED
+    // total (Subtotal − Discount) — what the downstream reservation/payment gates act on.
     public static Order Create(OrderPlaced e) =>
         new(e.OrderId, e.CustomerId, OrderStatus.AwaitingConfirmation, [.. e.Items], e.Total);
+
+    // A coupon was redeemed at checkout (slice 6.3): the aggregate remembers WHICH coupon, so the three
+    // cancellation sites (slice 6.4) can append the compensating CouponRedemptionReleased iff CouponId is set.
+    // The write model tracks only the id it needs to decide the release — not the code or discount (those are
+    // the read view's / the event's concern), matching Order's "carry only what the handlers read" shape.
+    public static Order Apply(CritterMart.Orders.Promotions.CouponRedeemed e, Order order) =>
+        order with { CouponId = e.CouponId };
+
+    // The redemption was released on cancellation (slice 6.4): clear the id — the release is terminal (rides
+    // the once-appended OrderCancelled), so this never fires twice and the id never resurrects.
+    public static Order Apply(CritterMart.Orders.Promotions.CouponRedemptionReleased e, Order order) =>
+        order with { CouponId = null };
 
     // Stock gate cleared (slice 4.2): StockReservedHandler appends this while AwaitingConfirmation, then
     // cascades AuthorizePayment. The Status advance is what its own idempotency guard reads on a replay.

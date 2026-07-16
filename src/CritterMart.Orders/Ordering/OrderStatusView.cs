@@ -30,14 +30,26 @@ public sealed record OrderStatusView(
     IReadOnlyList<OrderLine> Lines,
     decimal Total,
     DateTimeOffset PlacedAt,
-    string? CancelReason)
+    string? CancelReason,
+    decimal Subtotal,
+    decimal Discount,
+    string? CouponCode)
 {
-    // Genesis (slice 4.1): the placed order — lines, total, the awaiting_confirmation status, and the
+    // Genesis (slice 4.1 + slice 6.3 pricing): the placed order — lines, the DISCOUNTED total, the pricing
+    // breakdown (subtotal + discount, both off OrderPlaced), the awaiting_confirmation status, and the
     // placement time (the OrderPlaced event's append timestamp, off the IEvent<T> wrapper — the view
-    // surfacing metadata the Order aggregate never stores). CancelReason starts null; only a cancellation sets it.
+    // surfacing metadata the Order aggregate never stores). CancelReason starts null (only a cancellation
+    // sets it); CouponCode starts null and is set by the paired CouponRedeemed (below) in the same transaction.
     public static OrderStatusView Create(IEvent<OrderPlaced> e) =>
         new(e.Data.OrderId, e.Data.CustomerId, OrderStatus.AwaitingConfirmation, [.. e.Data.Items], e.Data.Total,
-            e.Timestamp, CancelReason: null);
+            e.Timestamp, CancelReason: null, e.Data.Subtotal, e.Data.Discount, CouponCode: null);
+
+    // A coupon was redeemed (slice 6.3): surface the human-facing code for display ("Discount (FLASH20)").
+    // Appended to the same order stream right after OrderPlaced, so the inline projection folds it in the
+    // same transaction — the view settles with CouponCode set. The discount amount is already on the view
+    // (from OrderPlaced); this fold only adds the code the redemption event carries.
+    public static OrderStatusView Apply(CritterMart.Orders.Promotions.CouponRedeemed e, OrderStatusView view) =>
+        view with { CouponCode = e.CouponCode };
 
     // Klefter grant (slice 4.2): the stock gate is cleared.
     public static OrderStatusView Apply(StockReserved e, OrderStatusView view) =>

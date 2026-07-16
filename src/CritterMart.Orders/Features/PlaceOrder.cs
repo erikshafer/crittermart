@@ -2,7 +2,10 @@ using System.Security.Claims;
 using CritterMart.Orders.Auth;
 using CritterMart.Orders.Customers;
 using CritterMart.Orders.Ordering;
+using CritterMart.Orders.Promotions;
 using CritterMart.Orders.Shopping;
+using JasperFx.Events;
+using JasperFx.Events.Tags;
 using Marten;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +20,13 @@ namespace CritterMart.Orders.Features;
 // customerId is the authenticated JWT `sub` claim — the same identity transport as GET /orders/mine
 // and GET /carts/mine (ADR 023 hard cutover). The cart's snapshotted lines + computed total are
 // frozen onto a new Order stream. This is the project's first multi-stream atomic write.
+//
+// Slice 6.3 (Workshop 003) adds an OPTIONAL coupon: PlaceOrder MAY carry a couponCode as an optional
+// `?couponCode=` QUERY parameter. Absent → the path below is byte-for-byte slice 4.1 (POST /orders with no
+// body, the existing contract — a body-bound field would 400 the bodyless checkout the W3 screen already
+// uses). Present → the DCB redemption branch resolves the coupon, enforces the global cap via a boundary
+// pre-check, and appends a tagged CouponRedeemed onto the same order stream in the same transaction —
+// CritterMart's first Dynamic Consistency Boundary (ADR 024).
 
 // The orderId handed back so the caller can read the order at GET /orders/{orderId}.
 public record PlaceOrderResponse(string OrderId);
@@ -34,7 +44,11 @@ public static class PlaceOrderEndpoint
     [WolverinePost("/orders")]
     public static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)> Post(
         ClaimsPrincipal user,
-        IDocumentSession session, [FromServices] PaymentDeadline deadline)
+        IDocumentSession session,
+        IDocumentStore store,
+        IMessageBus bus,
+        [FromServices] PaymentDeadline deadline,
+        string? couponCode = null)
     {
         // Identity is the authenticated JWT `sub` claim, guaranteed by [Authorize] (ADR 023 hard cutover):
         // a missing/bad/expired token is a 401 decided by JwtBearer before this handler runs — consistent
@@ -68,33 +82,124 @@ public static class PlaceOrderEndpoint
                 statusCode: StatusCodes.Status409Conflict), null, null);
         }
 
-        var orderId = Guid.NewGuid().ToString();
         var items = cart.Lines
             .Select(l => new OrderLine(l.Sku, l.Quantity, l.Name, l.Price))
             .ToList();
-        var total = items.Sum(i => i.Quantity * i.Price);
+        var subtotal = items.Sum(i => i.Quantity * i.Price);
 
-        // The multi-stream atomic write (slice 4.1's teaching beat): a new Order stream AND the
-        // cart's terminal CartCheckedOut, committed together by AutoApplyTransactions in ONE
-        // transaction. The inline OrderStatusView, Cart, and CartView projections all update.
+        // ── Coupon path (slice 6.3, DCB) ────────────────────────────────────────────────────────────
+        // A carried couponCode diverts to the DCB redemption path (its own transaction + retry, below); the
+        // API is the boundary — the W2 advisory check (slice 6.2) is a convenience, not a guard.
+        if (!string.IsNullOrWhiteSpace(couponCode))
+        {
+            var coupon = await session.Query<CouponView>().FirstOrDefaultAsync(c => c.Code == couponCode);
+            if (coupon is null)
+            {
+                return (Results.Problem(
+                    title: "CouponInvalid",
+                    detail: $"Coupon '{couponCode}' is not valid.",
+                    statusCode: StatusCodes.Status409Conflict), null, null);
+            }
+
+            return await RedeemWithDcbAsync(store, bus, customerId, cart.Id, items, subtotal, coupon, deadline);
+        }
+
+        // ── No coupon → slice 4.1 exactly (byte-for-byte unchanged) ─────────────────────────────────
+        // The multi-stream atomic write (slice 4.1's teaching beat): a new Order stream AND the cart's
+        // terminal CartCheckedOut, committed together by AutoApplyTransactions in ONE transaction. The 4-arg
+        // OrderPlaced convenience prices the order undiscounted (Subtotal == Total, Discount == 0).
+        var orderId = Guid.NewGuid().ToString();
         session.Events.StartStream<Order>(
-            orderId, new OrderPlaced(orderId, customerId, items, total));
+            orderId, new OrderPlaced(orderId, customerId, items, subtotal));
 
         var cartStream = await session.Events.FetchForWriting<Cart>(cart.Id);
         cartStream.AppendOne(new CartCheckedOut(orderId));
 
-        // Cascade the whole order's reservation request to Inventory over RabbitMQ (slice 4.2,
-        // design.md decision 2): one message carrying every line, reserved all-or-nothing.
         var reserveStock = new Contracts.ReserveStock(
             orderId,
             items.Select(i => new Contracts.ReserveStockLine(i.Sku, i.Quantity)).ToList());
-
-        // Schedule the payment deadline (slice 4.7): a self-message delivered back to this service
-        // after the configured timeout. If the order has settled by then, the timeout handler's
-        // terminal guard makes it a no-op; if not, the order is cancelled and its stock released.
         var paymentTimeout = new OrderPaymentTimeout(orderId).DelayedFor(deadline.Duration);
 
         return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), reserveStock, paymentTimeout);
+    }
+
+    // The DCB redemption path (slice 6.3): the canonical Marten "reload and retry" loop. DCB optimistic
+    // concurrency is CAP-BLIND — FetchForWritingByTags arms an assertion on the tag-set, so ANY concurrent
+    // redemption invalidates a commit even when both are safely under the cap. So a bare pre-check would
+    // under-admit under a burst (the cap never EXCEEDS, but far fewer than `cap` get through). The retry
+    // re-reads the boundary and re-decides each attempt: a loser still under the cap succeeds on retry; only
+    // a genuinely-full cap yields CouponExhausted. Exactly `cap` redemptions ever succeed (Workshop 003 §6.3).
+    //
+    // Each attempt uses a FRESH session because a session whose SaveChanges threw is dirty; and this path
+    // does NOT ride AutoApplyTransactions (which owns the injected session's commit post-handler and would
+    // re-throw the caught exception). Cascades therefore publish through the bus AFTER the commit rather than
+    // via the tuple/outbox — a post-commit send (acceptable: the order is durably placed; ReserveStock and
+    // the payment timeout are at-least-once safety nets). The no-coupon path keeps the transactional outbox.
+    private static async Task<(IResult, Contracts.ReserveStock?, DeliveryMessage<OrderPaymentTimeout>?)>
+        RedeemWithDcbAsync(
+            IDocumentStore store, IMessageBus bus, string customerId, string cartId,
+            List<OrderLine> items, decimal subtotal, CouponView coupon, PaymentDeadline deadline)
+    {
+        var discount = Math.Round(subtotal * coupon.DiscountPercent / 100m, 2);
+        var total = subtotal - discount;
+        var query = new EventTagQuery().Or<CouponId>(new CouponId(coupon.Id));
+
+        // Bounded so sustained contention cannot spin forever; generous enough to converge for realistic
+        // concurrency (each round commits at least one, so winners settle in ~cap rounds).
+        const int maxAttempts = 25;
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            await using var s = store.LightweightSession();
+
+            var boundary = await s.Events.FetchForWritingByTags<CouponUsage>(query);
+            if ((boundary.Aggregate?.NetCount ?? 0) >= coupon.Cap)
+            {
+                return (Results.Problem(
+                    title: "CouponExhausted",
+                    detail: $"Coupon '{coupon.Code}' has reached its redemption limit.",
+                    statusCode: StatusCodes.Status409Conflict), null, null);
+            }
+
+            var orderId = Guid.NewGuid().ToString();
+
+            // The tagged CouponRedeemed rides the SAME new order stream as the priced OrderPlaced, in one
+            // transaction (ADR 024's "real order streams"; mechanic confirmed by the slice-6.3 DCB spike),
+            // plus the cart's terminal CartCheckedOut — the multi-stream atomic write, now DCB-guarded.
+            s.Events.StartStream<Order>(
+                orderId, new OrderPlaced(orderId, customerId, items, subtotal, discount, total));
+
+            var redeemed = s.Events.BuildEvent(new CouponRedeemed(orderId, coupon.Id, coupon.Code, discount));
+            redeemed.WithTag(new CouponId(coupon.Id));
+            s.Events.Append(orderId, redeemed);
+
+            var cartStream = await s.Events.FetchForWriting<Cart>(cartId);
+            cartStream.AppendOne(new CartCheckedOut(orderId));
+
+            try
+            {
+                await s.SaveChangesAsync();
+            }
+            catch (DcbConcurrencyException)
+            {
+                continue; // a concurrent redemption raced into the boundary — reload and retry
+            }
+
+            // Committed. Cascade the same reservation + payment-deadline slice 4.1 does, post-commit via the bus.
+            await bus.PublishAsync(new Contracts.ReserveStock(
+                orderId, items.Select(i => new Contracts.ReserveStockLine(i.Sku, i.Quantity)).ToList()));
+            await bus.PublishAsync(
+                new OrderPaymentTimeout(orderId),
+                new DeliveryOptions { ScheduleDelay = deadline.Duration });
+
+            return (Results.Created($"/orders/{orderId}", new PlaceOrderResponse(orderId)), null, null);
+        }
+
+        // Retries exhausted under sustained contention — safe to treat as exhausted (no order committed).
+        return (Results.Problem(
+            title: "CouponExhausted",
+            detail: $"Coupon '{coupon.Code}' is under heavy demand — please try again.",
+            statusCode: StatusCodes.Status409Conflict), null, null);
     }
 }
 

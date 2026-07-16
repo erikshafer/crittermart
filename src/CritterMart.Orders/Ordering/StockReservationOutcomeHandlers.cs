@@ -1,3 +1,4 @@
+using CritterMart.Orders.Promotions;
 using Marten;
 using Contracts = CritterMart.Contracts;
 
@@ -43,5 +44,9 @@ public static class StockReservationFailedHandler
         // all-or-nothing reservation means nothing was reserved to give back.
         stream.AppendOne(new StockReservationFailed(message.OrderId, message.Reason));
         stream.AppendOne(new OrderCancelled(message.OrderId, CancelReason.StockUnavailable));
+
+        // Slice 6.4: if the order redeemed a coupon, return its slot to the pool (tagged
+        // CouponRedemptionReleased on the same stream, same transaction). No-op when CouponId is null.
+        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
     }
 }
