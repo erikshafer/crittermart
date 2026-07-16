@@ -23,9 +23,7 @@ public class StockReservationOutcomeTests
 
     private async Task ResetOrdersAsync()
     {
-        var store = _fixture.Host.Services.GetRequiredService<IDocumentStore>();
-        await store.Advanced.Clean.DeleteAllDocumentsAsync();
-        await store.Advanced.Clean.DeleteAllEventDataAsync();
+        await _fixture.ResetAllDataAsync();
     }
 
     // Seed an order awaiting confirmation directly on its stream — the state Inventory replies into.

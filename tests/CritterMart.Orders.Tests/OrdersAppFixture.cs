@@ -30,9 +30,42 @@ public class OrdersAppFixture : IAsyncLifetime
     // tests reset it to real "now" at their start.
     public TestTimeProvider Time { get; } = new();
 
+    // The container connection string, kept for the boundary-aggregate-safe reset below.
+    private string _connectionString = string.Empty;
+
+    // Clears every document + event + DCB-tag table in the `orders` schema via raw SQL. Used instead of
+    // Marten's Clean.DeleteAllDocumentsAsync because that enumerates ALL active document features to build
+    // their schemas — and the DCB boundary aggregate CouponUsage (a `[BoundaryAggregate]`, intentionally
+    // id-less per Marten's own guidance) has no Id, so once it has been materialized by a redemption the
+    // enumeration throws InvalidDocumentException store-wide (a Marten 9.15.1 DCB/Clean rough edge). TRUNCATEing
+    // the tables directly sidesteps the feature enumeration entirely. Also clears mt_event_tag_coupon, which
+    // DeleteAllEventDataAsync leaves behind (its stale rows would collide with the next test's tagged appends).
+    public async Task ResetAllDataAsync()
+    {
+        await using var conn = new Npgsql.NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            DO $$
+            DECLARE r record;
+            BEGIN
+              FOR r IN
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'orders'
+                  AND (tablename LIKE 'mt_doc_%' OR tablename LIKE 'mt_events%'
+                       OR tablename = 'mt_streams' OR tablename = 'mt_event_tag_coupon')
+              LOOP
+                EXECUTE 'TRUNCATE TABLE orders.' || quote_ident(r.tablename) || ' CASCADE';
+              END LOOP;
+            END $$;
+            """;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
+        _connectionString = _postgres.GetConnectionString();
         Environment.SetEnvironmentVariable("ConnectionStrings__crittermart", _postgres.GetConnectionString());
         // A dummy connection so UseRabbitMqUsingNamedConnection("rabbitmq") resolves at config
         // time; the transport is stubbed below, so nothing actually connects.

@@ -1,3 +1,4 @@
+using CritterMart.Orders.Promotions;
 using Marten;
 using Contracts = CritterMart.Contracts;
 
@@ -63,6 +64,10 @@ public static class PaymentDecisionHandler
 
         stream.AppendOne(new PaymentAuthFailed(message.OrderId, message.Reason ?? "declined"));
         stream.AppendOne(new OrderCancelled(message.OrderId, CancelReason.PaymentDeclined));
+
+        // Slice 6.4: return the coupon slot if this order redeemed one (tagged CouponRedemptionReleased on
+        // the same stream, same transaction). No-op when CouponId is null. Independent of the stock release.
+        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
 
         var lines = stream.Aggregate.Lines
             .Select(l => new Contracts.ReleaseStockLine(l.Sku, l.Quantity))

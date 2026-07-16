@@ -131,9 +131,13 @@ var seeder = builder.AddProject<Projects.CritterMart_Seeding>("seeder")
     .WithEnvironment("CATALOG_URL", catalog.GetEndpoint("http"))
     .WithEnvironment("INVENTORY_URL", inventory.GetEndpoint("http"))
     .WithEnvironment("IDENTITY_URL", identity.GetEndpoint("http"))
+    // Orders too (Workshop 003 slice 6.1): the seeder POSTs the demo coupon set to Orders' /coupons the
+    // same decoupled way it seeds products/stock/customers (real HTTP, no project reference — ADR 024).
+    .WithEnvironment("ORDERS_URL", orders.GetEndpoint("http"))
     .WaitFor(catalog)
     .WaitFor(inventory)
-    .WaitFor(identity);
+    .WaitFor(identity)
+    .WaitFor(orders);
 
 // The round-two customer storefront SPA (ADR 015) — a Vite + React app launched as part of the Aspire
 // orchestration so one `dotnet run` boots the full stack with the frontend visible in the dashboard

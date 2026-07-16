@@ -29,7 +29,8 @@ if (!string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
 var catalogUrl = Environment.GetEnvironmentVariable("CATALOG_URL") ?? "http://localhost:5101";
 var inventoryUrl = Environment.GetEnvironmentVariable("INVENTORY_URL") ?? "http://localhost:5102";
 var identityUrl = Environment.GetEnvironmentVariable("IDENTITY_URL") ?? "http://localhost:5105";
-Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}, Identity={identityUrl}");
+var ordersUrl = Environment.GetEnvironmentVariable("ORDERS_URL") ?? "http://localhost:5103";
+Log($"Seeding — Catalog={catalogUrl}, Inventory={inventoryUrl}, Identity={identityUrl}, Orders={ordersUrl}");
 
 // The canonical demo set. These three SKUs back the three runbook order routes:
 //   crit-001    happy path                (Step 4)
@@ -54,6 +55,7 @@ SeedItem[] seed =
 using var catalog = new HttpClient { BaseAddress = new Uri(catalogUrl), Timeout = requestTimeout };
 using var inventory = new HttpClient { BaseAddress = new Uri(inventoryUrl), Timeout = requestTimeout };
 using var identity = new HttpClient { BaseAddress = new Uri(identityUrl), Timeout = requestTimeout };
+using var orders = new HttpClient { BaseAddress = new Uri(ordersUrl), Timeout = requestTimeout };
 
 var failures = 0;
 foreach (var item in seed)
@@ -127,6 +129,38 @@ foreach (var c in customers)
     }
 }
 
+// The demo coupon set (Workshop 003 slice 6.1, configuration-as-events). Defined via Orders' POST /coupons
+// — the same real-HTTP, no-project-reference pattern as the products above (ADR 024). Two coupons by role:
+//   FLASH20    the RACE coupon (cap 3): small enough to drive to breach by hand and demonstrate the DCB —
+//              order 4 gets 409 CouponExhausted; cancel one and the slot returns. Do NOT raise the cap.
+//   WELCOME10  everyday discount (cap 100000): a high cap so sustained demo-traffic can apply it without
+//              exhausting it — the "normal discounted order" path, distinct from the flash-sale race.
+DemoCoupon[] coupons =
+[
+    new("FLASH20", 20, 3),
+    new("WELCOME10", 10, 100000),
+];
+
+foreach (var c in coupons)
+{
+    using var define = await PostJsonAsync(orders, "/coupons",
+        new { code = c.Code, discountPercent = c.DiscountPercent, cap = c.Cap });
+
+    switch (define.StatusCode)
+    {
+        case HttpStatusCode.Created:
+            Log($"defined coupon {c.Code} ({c.DiscountPercent}% off, cap {c.Cap})");
+            break;
+        case HttpStatusCode.Conflict:
+            Log($"coupon {c.Code} already defined — skipping (idempotent).");
+            break;
+        default:
+            Log($"FAILED to define coupon {c.Code} -> HTTP {(int)define.StatusCode}");
+            failures++;
+            break;
+    }
+}
+
 if (failures == 0)
 {
     // Verify all seeded products are actually queryable before exiting. Inline Marten projections
@@ -140,7 +174,7 @@ if (failures == 0)
         return 1;
     }
 
-    Log($"Seed complete: {seed.Length} product(s) + {customers.Length} customer(s) ensured.");
+    Log($"Seed complete: {seed.Length} product(s) + {customers.Length} customer(s) + {coupons.Length} coupon(s) ensured.");
     return 0;
 }
 
@@ -211,6 +245,9 @@ internal sealed record SeedItem(string Sku, string Name, string Description, dec
 
 // A demo customer with a deterministic id matching the SPA's useCurrentCustomer stub.
 internal sealed record DemoCustomer(string Id, string Email, string DisplayName);
+
+// A demo coupon (Workshop 003 slice 6.1): code, percentage discount, and the global redemption cap N.
+internal sealed record DemoCoupon(string Code, int DiscountPercent, int Cap);
 
 // Minimal shape for deserialising GET /products responses during catalog verification.
 internal sealed record ProductView(string Sku);

@@ -1,4 +1,5 @@
 using CritterMart.Orders.Observability;
+using CritterMart.Orders.Promotions;
 using Marten;
 using Wolverine;
 using Wolverine.Attributes;
@@ -47,6 +48,10 @@ public static class PaymentTimeoutHandler
         // settled, so the deadline ends it.
         stream.AppendOne(new OrderCancelled(message.OrderId, CancelReason.PaymentTimeout));
         activity?.SetTag("crittermart.timeout.outcome", "cancelled");
+
+        // Slice 6.4: return the coupon slot if this order redeemed one (tagged CouponRedemptionReleased on
+        // the same stream, same transaction). No-op when CouponId is null.
+        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
 
         // Always release. ReleaseStock has no Orders-local handler, so conventional routing
         // carries it to Inventory over the broker — the same path 4.6's decline-cancel uses.
