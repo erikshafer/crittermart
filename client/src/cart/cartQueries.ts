@@ -10,7 +10,7 @@ import { CartViewSchema, type CartView } from "./cartSchema";
 // header badge and the cart page trigger a single `GET /carts/mine` and read the same `CartView`.
 
 // Query-key factory (tanstack `qk-factory-pattern`): centralized, hierarchical, dependency-complete. The cart
-// is resolved BY the customer (identity rides the X-Customer-Id header, not the URL), so the customer id is a
+// is resolved BY the customer (identity rides the `Authorization: Bearer` token, not the URL), so the customer id is a
 // real dependency of the result and belongs in the key — if the dev identity ever switches, the cache keys a
 // different cart rather than serving the wrong one (`qk-include-dependencies`).
 export const cartKeys = {

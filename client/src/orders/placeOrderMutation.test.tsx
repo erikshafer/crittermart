@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("usePlaceOrder", () => {
-  it("POSTs an empty body to /orders with X-Customer-Id header, invalidates the cart, and navigates to the confirmation on success", async () => {
+  it("POSTs an empty body to /orders with the bearer token, invalidates the cart, and navigates to the confirmation on success", async () => {
     const queryClient = freshClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const fetchMock = vi
@@ -48,15 +48,15 @@ describe("usePlaceOrder", () => {
 
     const { result } = renderHook(() => usePlaceOrder(), { wrapper: makeWrapper(queryClient) });
     act(() => {
-      result.current.mutate();
+      result.current.mutate(undefined);
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toMatch(/\/orders$/); // POST /orders — NOT route-keyed by customer
+    expect(url).toMatch(/\/orders$/); // POST /orders — no coupon → no query param; NOT route-keyed by customer
     expect(init.method).toBe("POST");
-    // Header-keyed identity (Convention 4): X-Customer-Id is set by the shared client; body is empty.
+    // Bearer-keyed identity (Convention 4, ADR 023): the Authorization token is set by the shared client; body is empty.
     expect(JSON.parse(init.body as string)).toEqual({});
     // The cart badge resets: invalidating /carts/mine refetches → 404 → Cart (0).
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: cartKeys.mine(CUSTOMER) });
@@ -67,13 +67,32 @@ describe("usePlaceOrder", () => {
     });
   });
 
+  it("carries an applied coupon code as ?couponCode= when one is passed to mutate (slice 6.2)", async () => {
+    const queryClient = freshClient();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ orderId: "ord-9c2b" }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => usePlaceOrder(), { wrapper: makeWrapper(queryClient) });
+    act(() => {
+      result.current.mutate("FLASH20");
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    // The applied coupon rides checkout as the ?couponCode= query param the DCB redemption path reads.
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/orders\?couponCode=FLASH20$/);
+  });
+
   it("surfaces a 409 (NoOpenCart / CartEmpty) as an error and does NOT navigate — the cart stays put", async () => {
     const queryClient = freshClient();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 409 })));
 
     const { result } = renderHook(() => usePlaceOrder(), { wrapper: makeWrapper(queryClient) });
     act(() => {
-      result.current.mutate();
+      result.current.mutate(undefined);
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

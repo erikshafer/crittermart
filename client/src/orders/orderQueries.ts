@@ -22,7 +22,7 @@ import {
 export const orderKeys = {
   all: ["order"] as const,
   detail: (orderId: string) => [...orderKeys.all, "detail", orderId] as const,
-  // The "My Orders" list is resolved BY the customer (identity in the X-Customer-Id header, not the URL), so
+  // The "My Orders" list is resolved BY the customer (identity in the `Authorization: Bearer` token, not the URL), so
   // the customer id is the result's true dependency and belongs in the key — mirroring `cartKeys.mine`, and the
   // contrast with `detail` above (an order is id-keyed; the list is customer-keyed).
   mine: (customerId: string) => [...orderKeys.all, "mine", customerId] as const,
@@ -51,7 +51,7 @@ export function orderQueryOptions(orderId: string, ctx: RequestContext) {
 }
 
 // Fetch the customer's orders, newest-first — the "My Orders" list (`GET /orders/mine`; workshop Gap #3). Like
-// `fetchMyCart`, it is customer-keyed: identity rides the X-Customer-Id header (Convention 4), so the result
+// `fetchMyCart`, it is customer-keyed: identity rides the `Authorization: Bearer` token (Convention 4), so the result
 // depends on the customer. Unlike the cart read, an empty order history is a `200 []`, NOT a `404` — so there
 // is no NotFoundError mapping; `fetchParsed` returns the parsed (possibly empty) array, and any non-2xx is a
 // genuine error. Standalone (not inlined in `queryFn`) so a test can drive it with a literal context + mocked

@@ -3,13 +3,14 @@ narrative: 011
 title: The Customer Redeems a Flash Coupon
 actor: Customer
 status: draft
-version: v1.0
-slices: [6.1, 6.3, 6.4]
+version: v1.1
+slices: [6.1, 6.2, 6.3, 6.4]
 references:
   - docs/workshops/003-promotions-event-model.md (§ 3 storyboard, § 4 vocabulary, § 5 slices 6.1/6.3/6.4, § 6 GWT)
   - docs/decisions/024-dcb-coupon-redemption-in-orders.md (the DCB decision this journey realizes)
   - docs/narratives/004-customer-purchase.md (the purchasing journey this one wraps — Moment 2, Placing the order)
-  - openspec/changes/2026-07-16-slices-6-1-6-3-6-4-coupon-dcb/ (capabilities coupon-promotion + order-lifecycle)
+  - openspec/changes/archive/2026-07-16-slices-6-1-6-3-6-4-coupon-dcb/ (slices 6.1/6.3/6.4, archived; capabilities coupon-promotion + order-lifecycle)
+  - openspec/changes/2026-07-16-slice-6-2-advisory-coupon-validate/ (slice 6.2; coupon-promotion MODIFIED — the advisory validate query)
 ---
 
 # Narrative 011 — The Customer Redeems a Flash Coupon
@@ -21,10 +22,9 @@ Everything here happens inside the **Orders** service. "Promotions" is a lane in
 ## Journey scope
 
 - **Slice 6.1 — Define a coupon.** Moment 1 covers the coupon coming into being: a Seller-lane definition (`DefineCoupon` → `CouponDefined`), CritterMart's first **configuration-as-events** — the cap *N* is an event-sourced domain fact with an audit trail, not a config row. Seed-realized this round.
-- **Slice 6.3 — Redeem a coupon at checkout.** Moment 2 covers the Customer redeeming it, and the two failure shapes that make the cap real: the **cap-breach** (the last slot is gone) and the **race** (two shoppers reach for the same last slot). This is the DCB moment.
-- **Slice 6.4 — Release a redemption on cancellation.** Moment 3 covers the slot that comes *back*: when a redeemed order cancels — for any reason — its redemption is returned to the pool, so a failed sale never permanently burns a flash-sale slot.
-
-**Not yet in this journey:** the cart-review *preview* of the discount — typing a code and seeing the total drop *before* committing — is the advisory query (slice 6.2), which trails in the next increment. For now the code rides the checkout command directly, and the checkout is the one and only authority on whether it applies.
+- **Slice 6.2 — Preview the discount at cart review.** Moment 2 covers the Customer *seeing* the discount before committing: typing a code on the cart-review screen fires an **advisory** validation query, the total drops, and an invalid or exhausted code answers inline. Nothing is written — the preview is a convenience that softens the surprise of the checkout race, never an authority.
+- **Slice 6.3 — Redeem a coupon at checkout.** Moment 3 covers the Customer redeeming it, and the two failure shapes that make the cap real: the **cap-breach** (the last slot is gone) and the **race** (two shoppers reach for the same last slot). This is the DCB moment.
+- **Slice 6.4 — Release a redemption on cancellation.** Moment 4 covers the slot that comes *back*: when a redeemed order cancels — for any reason — its redemption is returned to the pool, so a failed sale never permanently burns a flash-sale slot.
 
 ## Moment 1 — The flash coupon comes into being (Seller lane)
 
@@ -36,9 +36,23 @@ Everything here happens inside the **Orders** service. "Promotions" is a lane in
 
 **Why the cap is an *event*, not a setting.** `CouponDefined` carries the cap as a fact on a stream, not a row in a config table. That is deliberate: the cap *N* is a domain decision with a history — who set it, to what, when — and it is the exact same `CouponDefined` contract a future standalone Promotions service would *publish* to Orders as Published Language. The only thing that would change is how the definition *travels* (a broker message instead of a local seed); its shape is already right. This is CritterMart's first use of **configuration-as-events**, completing the adjunct-pattern set the event-modeling skill has named since round one.
 
-## Moment 2 — Redeeming the coupon at checkout (the DCB moment)
+## Moment 2 — Previewing the discount at cart review (slice 6.2)
 
-**Context.** The Customer has shaped a cart — say `$40.00` worth of critters (Narrative 004, Moment 1) — and has *FLASH20* in hand. They are on the cart-review screen and decide to buy, applying the code.
+**Context.** The Customer has shaped a cart — say `$40.00` worth of critters (Narrative 004, Moment 1) — and has *FLASH20* in hand. Before they commit, they want to *see* what the code does. The cart-review screen (W2) now has a coupon field for exactly this.
+
+**Interaction.** The Customer types `FLASH20` and taps **Apply**. This does *not* place the order and does *not* commit anything — it asks a single, read-only question: `GET /coupons/FLASH20/validate`.
+
+**System response.** Orders resolves the code against the coupon definition (`CouponView`) and its advisory usage (`CouponUsageView`) and answers one of three things, and **writes nothing** doing so:
+
+- **valid** — the code resolves and has room left: the answer carries the `discountPercent`, and the storefront prices the dollar amount *itself* against the cart total it already holds, dropping the summary to `Subtotal $40.00 / Discount (FLASH20) − $8.00 / Total $32.00`. The code is held in the screen's own state — a reload forgets it (accepted round-one behavior) — and rides checkout only when the Customer actually places the order.
+- **invalid** — no such coupon: an inline *"This code isn't valid."*, and nothing is held.
+- **exhausted** — the coupon resolves but its advisory count has reached the cap: an inline *"This coupon is no longer available."*
+
+**Why the preview is only ever advisory.** The answer is a **projection read**, and a projection can lag; more to the point, a slot can free by a cancellation, or be claimed by another shopper, in the seconds between this check and checkout. So a `valid` preview is a *hope*, not a *promise*: the code still has to survive the checkout boundary, and an `exhausted` preview does not stop the Customer carrying the code to a checkout that might now admit it. This is the deliberate advisory-vs-authoritative split — the preview softens the surprise; the checkout is the only authority. It is the same truth Moment 3 makes vivid under a race.
+
+## Moment 3 — Redeeming the coupon at checkout (the DCB moment)
+
+**Context.** The Customer has previewed the discount (Moment 2) — or skipped straight past it — and has *FLASH20* in hand. They decide to buy.
 
 **Interaction.** The Customer taps **Place Order**, and this time the command carries the code: `PlaceOrder { customerId, couponCode: "FLASH20" }`. As always, the order's *contents* are not re-sent — they are whatever the open cart holds server-side. The code is the one new thing on the wire, and it is **optional**: a `PlaceOrder` with no code is Narrative 004's checkout, unchanged in every respect.
 
@@ -55,7 +69,7 @@ The order is now placed at the discounted total, and everything downstream — t
 
 **Why no single order could do this.** Each order is its own stream; the cap is a fact about *all of them at once*. There is no aggregate whose version could guard it — the boundary aligns with the *coupon*, not with any one order. That mismatch, "the consistency boundary does not align with an aggregate," is precisely what DCB is for, and it is the pedagogical point of the whole increment.
 
-## Moment 3 — The slot that comes back
+## Moment 4 — The slot that comes back
 
 **Context.** A discounted order doesn't always make it. It might be cancelled because stock ran short (Narrative 004, Moment 3), because payment was declined (Moment 5), or because it timed out in silence (Moment 6). When that happens, the coupon it redeemed should not stay spent — a flash sale of three should not be quietly reduced to two by an order that failed at payment.
 
@@ -65,20 +79,18 @@ The order is now placed at the discounted total, and everything downstream — t
 
 **Why it can only happen once.** The release rides the cancellation, and a cancellation happens exactly once — `OrderCancelled` is terminal and appended a single time (the discipline every Order handler already enforces). So a redemption can be released at most once; the net count can never drift *below* true usage. The reserve/release symmetry the Inventory story already teaches — set aside, then hand back — reappears here as pure tag arithmetic on the coupon.
 
-## What the Customer does *not* yet see
+## What the journey still leaves out
 
-- **No preview of the discount before checkout.** Typing *FLASH20* on the cart-review screen and watching the total drop to `$32.00` *before* committing — with an inline "this code isn't valid" or "no longer available" — is the advisory query (slice 6.2), and it trails in the next increment. For now the code is applied *at* checkout; the priced result appears on the confirmed order, not as a live preview.
-- **No "you were beaten to it" until you try.** Because there is no advisory check yet, a Customer only learns a flash coupon is exhausted when their `Place Order` comes back with `CouponExhausted`. The checkout is the authority; the preview that would soften the surprise is 6.2's job.
+- **A valid preview is still not a promise.** Even now that the discount previews *before* checkout (Moment 2), the preview is advisory: a coupon that read `valid` on the cart-review screen can still come back `CouponExhausted` at **Place Order** if another shopper took the last slot in between. The preview softens the surprise; it never removes the checkout's authority. That is by design, not a gap (Workshop 003 §3).
 - **No stacking, no per-customer limit.** One coupon per order is the rule, and the cap is global — one person could, in principle, redeem all three. A *one-per-customer* cap and a *shared discount budget* are the richer DCB variants ADR 024 names as natural next steps, not built here.
 
 ## Forthcoming Moments
 
-- **The cart-review preview (slice 6.2).** The advisory validation query and the W2/W3 storefront affordances — apply a code, see the discounted total, get an inline "not valid" / "no longer available" — turning Moment 2's at-checkout application into a previewed one. The next increment.
-
-Beyond that, the long road (Workshop 003 § 8): per-customer and shared-budget DCB variants, coupon lifecycle (expiry, disable, edit), and Promotions graduating to its own service — at which point Moment 1's `CouponDefined` crosses the broker as Published Language instead of being seeded locally, and nothing else about this journey changes.
+The storefront coupon journey is now complete end-to-end: define (Moment 1), preview (Moment 2), redeem under the cap (Moment 3), and release on cancellation (Moment 4). What remains is the long road (Workshop 003 §8): per-customer and shared-budget DCB variants, coupon lifecycle (expiry, disable, edit), and Promotions graduating to its own service — at which point Moment 1's `CouponDefined` crosses the broker as Published Language instead of being seeded locally, and nothing else about this journey changes.
 
 ## Document History
 
 | Version | Date       | Notes |
 | ------- | ---------- | ----- |
 | v1.0    | 2026-07-16 | Initial commit. The Customer's flash-coupon journey per [Workshop 003](../workshops/003-promotions-event-model.md) / [ADR 024](../decisions/024-dcb-coupon-redemption-in-orders.md): Moment 1 (slice 6.1, `DefineCoupon` → `CouponDefined`, configuration-as-events, seed-realized); Moment 2 (slice 6.3, redeem at checkout under the global cap — the DCB moment, including the cap-breach `CouponExhausted` refusal and the `DcbConcurrencyException` race resolving to exactly one surviving order); Moment 3 (slice 6.4, `CouponRedemptionReleased` on cancellation returning the slot). Wraps Narrative 004's Moment 2 (Place Order); the coupon code rides `PlaceOrder` optionally, leaving the no-coupon checkout byte-for-byte unchanged. The advisory cart-review preview (slice 6.2) noted as forthcoming. Realized in `openspec/changes/2026-07-16-slices-6-1-6-3-6-4-coupon-dcb/` (capabilities `coupon-promotion` + `order-lifecycle`). |
+| v1.1    | 2026-07-16 | **Slice 6.2 realized** (implementations/040, OpenSpec change `2026-07-16-slice-6-2-advisory-coupon-validate`; `coupon-promotion` MODIFIED — one ADDED requirement, the advisory validate query). The forthcoming preview is now a first-class **Moment 2** (Previewing the discount at cart review): the read-only `GET /coupons/{code}/validate` answers `valid` (+ `discountPercent`) / `invalid` / `exhausted`, the W2 field previews `Subtotal / Discount (CODE) / Total` priced client-side, and inline errors surface "not valid" / "no longer available". The former Moments 2 (redeem) and 3 (release) renumber to **3** and **4**. "What the journey still leaves out" retains the advisory caveat (a `valid` preview can still lose the checkout race — by design) and the stacking/per-customer-limit long road; the previously-forthcoming preview bullet is retired. The applied code rides checkout as the existing `?couponCode=` param (no checkout change); W3 binds the already-shipped `subtotal`/`discount`/`couponCode`. |

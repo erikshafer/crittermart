@@ -82,6 +82,18 @@ public class CouponTests
         return view?.NetCount ?? 0;
     }
 
+    // GET /coupons/{code}/validate — the advisory read (slice 6.2). Always 200; the answer is discriminated
+    // by Status (valid/invalid/exhausted).
+    private async Task<CouponValidation> ValidateCouponAsync(string code)
+    {
+        var result = await _fixture.Host.Scenario(_ =>
+        {
+            _.Get.Url($"/coupons/{code}/validate");
+            _.StatusCodeShouldBe(200);
+        });
+        return result.ReadAsJson<CouponValidation>()!;
+    }
+
     // ── 6.1 Define a coupon ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -120,6 +132,51 @@ public class CouponTests
 
         await using var session = Store.LightweightSession();
         (await session.Query<CouponView>().AnyAsync(c => c.Code == "BADCOUPON")).ShouldBeFalse();
+    }
+
+    // ── 6.2 Validate & price a coupon at cart review (advisory, read-only) ───────────────────────────
+
+    [Fact]
+    public async Task validating_a_redeemable_coupon_reports_valid_with_the_discount_and_writes_nothing()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FLASH20", 20, 3);
+        var couponId = await CouponIdAsync("FLASH20");
+
+        var result = await ValidateCouponAsync("FLASH20");
+        result.Code.ShouldBe("FLASH20");
+        result.Status.ShouldBe(CouponValidationStatus.Valid);
+        result.DiscountPercent.ShouldBe(20);
+
+        // Advisory read — it must not have moved the usage count (nothing redeemed).
+        (await UsageNetCountAsync(couponId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task validating_an_unknown_code_reports_invalid()
+    {
+        await ResetOrdersAsync();
+
+        var result = await ValidateCouponAsync("BOGUS");
+        result.Code.ShouldBe("BOGUS");
+        result.Status.ShouldBe(CouponValidationStatus.Invalid);
+        result.DiscountPercent.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task validating_a_coupon_at_its_cap_reports_exhausted()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("SOLO", 20, 1);   // cap 1: one redemption exhausts it
+
+        await AddOneToCartAsync("customer-A");
+        var (status, _) = await PlaceAsync("customer-A", "SOLO");
+        status.ShouldBe(201);   // the one slot is now taken
+
+        var result = await ValidateCouponAsync("SOLO");
+        result.Code.ShouldBe("SOLO");
+        result.Status.ShouldBe(CouponValidationStatus.Exhausted);
+        result.DiscountPercent.ShouldBeNull();
     }
 
     // ── 6.3 Redeem a coupon at checkout ─────────────────────────────────────────────────────────────

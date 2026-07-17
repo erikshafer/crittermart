@@ -8,9 +8,10 @@ import { z } from "zod";
 //
 // **Wire casing is camelCase.** Wolverine.Http serializes with System.Text.Json *web defaults* and Orders
 // applies no `PropertyNamingPolicy` override (same as CartView, confirmed in #58/#61), so the C# PascalCase
-// properties land camelCased on the wire: `id`, `customerId`, `status`, `lines`, `total`, and (slice 025)
-// `placedAt`, `cancelReason`. `decimal Total` and per-line `decimal Price` serialize as JSON **numbers** (not
-// strings); `DateTimeOffset PlacedAt` as an ISO-8601 string; `string? CancelReason` as a string-or-null.
+// properties land camelCased on the wire: `id`, `customerId`, `status`, `lines`, `total`, (slice 025)
+// `placedAt`, `cancelReason`, and (slice 6.3, surfaced by 6.2) `subtotal`, `discount`, `couponCode`. `decimal
+// Total`/`Subtotal`/`Discount` and per-line `decimal Price` serialize as JSON **numbers** (not strings);
+// `DateTimeOffset PlacedAt` as an ISO-8601 string; `string? CancelReason`/`string? CouponCode` as string-or-null.
 //
 // **Default `.strip()`, deliberately — not `.strict()`.** A field the SPA reads going missing or changing
 // type throws here, loud and located; a benign *additive* Orders field the SPA doesn't read is dropped, not
@@ -80,6 +81,15 @@ export const OrderStatusViewSchema = z.object({
   // local model hasn't arrived yet — an eventual-consistency gap, not an error. Strip-mode drops it silently
   // when missing; present it is a string or null.
   customerName: z.string().nullable().optional(),
+  // The pricing breakdown (slice 6.3, surfaced to W3 by slice 6.2). `subtotal` is the pre-discount line sum
+  // and `discount` the amount taken off; both are server-computed JSON numbers on `EnrichedOrderView` (shipped
+  // in #144, additive after `customerName`). `total` above is already the DISCOUNTED total. When no coupon was
+  // redeemed `discount` is `0`, `subtotal == total`, and `couponCode` is null — so W3 renders the plain single
+  // Total and only shows the Subtotal/Discount/Total breakdown when `discount > 0`. `couponCode` is the human
+  // code the confirmation labels the discount line with ("Discount (FLASH20)").
+  subtotal: z.number().nonnegative(),
+  discount: z.number().nonnegative(),
+  couponCode: z.string().nullable(),
 });
 
 // The "My Orders" list payload (`GET /orders/mine`) — a customer's orders, each a full `OrderStatusView`,
