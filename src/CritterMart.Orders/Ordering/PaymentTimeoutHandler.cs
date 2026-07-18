@@ -51,7 +51,9 @@ public static class PaymentTimeoutHandler
 
         // Slice 6.4: return the coupon slot if this order redeemed one (tagged CouponRedemptionReleased on
         // the same stream, same transaction). No-op when CouponId is null.
-        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
+        // Slice 6.5: a per-customer coupon's release also carries the composite (coupon × customer) tag.
+        session.AppendCouponRelease(
+            message.OrderId, stream.Aggregate.CouponId, stream.Aggregate.CustomerId, stream.Aggregate.CouponPerCustomer);
 
         // Always release. ReleaseStock has no Orders-local handler, so conventional routing
         // carries it to Inventory over the broker — the same path 4.6's decline-cancel uses.

@@ -135,21 +135,26 @@ foreach (var c in customers)
 //              order 4 gets 409 CouponExhausted; cancel one and the slot returns. Do NOT raise the cap.
 //   WELCOME10  everyday discount (cap 100000): a high cap so sustained demo-traffic can apply it without
 //              exhausting it — the "normal discounted order" path, distinct from the flash-sale race.
+//   FIRSTORDER the PER-CUSTOMER coupon (slice 6.5, oneRedemptionPerCustomer): a high global cap but each
+//              customer may redeem it at most once — the composite (coupon × customer) DCB. Demo: a customer
+//              redeems it, their SECOND attempt gets 409 CouponAlreadyRedeemedByCustomer, another customer
+//              still succeeds. The second DCB (ADR 024 §38) made visible.
 DemoCoupon[] coupons =
 [
     new("FLASH20", 20, 3),
     new("WELCOME10", 10, 100000),
+    new("FIRSTORDER", 15, 100000, OneRedemptionPerCustomer: true),
 ];
 
 foreach (var c in coupons)
 {
     using var define = await PostJsonAsync(orders, "/coupons",
-        new { code = c.Code, discountPercent = c.DiscountPercent, cap = c.Cap });
+        new { code = c.Code, discountPercent = c.DiscountPercent, cap = c.Cap, oneRedemptionPerCustomer = c.OneRedemptionPerCustomer });
 
     switch (define.StatusCode)
     {
         case HttpStatusCode.Created:
-            Log($"defined coupon {c.Code} ({c.DiscountPercent}% off, cap {c.Cap})");
+            Log($"defined coupon {c.Code} ({c.DiscountPercent}% off, cap {c.Cap}{(c.OneRedemptionPerCustomer ? ", 1/customer" : "")})");
             break;
         case HttpStatusCode.Conflict:
             Log($"coupon {c.Code} already defined — skipping (idempotent).");
@@ -247,7 +252,8 @@ internal sealed record SeedItem(string Sku, string Name, string Description, dec
 internal sealed record DemoCustomer(string Id, string Email, string DisplayName);
 
 // A demo coupon (Workshop 003 slice 6.1): code, percentage discount, and the global redemption cap N.
-internal sealed record DemoCoupon(string Code, int DiscountPercent, int Cap);
+// Slice 6.5 adds OneRedemptionPerCustomer — when true, the coupon is also once-per-customer (composite DCB).
+internal sealed record DemoCoupon(string Code, int DiscountPercent, int Cap, bool OneRedemptionPerCustomer = false);
 
 // Minimal shape for deserialising GET /products responses during catalog verification.
 internal sealed record ProductView(string Sku);

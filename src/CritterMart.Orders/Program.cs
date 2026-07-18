@@ -98,6 +98,15 @@ builder.Services.AddMarten(opts =>
         opts.Events.RegisterTagType<CritterMart.Orders.Promotions.CouponId>("coupon")
             .ForAggregate<CritterMart.Orders.Promotions.CouponUsage>();
 
+        // The SECOND DCB registration (slice 6.5; ADR 024 §38): the composite (coupon × customer) tag, associated
+        // to the CustomerCouponUsage boundary aggregate. Same single-tag opt-in as CouponId above — the composite
+        // is a single-scalar tag whose value encodes the pair (verified against the resolved JasperFx.Events
+        // v2.27.0.0; there is no two-tag EventTagQuery.And). Triggers the mt_event_tag_couponcustomer schema on
+        // orders.mt_events and lets FetchForWritingByTags<CustomerCouponUsage> enforce "at most once per customer"
+        // for coupons whose CouponDefined.OneRedemptionPerCustomer is true.
+        opts.Events.RegisterTagType<CritterMart.Orders.Promotions.CouponCustomerTag>("couponcustomer")
+            .ForAggregate<CritterMart.Orders.Promotions.CustomerCouponUsage>();
+
         // CouponUsageView — the ADVISORY per-coupon usage read model (slice 6.3): a MULTI-stream inline
         // projection folding CouponRedeemed (+1) / CouponRedemptionReleased (−1) across all order streams,
         // keyed by couponId. Inline (no async daemon runs — an async advisory view would sit empty). Distinct

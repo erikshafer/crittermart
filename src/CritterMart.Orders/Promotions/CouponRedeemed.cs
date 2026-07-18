@@ -6,4 +6,10 @@ namespace CritterMart.Orders.Promotions;
 // redemption of this coupon regardless of which order stream carries it — the consistency boundary aligns
 // with the coupon, not with any aggregate. `Discount` is the amount taken off (subtotal × discountPercent/100);
 // `CouponCode` is the human-facing code the OrderStatusView surfaces for display ("Discount (FLASH20)").
-public record CouponRedeemed(string OrderId, string CouponId, string CouponCode, decimal Discount);
+//
+// Slice 6.5: `PerCustomer` records whether this redemption was tagged with the composite (coupon × customer)
+// tag too (i.e. the coupon is oneRedemptionPerCustomer). The Order aggregate folds it so the cancellation
+// sites know to ALSO carry the composite tag on the compensating release — returning the customer's slot.
+// Defaulted false so pre-6.5 CouponRedeemed events (no such JSON property) fold as global-cap-only.
+public record CouponRedeemed(
+    string OrderId, string CouponId, string CouponCode, decimal Discount, bool PerCustomer = false);

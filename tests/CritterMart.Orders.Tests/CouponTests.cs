@@ -33,11 +33,12 @@ public class CouponTests
     private IDocumentStore Store => _fixture.Host.Services.GetRequiredService<IDocumentStore>();
 
     // POST /coupons and return the generated couponId (resolved from CouponView by code).
-    private async Task DefineCouponAsync(string code, int discountPercent, int cap, int expectedStatus = 201)
+    private async Task DefineCouponAsync(
+        string code, int discountPercent, int cap, bool oneRedemptionPerCustomer = false, int expectedStatus = 201)
     {
         await _fixture.Host.Scenario(_ =>
         {
-            _.Post.Json(new DefineCoupon(code, discountPercent, cap)).ToUrl("/coupons");
+            _.Post.Json(new DefineCoupon(code, discountPercent, cap, oneRedemptionPerCustomer)).ToUrl("/coupons");
             _.StatusCodeShouldBe(expectedStatus);
         });
     }
@@ -342,5 +343,130 @@ public class CouponTests
         events.ShouldNotContain(e => e.Data is CouponRedemptionReleased);
         // OrderPlaced + StockReservationFailed + OrderCancelled — exactly slice 4.5, unchanged.
         events.Count.ShouldBe(3);
+    }
+
+    // ── 6.5 One redemption per customer (the composite (coupon × customer) DCB) ──────────────────────
+
+    [Fact]
+    public async Task defining_a_per_customer_coupon_records_the_flag()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await using var session = Store.LightweightSession();
+        var view = await session.Query<CouponView>().FirstAsync(c => c.Code == "FIRSTORDER");
+        view.OneRedemptionPerCustomer.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task a_per_customer_coupon_admits_a_customer_once_then_rejects_a_second_redemption()
+    {
+        await ResetOrdersAsync();
+        // High global cap so ONLY the per-customer boundary can bite.
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        // First redemption succeeds.
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        // A second redemption by the SAME customer — a fresh open cart, a later order — is refused by the
+        // composite boundary's existence check, with no order stream created.
+        await AddOneToCartAsync("customer-X");
+        var (status, _) = await PlaceAsync("customer-X", "FIRSTORDER");
+        status.ShouldBe(409);
+
+        await using var session = Store.LightweightSession();
+        // Exactly one order by customer-X carries the coupon — the second never became an order.
+        var placed = await session.Query<OrderStatusView>()
+            .Where(o => o.CustomerId == "customer-X" && o.CouponCode == "FIRSTORDER")
+            .CountAsync();
+        placed.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task a_per_customer_coupon_still_admits_a_different_customer()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        // A DIFFERENT customer is a distinct (coupon × customer) pair — an independent composite boundary at 0.
+        await AddOneToCartAsync("customer-Y");
+        (await PlaceAsync("customer-Y", "FIRSTORDER")).Status.ShouldBe(201);
+    }
+
+    [Fact]
+    public async Task concurrent_redemptions_by_different_customers_of_a_per_customer_coupon_all_succeed()
+    {
+        await ResetOrdersAsync();
+        const int customers = 6;
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        var ids = Enumerable.Range(1, customers).Select(i => $"firstorder-{i}").ToArray();
+        foreach (var c in ids)
+        {
+            await AddOneToCartAsync(c);
+        }
+
+        // Each customer holds an INDEPENDENT (FIRSTORDER × customer) composite boundary, so a concurrent
+        // burst must not false-conflict on the per-customer boundary; the high global cap admits them all.
+        var results = await Task.WhenAll(ids.Select(c => PlaceAsync(c, "FIRSTORDER")));
+        results.Count(r => r.Status == 201).ShouldBe(customers);
+
+        await using var session = Store.LightweightSession();
+        var orders = await session.Query<OrderStatusView>()
+            .Where(o => o.CouponCode == "FIRSTORDER")
+            .CountAsync();
+        orders.ShouldBe(customers);
+    }
+
+    [Fact]
+    public async Task cancelling_a_per_customer_redemption_lets_the_customer_redeem_again()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        var (status, orderId) = await PlaceAsync("customer-X", "FIRSTORDER");
+        status.ShouldBe(201);
+
+        // A second attempt is refused while the first redemption stands.
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(409);
+
+        // Cancel the first order (stock-reservation failure, slice 4.5) — the release carries the composite
+        // tag too, so the per-customer boundary decrements and the customer's slot returns.
+        await _fixture.Host.InvokeMessageAndWaitAsync(
+            new Contracts.StockReservationFailed(orderId!, "insufficient"));
+
+        await using (var session = Store.LightweightSession())
+        {
+            var events = await session.Events.FetchStreamAsync(orderId!);
+            events.ShouldContain(e => e.Data is CouponRedemptionReleased);
+        }
+
+        // And now the same customer can redeem it again — the slot was genuinely returned.
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+    }
+
+    [Fact]
+    public async Task a_non_per_customer_coupon_lets_one_customer_redeem_more_than_once()
+    {
+        await ResetOrdersAsync();
+        // FLASH20 is global-cap-only (oneRedemptionPerCustomer defaults false); cap 3 leaves room for two.
+        await DefineCouponAsync("FLASH20", 20, 3);
+        var couponId = await CouponIdAsync("FLASH20");
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FLASH20")).Status.ShouldBe(201);
+
+        // The SAME customer redeems again — no composite boundary is opened, so only the global cap applies.
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FLASH20")).Status.ShouldBe(201);
+
+        (await UsageNetCountAsync(couponId)).ShouldBe(2);
     }
 }

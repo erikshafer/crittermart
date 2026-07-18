@@ -67,7 +67,9 @@ public static class PaymentDecisionHandler
 
         // Slice 6.4: return the coupon slot if this order redeemed one (tagged CouponRedemptionReleased on
         // the same stream, same transaction). No-op when CouponId is null. Independent of the stock release.
-        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
+        // Slice 6.5: a per-customer coupon's release also carries the composite (coupon × customer) tag.
+        session.AppendCouponRelease(
+            message.OrderId, stream.Aggregate.CouponId, stream.Aggregate.CustomerId, stream.Aggregate.CouponPerCustomer);
 
         var lines = stream.Aggregate.Lines
             .Select(l => new Contracts.ReleaseStockLine(l.Sku, l.Quantity))

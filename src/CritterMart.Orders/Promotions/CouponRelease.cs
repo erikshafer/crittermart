@@ -12,10 +12,17 @@ namespace CritterMart.Orders.Promotions;
 //
 // At-most-one-release is inherited free: OrderCancelled is terminal and appended once (Workshop 001's
 // terminal-guard discipline, enforced by each handler's status guard), so this rides a single append.
-// Takes primitives (orderId, couponId?) to keep Promotions decoupled from the Ordering.Order type.
+// Takes primitives (orderId, couponId?, customerId?, perCustomer) to keep Promotions decoupled from the
+// Ordering.Order type — the caller reads them off the loaded Order aggregate.
+//
+// Slice 6.5: when the redeemed coupon was per-customer, the release ALSO carries the composite (coupon ×
+// customer) tag, so CustomerCouponUsage decrements and the customer's slot returns (the reserve/release
+// symmetry, now on BOTH boundaries). The composite tag is rebuilt from the SAME (couponId, customerId) pair
+// the redemption used — Order carries both, so no lookup is needed.
 public static class CouponRelease
 {
-    public static void AppendCouponRelease(this IDocumentSession session, string orderId, string? couponId)
+    public static void AppendCouponRelease(
+        this IDocumentSession session, string orderId, string? couponId, string? customerId, bool perCustomer)
     {
         if (couponId is null)
         {
@@ -24,6 +31,14 @@ public static class CouponRelease
 
         var released = session.Events.BuildEvent(new CouponRedemptionReleased(orderId, couponId));
         released.WithTag(new CouponId(couponId));
+
+        // Per-customer coupon → also decrement the composite boundary for this (coupon, customer) pair.
+        // customerId is always set for a redeemed order (it comes from OrderPlaced); guard defensively anyway.
+        if (perCustomer && customerId is not null)
+        {
+            released.WithTag(CouponCustomerTag.For(couponId, customerId));
+        }
+
         session.Events.Append(orderId, released);
     }
 }

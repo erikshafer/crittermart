@@ -161,4 +161,39 @@ public class OrderProjectionTests
         view.CancelReason.ShouldBe(reason);
         view.PlacedAt.ShouldBe(T0); // the cancellation does not disturb the placement time
     }
+
+    // ── Coupon folds on the Order aggregate (slices 6.3/6.5) ──
+
+    // Slice 6.5: a PER-CUSTOMER redemption folds both the coupon id AND the per-customer flag onto the
+    // aggregate, so the three cancellation sites can rebuild the composite (coupon × customer) release tag
+    // from Order.CouponId + Order.CustomerId. The release fold clears both — the redemption is returned once.
+    [Fact]
+    public void per_customer_coupon_redemption_folds_the_flag_and_the_release_clears_it()
+    {
+        var order = Order.Create(new OrderPlaced("order-1", "customer-X", [Plush], 49.98m));
+
+        order = Order.Apply(
+            new CritterMart.Orders.Promotions.CouponRedeemed("order-1", "coupon-1", "FIRSTORDER", 7.50m, PerCustomer: true),
+            order);
+        order.CouponId.ShouldBe("coupon-1");
+        order.CouponPerCustomer.ShouldBeTrue();
+
+        order = Order.Apply(new CritterMart.Orders.Promotions.CouponRedemptionReleased("order-1", "coupon-1"), order);
+        order.CouponId.ShouldBeNull();
+        order.CouponPerCustomer.ShouldBeFalse();
+    }
+
+    // Slice 6.3: a GLOBAL-cap-only redemption (the default) sets the coupon id but leaves the per-customer flag
+    // false — so its release carries only the CouponId tag, never the composite one.
+    [Fact]
+    public void a_global_cap_coupon_redemption_folds_no_per_customer_flag()
+    {
+        var order = Order.Create(new OrderPlaced("order-1", "customer-X", [Plush], 49.98m));
+
+        order = Order.Apply(
+            new CritterMart.Orders.Promotions.CouponRedeemed("order-1", "coupon-1", "FLASH20", 10m), order);
+
+        order.CouponId.ShouldBe("coupon-1");
+        order.CouponPerCustomer.ShouldBeFalse();
+    }
 }
