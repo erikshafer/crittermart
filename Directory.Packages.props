@@ -34,13 +34,13 @@
        6.18.0-target (2026-07-16). See the dependency-update runbook (docs/skills/updating-critter-stack-dependencies). -->
   <ItemGroup>
     <PackageVersion Include="WolverineFx" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.19.0" />
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.19.0" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.HealthChecks" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.20.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.20.0" />
   </ItemGroup>
   <!-- EF Core provider — the Identity spike runs Wolverine over EF Core / Npgsql instead of Marten
        (the persistence-agnostic teaching beat; a data store per ADR 009). .NET 10 / EF Core 10 line. -->
