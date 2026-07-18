@@ -47,6 +47,8 @@ public static class StockReservationFailedHandler
 
         // Slice 6.4: if the order redeemed a coupon, return its slot to the pool (tagged
         // CouponRedemptionReleased on the same stream, same transaction). No-op when CouponId is null.
-        session.AppendCouponRelease(message.OrderId, stream.Aggregate.CouponId);
+        // Slice 6.5: a per-customer coupon's release also carries the composite (coupon × customer) tag.
+        session.AppendCouponRelease(
+            message.OrderId, stream.Aggregate.CouponId, stream.Aggregate.CustomerId, stream.Aggregate.CouponPerCustomer);
     }
 }

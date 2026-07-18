@@ -38,8 +38,9 @@ public class OrdersAppFixture : IAsyncLifetime
     // their schemas — and the DCB boundary aggregate CouponUsage (a `[BoundaryAggregate]`, intentionally
     // id-less per Marten's own guidance) has no Id, so once it has been materialized by a redemption the
     // enumeration throws InvalidDocumentException store-wide (a Marten 9.15.1 DCB/Clean rough edge). TRUNCATEing
-    // the tables directly sidesteps the feature enumeration entirely. Also clears mt_event_tag_coupon, which
-    // DeleteAllEventDataAsync leaves behind (its stale rows would collide with the next test's tagged appends).
+    // the tables directly sidesteps the feature enumeration entirely. Also clears the DCB tag tables (matched by
+    // the mt_event_tag_% prefix — mt_event_tag_coupon from slice 6.3, mt_event_tag_couponcustomer from slice 6.5),
+    // which DeleteAllEventDataAsync leaves behind (their stale rows would collide with the next test's tagged appends).
     public async Task ResetAllDataAsync()
     {
         await using var conn = new Npgsql.NpgsqlConnection(_connectionString);
@@ -53,7 +54,7 @@ public class OrdersAppFixture : IAsyncLifetime
                 SELECT tablename FROM pg_tables
                 WHERE schemaname = 'orders'
                   AND (tablename LIKE 'mt_doc_%' OR tablename LIKE 'mt_events%'
-                       OR tablename = 'mt_streams' OR tablename = 'mt_event_tag_coupon')
+                       OR tablename = 'mt_streams' OR tablename LIKE 'mt_event_tag_%')
               LOOP
                 EXECUTE 'TRUNCATE TABLE orders.' || quote_ident(r.tablename) || ' CASCADE';
               END LOOP;

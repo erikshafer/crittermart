@@ -27,7 +27,8 @@ public sealed record Order(
     string Status,
     IReadOnlyList<OrderLine> Lines,
     decimal Total,
-    string? CouponId = null)
+    string? CouponId = null,
+    bool CouponPerCustomer = false)
 {
     // Genesis: the customer checked out their open cart (PlaceOrder starts the stream as
     // StartStream<Order>(orderId, new OrderPlaced(...))). The placed order awaits confirmation; the
@@ -40,13 +41,16 @@ public sealed record Order(
     // cancellation sites (slice 6.4) can append the compensating CouponRedemptionReleased iff CouponId is set.
     // The write model tracks only the id it needs to decide the release — not the code or discount (those are
     // the read view's / the event's concern), matching Order's "carry only what the handlers read" shape.
+    //
+    // Slice 6.5: also remember whether the coupon was per-customer, so the release can rebuild the composite
+    // (coupon × customer) tag from this aggregate's CouponId + CustomerId and decrement the per-customer boundary.
     public static Order Apply(CritterMart.Orders.Promotions.CouponRedeemed e, Order order) =>
-        order with { CouponId = e.CouponId };
+        order with { CouponId = e.CouponId, CouponPerCustomer = e.PerCustomer };
 
-    // The redemption was released on cancellation (slice 6.4): clear the id — the release is terminal (rides
-    // the once-appended OrderCancelled), so this never fires twice and the id never resurrects.
+    // The redemption was released on cancellation (slice 6.4): clear the id (and the per-customer flag) — the
+    // release is terminal (rides the once-appended OrderCancelled), so this never fires twice and neither resurrects.
     public static Order Apply(CritterMart.Orders.Promotions.CouponRedemptionReleased e, Order order) =>
-        order with { CouponId = null };
+        order with { CouponId = null, CouponPerCustomer = false };
 
     // Stock gate cleared (slice 4.2): StockReservedHandler appends this while AwaitingConfirmation, then
     // cascades AuthorizePayment. The Status advance is what its own idempotency guard reads on a replay.

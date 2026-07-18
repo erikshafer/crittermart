@@ -163,6 +163,7 @@ The seeder also defines the demo **coupon** set (Workshop 003 slice 6.1, via `PO
 |---|---|---|---|
 | `FLASH20` | 20% off | **3** | [Step 5d](#step-5d--redeem-a-coupon-dcb-cap--the-race) the DCB cap + race (order **4** → `409 CouponExhausted`; cancel one → slot returns). Do **not** raise the cap. |
 | `WELCOME10` | 10% off | 100000 | everyday discounted-order traffic (`demo-traffic.ps1 -CouponEvery`), a high cap so a sustained run never exhausts it |
+| `FIRSTORDER` | 15% off | 100000, **1/customer** | [Step 5d](#step-5d--redeem-a-coupon-dcb-cap--the-race) the **second** DCB — the composite `(coupon × customer)` boundary (slice 6.5): a customer's second redemption → `409 CouponAlreadyRedeemedByCustomer`; another customer still succeeds |
 
 **Disable auto-seed** (to seed by hand, or to demo an empty store): set `SEEDING_ENABLED=false` on the
 `seeder` resource (e.g. add `.WithEnvironment("SEEDING_ENABLED","false")` in the AppHost, or export it),
@@ -478,11 +479,38 @@ cap, and gets `409`. To force it, drive `FLASH20` to cap-1 (two orders), then fi
 in parallel (`Start-Job`/`Start-ThreadJob`): exactly one returns `201`, the other `409`. The integration test
 `CouponTests.concurrent_redemptions_never_exceed_the_cap` pins this (6 racers, cap 3 → exactly 3 survive).
 
+**One redemption per customer — the SECOND DCB (slice 6.5, ADR 024 §38).** Where `FLASH20` counts redemptions
+against a *coupon*, **`FIRSTORDER`** (15% off, `1/customer`) counts against a `(coupon × customer)` **pair** — a
+composite tag, CritterMart's first. The invariant: a given customer may redeem it **at most once, ever**, even
+across separate orders. The `Place-Coupon` helper above registers a *fresh* shopper each call, so to show the
+per-customer refusal you must reuse **one** identity across two checkouts:
+
+```powershell
+# Reuse ONE shopper across two FIRSTORDER checkouts to show the per-customer boundary bite.
+$email = "firstorder-$([guid]::NewGuid().ToString('N').Substring(0,8))@crittermart.com"
+Invoke-RestMethod "$idp/register" -Method Post -ContentType application/json -Body (J @{ email=$email; password='Demo!pass1'; displayName='Repeat Shopper' }) | Out-Null
+$auth = @{ Authorization = "Bearer $((Invoke-RestMethod "$idp/login" -Method Post -ContentType application/json -Body (J @{ email=$email; password='Demo!pass1' })).token)" }
+function Redeem-FirstOrder {
+  Invoke-RestMethod "$ord/carts/mine/items" -Method Post -ContentType application/json -Headers $auth -Body (J @{ sku='crit-001'; quantity=1; productSnapshot=@{ name='Cosmic Critter Plush'; price=24.99 } }) | Out-Null
+  try { $r = Invoke-WebRequest "$ord/orders?couponCode=FIRSTORDER" -Method Post -Headers $auth; "  $($r.StatusCode)  redeemed" }
+  catch { "  $([int]$_.Exception.Response.StatusCode)  refused   $((($_.ErrorDetails.Message | ConvertFrom-Json).title))" }
+}
+Redeem-FirstOrder   # 201 redeemed — first time
+Redeem-FirstOrder   # 409 refused   CouponAlreadyRedeemedByCustomer — same customer, second attempt
+Place-Coupon 'FIRSTORDER'   # 201 — a DIFFERENT (fresh) customer still succeeds; their pair is independent
+```
+
+**Expected:** the same shopper's **second** `FIRSTORDER` checkout returns `409 CouponAlreadyRedeemedByCustomer`
+and creates no order; a different customer still gets `201`. Cancel the first order (any route) and its release
+carries the composite tag too, so **that** customer may redeem `FIRSTORDER` again — the reserve/release symmetry,
+now on the per-customer boundary. Pinned by `CouponTests.a_per_customer_coupon_admits_a_customer_once_then_rejects_a_second_redemption`
+and `…_lets_the_customer_redeem_again`.
+
 **What to watch:**
 
 | Surface | What shows |
 |---|---|
-| **Marten** | the coupon definition in `orders.mt_doc_couponview` (`FLASH20` → cap 3); the tagged `CouponRedeemed` / `CouponRedemptionReleased` events on **order** streams in `orders.mt_events` (the `tags` column carries the `CouponId`); the advisory net count in `orders.mt_doc_couponusageview`. |
+| **Marten** | the coupon definitions in `orders.mt_doc_couponview` (`FLASH20` → cap 3; `FIRSTORDER` → `oneRedemptionPerCustomer: true`); the tagged `CouponRedeemed` / `CouponRedemptionReleased` events on **order** streams in `orders.mt_events`; the DCB tag tables `orders.mt_event_tag_coupon` (the `CouponId`) and, for a `FIRSTORDER` redemption, `orders.mt_event_tag_couponcustomer` (the composite `(coupon × customer)` value); the advisory net count in `orders.mt_doc_couponusageview`. |
 | **CritterWatch — event append metric** | `CouponDefined` / `CouponRedeemed` / `CouponRedemptionReleased` in the `marten.event.append` counter (tagged by event type). |
 | **The order view** | `GET /orders/{id}` on a redeemed order returns the `subtotal` / `discount` / `couponCode` breakdown; the 4th (refused) order was never created. |
 
@@ -491,9 +519,11 @@ in parallel (`Start-Job`/`Start-ThreadJob`): exactly one returns `201`, the othe
 > `FLASH20`'s **cap 3** is deliberately tiny so the breach + race are hand-demonstrable. The seeder
 > (`src/CritterMart.Seeding/Program.cs`) defines it; **do not raise the cap** or the breach stops being
 > reachable by hand. `WELCOME10` (cap 100000) is the everyday-discount counterpart for sustained traffic
-> (`demo-traffic.ps1 -CouponEvery 3`). Unlike the payment/timeout knobs, the coupon set is real domain data
-> (configuration-as-events), not a runtime toggle — it survives as `CouponDefined` events, so a reseed
-> re-establishes it and a re-run is idempotent (duplicate code → 409 → skip).
+> (`demo-traffic.ps1 -CouponEvery 3`); `FIRSTORDER` (cap 100000, `1/customer`) is the second-DCB
+> counterpart — its high global cap keeps the *composite* boundary the only one that bites. Unlike the
+> payment/timeout knobs, the coupon set is real domain data (configuration-as-events), not a runtime toggle —
+> it survives as `CouponDefined` events, so a reseed re-establishes it and a re-run is idempotent (duplicate
+> code → 409 → skip).
 
 ---
 

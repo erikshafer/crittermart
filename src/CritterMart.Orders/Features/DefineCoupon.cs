@@ -10,7 +10,10 @@ namespace CritterMart.Orders.Features;
 // round: the seeder drives this endpoint with real HTTP, the same decoupled way it publishes products
 // and receives stock (no project reference on any service). An anonymous admin path — the passwordless
 // POST /customers precedent — a real Promotions service would own auth later (ADR 024).
-public record DefineCoupon(string Code, int DiscountPercent, int Cap);
+//
+// Slice 6.5: OneRedemptionPerCustomer opts the coupon into the composite (coupon × customer) DCB — a given
+// customer may redeem it at most once. Defaulted false so existing callers/tests define a global-cap-only coupon.
+public record DefineCoupon(string Code, int DiscountPercent, int Cap, bool OneRedemptionPerCustomer = false);
 
 // The coupon id handed back so the location points at the (future 6.2) coupon read.
 public record DefineCouponResponse(string CouponId, string Code);
@@ -62,11 +65,12 @@ public static class DefineCouponEndpoint
         // The couponId is the stream key (generated); the human-facing Code is the checkout lookup key.
         var couponId = Guid.NewGuid().ToString();
 
-        // Configuration-as-events: the definition — including cap N — is appended as a domain event.
-        // AutoApplyTransactions commits it with the inline CouponView projection in one transaction.
+        // Configuration-as-events: the definition — including cap N and the per-customer policy — is appended
+        // as a domain event. AutoApplyTransactions commits it with the inline CouponView projection in one transaction.
         session.Events.StartStream(
             couponId,
-            new CouponDefined(couponId, command.Code, command.DiscountPercent, command.Cap));
+            new CouponDefined(
+                couponId, command.Code, command.DiscountPercent, command.Cap, command.OneRedemptionPerCustomer));
 
         return new CreationResponse($"/coupons/{command.Code}");
     }

@@ -236,7 +236,8 @@ while ($Continuous -or $i -lt $Count) {
         # POST /orders resolves identity from the Bearer token's `sub` claim (ADR 023 hard cutover) — there is
         # no request body. An optional ?couponCode applies a discount (slice 6.3): every -CouponEvery'th order
         # redeems -CouponCode (default WELCOME10, high-cap so a sustained run never exhausts it). To demo the
-        # FLASH20 cap/race by hand, see the runbook's coupon step — not this scripted everyday traffic.
+        # FLASH20 cap/race OR the FIRSTORDER per-customer refusal (slice 6.5) by hand, see the runbook's coupon
+        # step — not this scripted everyday traffic (each order is a fresh shopper, so FIRSTORDER never repeats).
         $coupon = ($CouponEvery -gt 0) -and ($i % $CouponEvery -eq 0)
         $ordersUri = if ($coupon) { "$OrdersUrl/orders?couponCode=$CouponCode" } else { "$OrdersUrl/orders" }
         $orderId = (Invoke-RestMethod $ordersUri -Method Post -Headers $shopper.Headers).orderId

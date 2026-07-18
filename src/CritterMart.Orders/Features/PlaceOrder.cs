@@ -27,6 +27,10 @@ namespace CritterMart.Orders.Features;
 // uses). Present → the DCB redemption branch resolves the coupon, enforces the global cap via a boundary
 // pre-check, and appends a tagged CouponRedeemed onto the same order stream in the same transaction —
 // CritterMart's first Dynamic Consistency Boundary (ADR 024).
+//
+// Slice 6.5 (ADR 024 §38) composes a SECOND DCB when the coupon is oneRedemptionPerCustomer: the composite
+// (coupon × customer) boundary, enforcing "at most once per customer" alongside the global cap in the same
+// transaction. CritterMart's first composite-tag boundary — the boundary aligns with a PAIR, not a single id.
 
 // The orderId handed back so the caller can read the order at GET /orders/{orderId}.
 public record PlaceOrderResponse(string OrderId);
@@ -130,6 +134,11 @@ public static class PlaceOrderEndpoint
     // re-reads the boundary and re-decides each attempt: a loser still under the cap succeeds on retry; only
     // a genuinely-full cap yields CouponExhausted. Exactly `cap` redemptions ever succeed (Workshop 003 §6.3).
     //
+    // Slice 6.5: for a per-customer coupon this opens TWO boundaries per attempt (the composite per-customer
+    // boundary + the global cap) and appends a doubly-tagged CouponRedeemed, so a DcbConcurrencyException from
+    // EITHER boundary drives the same retry — including a customer's own double-submit, which settles to exactly
+    // one (the loser re-reads the composite boundary at net count 1 → CouponAlreadyRedeemedByCustomer).
+    //
     // Each attempt uses a FRESH session because a session whose SaveChanges threw is dirty; and this path
     // does NOT ride AutoApplyTransactions (which owns the injected session's commit post-handler and would
     // re-throw the caught exception). Cascades therefore publish through the bus AFTER the commit rather than
@@ -144,6 +153,13 @@ public static class PlaceOrderEndpoint
         var total = subtotal - discount;
         var query = new EventTagQuery().Or<CouponId>(new CouponId(coupon.Id));
 
+        // Slice 6.5: a per-customer coupon composes a SECOND DCB — the composite (coupon × customer) boundary.
+        // Built once (the pair is constant across retries): a single-scalar CouponCustomerTag, queried through
+        // the same single-tag path as the global cap. Null for a global-cap-only coupon → no second boundary opened.
+        var perCustomerQuery = coupon.OneRedemptionPerCustomer
+            ? new EventTagQuery().Or<CouponCustomerTag>(CouponCustomerTag.For(coupon.Id, customerId))
+            : null;
+
         // Bounded so sustained contention cannot spin forever; generous enough to converge for realistic
         // concurrency (each round commits at least one, so winners settle in ~cap rounds).
         const int maxAttempts = 25;
@@ -151,6 +167,26 @@ public static class PlaceOrderEndpoint
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             await using var s = store.LightweightSession();
+
+            // Slice 6.5: the per-customer EXISTENCE check runs BEFORE the global-cap count check, so a customer
+            // who already redeemed hears the honest reason (AlreadyRedeemedByCustomer) rather than a coincidental
+            // CouponExhausted. Reading the composite boundary here ALSO arms its tag-scoped concurrency assertion
+            // (the doubly-tagged append below participates in it) — a transactional backstop. In practice a single
+            // customer's concurrent checkouts are already serialized by the one-open-cart invariant (they collide
+            // on the cart stream first), so this boundary's real guarantee is the cross-order EXISTENCE check: a
+            // LATER order refused because an EARLIER one already redeemed. Distinct (coupon × customer) pairs are
+            // independent boundaries, so different customers never false-conflict here.
+            if (perCustomerQuery is not null)
+            {
+                var perCustomer = await s.Events.FetchForWritingByTags<CustomerCouponUsage>(perCustomerQuery);
+                if ((perCustomer.Aggregate?.NetCount ?? 0) >= 1)
+                {
+                    return (Results.Problem(
+                        title: "CouponAlreadyRedeemedByCustomer",
+                        detail: $"Coupon '{coupon.Code}' may be redeemed only once per customer, and you have already redeemed it.",
+                        statusCode: StatusCodes.Status409Conflict), null, null);
+                }
+            }
 
             var boundary = await s.Events.FetchForWritingByTags<CouponUsage>(query);
             if ((boundary.Aggregate?.NetCount ?? 0) >= coupon.Cap)
@@ -169,8 +205,15 @@ public static class PlaceOrderEndpoint
             s.Events.StartStream<Order>(
                 orderId, new OrderPlaced(orderId, customerId, items, subtotal, discount, total));
 
-            var redeemed = s.Events.BuildEvent(new CouponRedeemed(orderId, coupon.Id, coupon.Code, discount));
+            var redeemed = s.Events.BuildEvent(
+                new CouponRedeemed(orderId, coupon.Id, coupon.Code, discount, coupon.OneRedemptionPerCustomer));
             redeemed.WithTag(new CouponId(coupon.Id));
+            // Slice 6.5: a per-customer redemption ALSO carries the composite tag, so both boundaries' assertions
+            // are armed by this one committed event and the release can decrement the per-customer boundary too.
+            if (coupon.OneRedemptionPerCustomer)
+            {
+                redeemed.WithTag(CouponCustomerTag.For(coupon.Id, customerId));
+            }
             s.Events.Append(orderId, redeemed);
 
             var cartStream = await s.Events.FetchForWriting<Cart>(cartId);
