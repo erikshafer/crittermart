@@ -1,0 +1,172 @@
+# CI for CritterMart — build, format, unit + integration tests, and the storefront SPA, each a
+# separate check. Stack: Wolverine 6 / Marten 9 on .NET 10 (see docs/decisions/); the client is the
+# round-two Vite + React SPA (ADR 015/016). ADR 007 — process-manager handlers are pure functions —
+# is the home of the growing unit suite.
+#
+# Job graph is deliberately FLAT: every job starts at t=0. See the `needs:` note on the test jobs.
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    # Skip the whole pipeline when only docs/specs/repo-meta change (no buildable code).
+    # A denylist fails safe: forget a type and CI just runs unnecessarily.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "openspec/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "openspec/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref (e.g., new pushes to a PR branch).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "22"
+  SOLUTION: CritterMart.slnx
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      # NuGet package cache. setup-dotnet's built-in `cache: true` is NOT usable here — it requires
+      # packages.lock.json, which this repo does not generate. Central Package Management makes a
+      # hand-rolled key trivially correct instead: every version in the solution is pinned in the one
+      # Directory.Packages.props, so that file's hash fully determines the restore graph.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION }} --no-restore
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+      # Style gate: fails the build if any file deviates from .editorconfig. The codebase passed
+      # clean when this gate was added (chore: pre-frontend hardening) — independent of build/test
+      # so a formatting slip is reported on its own check, not buried in a test failure.
+      - name: Verify formatting
+        run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore
+
+  # NOTE ON `needs:` — intentionally absent from both test jobs.
+  #
+  # These jobs used to declare `needs: build`. That gate cost ~40s of wall clock and bought nothing:
+  # the Build job uploads no artifact, so `dotnet test` restores and compiles the whole solution from
+  # scratch regardless. A compile break fails the test jobs on their own build step anyway — the gate
+  # only changed WHICH check went red, while serializing the slowest job behind the build every run.
+  # Build is kept as a standalone "it compiles" check; it just no longer blocks anything.
+  # Re-adding `needs:` is only worthwhile alongside artifact passing (build once, `dotnet test
+  # --no-build` downstream), which is a larger change than the savings currently justify.
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      # Fast, no Docker. Covers the Category=Unit suites (Inventory's ReplenishmentSaga, Identity's
+      # EmailChangeSaga) plus untagged pure-function tests such as StockLevelProjectionTests. Orders'
+      # process-manager tests (ADR 007) land here without a workflow change.
+      - name: Unit tests (Category != Integration)
+        run: dotnet test ${{ env.SOLUTION }} --filter "Category!=Integration" --verbosity normal
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      # Alba + Testcontainers spin real Postgres containers. ubuntu-latest ships Docker, and
+      # Testcontainers manages the container lifecycle, so no `services:` block is needed.
+      # This is the pipeline's long pole; if it crosses ~4 minutes, shard it by test project with a
+      # matrix. Not worth the 5x container churn at current runtime.
+      - name: Integration tests (Category = Integration)
+        run: dotnet test ${{ env.SOLUTION }} --filter "Category=Integration" --verbosity normal
+
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # setup-node's npm cache is built in and keys off the committed lockfile — no
+          # hand-rolled key needed, unlike the NuGet side above.
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: client
+      # `npm run build` is `tsc --noEmit && vite build` — the typecheck gate and the bundle gate in
+      # one script. Run before the tests so a type error reports as a build failure, not a test failure.
+      - name: Typecheck + build
+        run: npm run build
+        working-directory: client
+      # Vitest only; scoped to src/ by vite.config.ts. The Playwright suite under client/e2e needs the
+      # full Aspire stack running and is deliberately NOT wired here — it wants its own workflow.
+      - name: Unit tests (Vitest)
+        run: npm test
+        working-directory: client
