@@ -26,9 +26,14 @@ A measurement-first pass over a CI shape untouched since chore/003, prompted by 
   .NET-only. Verified no branch protection referenced the old name.
 
 Measured baseline (run `29762921031`): **2m34s** wall clock — Build 39s, Format 53s, Unit 42s,
-Integration 106s; restore 11.5s per job. Expected after: **~1m42s**, a ~35% cut, from removing ~44s of
-serialization and ~8s of restore on the critical path. The `Client` job (~40s) runs inside the
-integration-test shadow and should not extend wall clock.
+Integration 106s; restore 11.5s per job. Projected after: ~1m42s (~35%).
+
+**Observed on the PR run: 1m37s — a 37% cut, slightly ahead of the projection, and on a *cold*
+cache.** Build 47s, Format 52s, Unit 51s, Integration 95s, Client 33s; every job started within 2s of
+t=0, so the critical path is now Integration alone. The Build/Unit jobs came in *above* their baseline
+because this run **wrote** the NuGet cache rather than reading it — the cache's own benefit lands from
+the second run onward and is not in the 1m37s figure. The `Client` job finished first of the five and
+never approached the critical path, confirming the gate is effectively free.
 
 Client suite verified locally: 17 files, 125 tests green in 7.7s; `npm run build` clean.
 
@@ -94,8 +99,9 @@ Client suite verified locally: 17 files, 125 tests green in 7.7s; `npm run build
 - **Integration-test matrix sharding** when that job crosses ~4 minutes. Trigger is in the workflow.
 - **Playwright e2e in CI** — needs the full Aspire stack; wants its own workflow. `client/e2e` is
   currently run by hand only, and the Vitest scoping fix means nothing collects it accidentally now.
-- **Confirm the projected timing on the first post-merge run.** The ~1m42s figure is a projection from
-  the measured baseline, not an observed number; the merge run on `main` is the check.
+- ~~Confirm the projected timing~~ — **closed in-session**: the PR run came in at 1m37s (37%), ahead
+  of the projection, cold-cache. Worth one more look at a warm-cache run on `main` to see what the
+  NuGet cache is actually worth; the 11.5s/job restore figure predicts ~8s off the critical path.
 - **`docs/prompts/chore/005`** (demo-traffic & observability review) has a prompt but no retro. Either
   that session ran light and the pair should be closed out, or it is still owed. Untouched here.
 
