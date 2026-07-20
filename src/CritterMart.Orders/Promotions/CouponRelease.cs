@@ -29,7 +29,12 @@ public static class CouponRelease
             return;
         }
 
-        var released = session.Events.BuildEvent(new CouponRedemptionReleased(orderId, couponId));
+        // Slice 6.6: the release carries CustomerId so CustomerCouponUsageView decrements the same
+        // "{couponId}|{customerId}" document the redemption incremented. `?? ""` matches the event's own
+        // unattributed default — customerId is always set for a redeemed order (it comes from OrderPlaced),
+        // and an unattributed release lands in the same unattributed bucket its redemption did.
+        var released = session.Events.BuildEvent(
+            new CouponRedemptionReleased(orderId, couponId, customerId ?? ""));
         released.WithTag(new CouponId(couponId));
 
         // Per-customer coupon → also decrement the composite boundary for this (coupon, customer) pair.

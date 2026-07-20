@@ -113,6 +113,13 @@ builder.Services.AddMarten(opts =>
         // from the never-persisted CouponUsage DCB boundary state, which is the write-time cap authority.
         opts.Projections.Add<CritterMart.Orders.Promotions.CouponUsageViewProjection>(ProjectionLifecycle.Inline);
 
+        // CustomerCouponUsageView — the ADVISORY per-(coupon × customer) read model (slice 6.6): the same
+        // multi-stream inline shape, keyed by "{couponId}|{customerId}" built from the events' MEMBERS (the
+        // reason 6.6 amended both events — a projection cannot route by DCB tag). Feeds the validate query's
+        // `already_redeemed` preview only; the composite CustomerCouponUsage boundary stays the sole authority.
+        opts.Projections.Add<CritterMart.Orders.Promotions.CustomerCouponUsageViewProjection>(
+            ProjectionLifecycle.Inline);
+
         // The round-one ASYNC projection teaser (ADR 008, slice 3.4): registered with the async
         // lifecycle but NO AddAsyncDaemon anywhere — the daily abandonment report stays empty
         // until an on-demand rebuild materializes it from the events. That emptiness is the

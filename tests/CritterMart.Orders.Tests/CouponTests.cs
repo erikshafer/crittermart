@@ -5,6 +5,7 @@ using CritterMart.Orders.Promotions;
 using CritterMart.Orders.Shopping;
 using CritterMart.TestSupport;
 using Marten;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Wolverine.Tracking;
@@ -83,16 +84,40 @@ public class CouponTests
         return view?.NetCount ?? 0;
     }
 
-    // GET /coupons/{code}/validate — the advisory read (slice 6.2). Always 200; the answer is discriminated
-    // by Status (valid/invalid/exhausted).
-    private async Task<CouponValidation> ValidateCouponAsync(string code)
+    // GET /coupons/{code}/validate — the advisory read (slice 6.2, enriched by 6.6). Always 200; the answer
+    // is discriminated by Status (valid/invalid/exhausted/already_redeemed).
+    //
+    // Slice 6.6: the endpoint is OPTIONALLY authenticated. `customerId: null` (the default) sends NO bearer
+    // token — the anonymous path, whose answer is pinned byte-for-byte to slice 6.2 and must never be 401.
+    // Supplying a customerId sends the bearer, unlocking the per-customer `already_redeemed` answer.
+    private async Task<CouponValidation> ValidateCouponAsync(string code, string? customerId = null)
     {
         var result = await _fixture.Host.Scenario(_ =>
         {
             _.Get.Url($"/coupons/{code}/validate");
+            if (customerId is not null)
+            {
+                _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
+            }
             _.StatusCodeShouldBe(200);
         });
         return result.ReadAsJson<CouponValidation>()!;
+    }
+
+    // Place an order expecting a ProblemDetails refusal, returning (status, title, detail) so a test can
+    // assert the machine-readable title and the human copy independently (slice 6.6 moves only the latter).
+    private async Task<(int Status, string? Title, string? Detail)> PlaceExpectingProblemAsync(
+        string customerId, string couponCode)
+    {
+        var result = await _fixture.Host.Scenario(_ =>
+        {
+            _.Post.Url($"/orders?couponCode={couponCode}");
+            _.WithRequestHeader("Authorization", JwtTestTokens.Bearer(customerId));
+            _.IgnoreStatusCode();
+        });
+
+        var problem = result.ReadAsJson<ProblemDetails>();
+        return (result.Context.Response.StatusCode, problem?.Title, problem?.Detail);
     }
 
     // ── 6.1 Define a coupon ─────────────────────────────────────────────────────────────────────────
@@ -468,5 +493,148 @@ public class CouponTests
         (await PlaceAsync("customer-X", "FLASH20")).Status.ShouldBe(201);
 
         (await UsageNetCountAsync(couponId)).ShouldBe(2);
+    }
+
+    // ── 6.6 Preview a per-customer coupon & explain the refusal ──────────────────────────────────────
+    //
+    // The storefront half of 6.5: the validate query becomes optionally authenticated and gains a fourth
+    // status, and the checkout refusal gains customer-facing copy. NOTHING here writes an event.
+
+    [Fact]
+    public async Task validating_a_per_customer_coupon_warns_the_customer_who_already_redeemed()
+    {
+        await ResetOrdersAsync();
+        // High global cap so ONLY the per-customer dimension can produce a non-valid answer.
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+        var couponId = await CouponIdAsync("FIRSTORDER");
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        // Signed in, and the advisory view holds this pair at net 1 → the personal reason, before checkout.
+        var result = await ValidateCouponAsync("FIRSTORDER", "customer-X");
+        result.Code.ShouldBe("FIRSTORDER");
+        result.Status.ShouldBe(CouponValidationStatus.AlreadyRedeemed);
+        result.DiscountPercent.ShouldBeNull();
+
+        // Advisory read — it moved nothing.
+        (await UsageNetCountAsync(couponId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task validating_a_per_customer_coupon_shows_the_discount_to_a_customer_who_has_not_redeemed()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        // customer-Y holds a DISTINCT pair at net 0 — one customer's redemption is not another's.
+        var result = await ValidateCouponAsync("FIRSTORDER", "customer-Y");
+        result.Status.ShouldBe(CouponValidationStatus.Valid);
+        result.DiscountPercent.ShouldBe(15);
+    }
+
+    [Fact]
+    public async Task validating_a_per_customer_coupon_anonymously_gives_the_unchanged_global_answer()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        // NO bearer token. The pinned slice-6.2 contract: a 200 (never 401), the global-cap answer, and
+        // `already_redeemed` unreachable — the query holds no identity, so it makes no personal claim.
+        var result = await ValidateCouponAsync("FIRSTORDER");
+        result.Status.ShouldBe(CouponValidationStatus.Valid);
+        result.DiscountPercent.ShouldBe(15);
+    }
+
+    [Fact]
+    public async Task validating_a_global_cap_only_coupon_never_reports_already_redeemed()
+    {
+        await ResetOrdersAsync();
+        // FLASH20 carries no per-customer policy, so the per-customer view is not consulted at all —
+        // redeeming it twice is that coupon's CHOSEN policy, not a condition to warn about.
+        await DefineCouponAsync("FLASH20", 20, 3);
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FLASH20")).Status.ShouldBe(201);
+
+        var result = await ValidateCouponAsync("FLASH20", "customer-X");
+        result.Status.ShouldBe(CouponValidationStatus.Valid);
+        result.DiscountPercent.ShouldBe(20);
+    }
+
+    [Fact]
+    public async Task the_personal_reason_outranks_the_crowd_reason()
+    {
+        await ResetOrdersAsync();
+        // cap 2 AND per-customer: two customers exhaust the coupon globally, and one of them is also
+        // personally spent — so both refusal conditions hold simultaneously for customer-X.
+        await DefineCouponAsync("FIRSTORDER", 15, 2, oneRedemptionPerCustomer: true);
+        var couponId = await CouponIdAsync("FIRSTORDER");
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+        await AddOneToCartAsync("customer-Y");
+        (await PlaceAsync("customer-Y", "FIRSTORDER")).Status.ShouldBe(201);
+        (await UsageNetCountAsync(couponId)).ShouldBe(2);   // globally exhausted
+
+        // already_redeemed, NOT exhausted — mirroring checkout's ordering exactly. The two reasons lead to
+        // different remedies ("try another code" vs "try again later"); blaming the crowd for a personal
+        // refusal would teach the wrong one.
+        var mine = await ValidateCouponAsync("FIRSTORDER", "customer-X");
+        mine.Status.ShouldBe(CouponValidationStatus.AlreadyRedeemed);
+
+        // A customer who never redeemed it still hears the crowd reason — the ladder is per-caller.
+        var theirs = await ValidateCouponAsync("FIRSTORDER", "customer-Z");
+        theirs.Status.ShouldBe(CouponValidationStatus.Exhausted);
+    }
+
+    [Fact]
+    public async Task a_cancelled_redemption_restores_the_preview()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        var (status, orderId) = await PlaceAsync("customer-X", "FIRSTORDER");
+        status.ShouldBe(201);
+        (await ValidateCouponAsync("FIRSTORDER", "customer-X")).Status
+            .ShouldBe(CouponValidationStatus.AlreadyRedeemed);
+
+        // Cancel via a stock-reservation failure (slice 4.5) — the release carries CustomerId, so the
+        // advisory view decrements the same pair document the redemption incremented.
+        await _fixture.Host.InvokeMessageAndWaitAsync(
+            new Contracts.StockReservationFailed(orderId!, "insufficient"));
+
+        // The advisory view and the DCB boundary agree, because both fold the same two events — they differ
+        // in WHEN, not in WHAT. (The boundary's agreement is proven by the 6.5 re-redemption test.)
+        var result = await ValidateCouponAsync("FIRSTORDER", "customer-X");
+        result.Status.ShouldBe(CouponValidationStatus.Valid);
+        result.DiscountPercent.ShouldBe(15);
+    }
+
+    [Fact]
+    public async Task the_per_customer_refusal_keeps_its_title_and_gains_customer_facing_copy()
+    {
+        await ResetOrdersAsync();
+        await DefineCouponAsync("FIRSTORDER", 15, 100000, oneRedemptionPerCustomer: true);
+
+        await AddOneToCartAsync("customer-X");
+        (await PlaceAsync("customer-X", "FIRSTORDER")).Status.ShouldBe(201);
+
+        await AddOneToCartAsync("customer-X");
+        var (status, title, detail) = await PlaceExpectingProblemAsync("customer-X", "FIRSTORDER");
+
+        // UNCHANGED — the machine-readable contract. Slice 6.6 moves only the human sentence.
+        status.ShouldBe(409);
+        title.ShouldBe("CouponAlreadyRedeemedByCustomer");
+
+        // The 6.6 copy: names the personal reason, hands the decision back, no interpolated code.
+        detail.ShouldBe("You've already used this coupon — remove it to continue, or try another.");
     }
 }

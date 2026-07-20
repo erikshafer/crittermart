@@ -5,4 +5,8 @@ namespace CritterMart.Orders.Promotions;
 // the SAME CouponId. The compensation twin of CouponRedeemed — the tag-arithmetic mirror of Inventory's
 // StockReserved/StockReleased pair. The DCB boundary and CouponUsageView count redemptions MINUS releases,
 // so a cancelled order returns its flash-sale slot.
-public record CouponRedemptionReleased(string OrderId, string CouponId);
+//
+// Slice 6.6: `CustomerId` mirrors the twin's new member, so CustomerCouponUsageView can decrement the pair it
+// incremented (see CouponRedeemed for why a tag cannot serve as a projection grouping key). Defaulted "" and
+// last, the same non-breaking evolution — pre-6.6 releases fold unattributed.
+public record CouponRedemptionReleased(string OrderId, string CouponId, string CustomerId = "");

@@ -63,6 +63,28 @@ describe("fetchCouponValidation", () => {
     expect(result.status).toBe("exhausted");
   });
 
+  // Slice 6.6: the fourth status. It reaches us only when the bearer token rode the call (the endpoint is
+  // optionally authenticated) AND the coupon carries the per-customer policy — but the parse must accept it,
+  // and it must not be mistaken for a valid answer: no discountPercent to price.
+  it("parses an already-redeemed per-customer coupon", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ code: "FIRSTORDER", status: "already_redeemed", discountPercent: null }),
+            { status: 200 },
+          ),
+        ),
+    );
+
+    const result = await fetchCouponValidation("FIRSTORDER", ctx);
+
+    expect(result.status).toBe("already_redeemed");
+    expect(result.discountPercent).toBeNull();
+  });
+
   // The z.enum boundary guard: a status the backend never sends fails loud rather than rendering as mystery UI.
   it("rejects an unexpected status at the boundary", async () => {
     vi.stubGlobal(
