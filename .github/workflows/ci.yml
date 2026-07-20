@@ -57,6 +57,11 @@ jobs:
       # packages.lock.json, which this repo does not generate. Central Package Management makes a
       # hand-rolled key trivially correct instead: every version in the solution is pinned in the one
       # Directory.Packages.props, so that file's hash fully determines the restore graph.
+      #
+      # Honest accounting: this is roughly a WASH on wall clock, not a win. Warm cache takes restore
+      # from 11.5s to 2.5s, but the cache step itself costs ~6.8s — net ~2s, and the measured warm run
+      # (1m38s) did not beat the cold one (1m37s). Kept as insurance against a slow NuGet mirror, and
+      # because it costs nothing. The pipeline's real win was flattening the job graph, not this.
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -98,8 +103,14 @@ jobs:
   # scratch regardless. A compile break fails the test jobs on their own build step anyway — the gate
   # only changed WHICH check went red, while serializing the slowest job behind the build every run.
   # Build is kept as a standalone "it compiles" check; it just no longer blocks anything.
-  # Re-adding `needs:` is only worthwhile alongside artifact passing (build once, `dotnet test
-  # --no-build` downstream), which is a larger change than the savings currently justify.
+  #
+  # Do NOT "fix" this by adding `needs: build` plus artifact passing. Measured (warm cache): the Build
+  # job costs 36s, while the compile it would save inside Integration is only ~15s of that job's 92s.
+  # Even with FREE artifact transfer the critical path becomes 36 + ~60 = ~96s against today's 92s —
+  # worse before a single byte moves, and .NET bin/ output across 15 projects does not transfer free.
+  # Serializing only helps wall clock when the upstream job is CHEAPER than the build work it saves
+  # downstream. That could flip if Integration is ever sharded into many jobs each paying their own
+  # compile; re-measure then rather than assuming.
 
   unit-tests:
     name: Unit tests

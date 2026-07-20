@@ -93,17 +93,50 @@ Client suite verified locally: 17 files, 125 tests green in 7.7s; `npm run build
 
 ## Outstanding items / next-session inputs
 
-- **Build-artifact passing** is the real fix for compiling the solution three times per run
-  (`upload-artifact` → `dotnet test --no-build`). It would restore a *justified* `needs: build` and
-  cut more than this session did. Recorded in the `needs:` note in `ci.yml`.
+- ~~**Build-artifact passing** is the real fix … it would restore a *justified* `needs: build` and cut
+  more than this session did.~~ **Retracted — see corrections; the arithmetic says it makes things
+  worse at this shape.** Revisit only if Integration is ever sharded into many jobs.
 - **Integration-test matrix sharding** when that job crosses ~4 minutes. Trigger is in the workflow.
 - **Playwright e2e in CI** — needs the full Aspire stack; wants its own workflow. `client/e2e` is
   currently run by hand only, and the Vitest scoping fix means nothing collects it accidentally now.
-- ~~Confirm the projected timing~~ — **closed in-session**: the PR run came in at 1m37s (37%), ahead
-  of the projection, cold-cache. Worth one more look at a warm-cache run on `main` to see what the
-  NuGet cache is actually worth; the 11.5s/job restore figure predicts ~8s off the critical path.
+- ~~Confirm the projected timing~~ — **closed in-session**: 1m37s cold, 1m38s warm, against a 2m34s
+  baseline (37%). See the corrections section — the split of credit between the two changes was not
+  what this retro originally claimed.
+- ~~Build-artifact passing as the real fix~~ — **retracted, measured false.** See corrections.
 - **`docs/prompts/chore/005`** (demo-traffic & observability review) has a prompt but no retro. Either
   that session ran light and the pair should be closed out, or it is still owed. Untouched here.
+
+## Corrections (post-merge-run, same session)
+
+Two claims in the first draft of this retro were asserted from estimate rather than measurement, and
+a second (warm-cache) run falsified both. Recorded here rather than quietly edited away, because the
+failure mode is more instructive than the fix.
+
+**1. "Build-artifact passing would restore a justified `needs: build` and cut more than this session
+did" — false.** Warm-run measurement: the Build job costs **36s**, while the compile it would save
+inside the Integration job is only ~**15s** of that job's 92s. Even granting *free* artifact transfer,
+the critical path becomes 36 + ~60 = **~96s against today's 92s** — worse before a byte moves, and
+.NET `bin/` output across 15 projects transfers nowhere near free. The governing rule, which the first
+draft never stated: **serializing helps wall clock only when the upstream job is cheaper than the
+build work it saves downstream.** Here it costs more than double. No transfer speed rescues it. The
+claim could become true if Integration were sharded into many jobs each paying their own compile —
+a different change, and one to re-measure rather than assume.
+
+**2. "NuGet caching ≈ 8s off the critical path" — overstated by ~4x.** Warm cache does take restore
+from 11.5s to 2.5s as predicted, but `actions/cache` itself costs ~6.8s, netting ~**2s**. The measured
+warm run (**1m38s**) did not beat the cold run (**1m37s**). The cache is kept — it is free insurance
+against a slow NuGet mirror — but it is a wash, not a win.
+
+**Corrected scorecard: flattening the job graph did essentially all of the 37%.** The cache is
+neutral; the client job is a correctness gain with no wall-clock cost.
+
+**The methodology failure is the point.** This retro's headline lesson is *measure before proposing* —
+and both errors were committed in the same session, in the follow-on recommendations, immediately
+after that lesson was written down. Measurement discipline was applied to the changes being made and
+then dropped for the changes being *recommended*, as though a forward-looking claim were cheaper to
+make. It isn't: an unmeasured recommendation in a retro or a workflow comment is more durable than a
+bad estimate in conversation, because the next session reads it as established. **A follow-on item
+should carry the same evidentiary standard as a shipped one, or be labeled explicitly as unmeasured.**
 
 ## Spec-delta — landed?
 
