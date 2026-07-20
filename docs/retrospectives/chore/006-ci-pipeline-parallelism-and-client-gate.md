@@ -1,0 +1,147 @@
+---
+retrospective: 006
+kind: chore
+prompt: docs/prompts/chore/006-ci-pipeline-parallelism-and-client-gate.md
+deliverable: .github/workflows/ci.yml (renamed from dotnet.yml), client/vite.config.ts
+date: 2026-07-20
+mode: solo infra; scope confirmed by the user (single PR, client gate not split out)
+session-runner: Claude (Opus 4.8)
+---
+
+# Retrospective — Chore 006: CI pipeline parallelism + the client gate
+
+## Outcome summary
+
+A measurement-first pass over a CI shape untouched since chore/003, prompted by an open question:
+*can this be faster, and is caching too early in the project's life?* Shipped:
+
+- **Flattened job graph** — `needs: build` removed from both test jobs. `.github/workflows/ci.yml`
+  carries a block comment explaining why, so the gate isn't "restored" later as a fix.
+- **NuGet caching** — `actions/cache` on `~/.nuget/packages`, keyed on the hash of the single
+  `Directory.Packages.props`, added to all four .NET jobs.
+- **A `Client` job** — `npm ci` → `npm run build` (`tsc --noEmit && vite build`) → `npm test`
+  (Vitest), with `setup-node`'s built-in npm cache.
+- **Vitest scoping fix** — `client/vite.config.ts` gains `include: ["src/**/*.{test,spec}.{ts,tsx}"]`.
+- **Workflow renamed** `dotnet.yml` → `ci.yml`, `name: .NET` → `name: CI`, now that it is not
+  .NET-only. Verified no branch protection referenced the old name.
+
+Measured baseline (run `29762921031`): **2m34s** wall clock — Build 39s, Format 53s, Unit 42s,
+Integration 106s; restore 11.5s per job. Projected after: ~1m42s (~35%).
+
+**Observed on the PR run: 1m37s — a 37% cut, slightly ahead of the projection, and on a *cold*
+cache.** Build 47s, Format 52s, Unit 51s, Integration 95s, Client 33s; every job started within 2s of
+t=0, so the critical path is now Integration alone. The Build/Unit jobs came in *above* their baseline
+because this run **wrote** the NuGet cache rather than reading it — the cache's own benefit lands from
+the second run onward and is not in the 1m37s figure. The `Client` job finished first of the five and
+never approached the critical path, confirming the gate is effectively free.
+
+Client suite verified locally: 17 files, 125 tests green in 7.7s; `npm run build` clean.
+
+## What worked
+
+- **Measuring before proposing.** The intuitive answer to "make CI faster" is caching, and caching was
+  the *smaller* win — 8s against the 44s the job graph was giving away. Pulling per-job and per-step
+  timings with `gh run view` took two minutes and completely reordered the recommendations. Had the
+  session optimized by intuition it would have shipped the cache, felt productive, and left the actual
+  problem in place.
+- **Asking what `needs: build` was buying.** The gate looks like textbook fail-fast, and reads as
+  correct until you check whether anything downstream consumes the build. Nothing did — no artifact
+  upload, so each test job compiled the solution from scratch anyway. The gate only changed *which*
+  check went red while serializing the slowest job behind the fastest one on every single run.
+- **Honouring chore/003's own lesson.** That retro says: verify a new CI gate with the byte-identical
+  command it will run. Doing so is the only reason this session didn't merge a red pipeline (below).
+- **Declining the sharding.** Matrix-sharding the integration tests was the flashiest available change
+  and would have cut 106s to ~50s — at 5x the Testcontainers churn, for a job that is not yet a
+  problem. Recorded in the workflow comments with a concrete trigger (~4 minutes) instead.
+
+## What was harder than expected
+
+- **The client gate could not simply be wired; it had to be repaired first.** Running `npm test`
+  locally — as chore/003's lesson demands — showed it **failing today**: Vitest's default `include`
+  (`**/*.{test,spec}.*`) collected `client/e2e/seeder.spec.ts`, a Playwright spec, which throws
+  *"Playwright Test did not expect test() to be called here."* 125 tests passed and the run still
+  exited non-zero. Wiring the job without looking would have merged a permanently-red check and
+  invited exactly the wrong fix (weakening the gate to make it green).
+- **The failure had been latent for the entire life of the e2e suite.** Nobody hit it because the only
+  way to hit it is to run `npm test` — and no CI job did. This is the self-proving case for the gate:
+  the first thing the client check did was find a broken client check.
+- **Per-job path filtering had no clean answer.** Both routes are worse than doing nothing: a
+  third-party filter action re-serializes the graph this session just flattened, and splitting into
+  two path-filtered workflows makes checks go *absent* rather than green, which reads as "pending"
+  to branch protection. Left alone; the client job's ~40s on .NET-only PRs is cheaper than either.
+
+## Methodology refinements that emerged
+
+- **A CI job that has never run a command is not a gate — it is a guess.** Generalizing chore/003's
+  byte-identical-command lesson: the risk isn't only flag mismatch, it's that the command may never
+  have been run *at all* in the configuration CI will run it. `npm test` existed in `package.json`
+  for the entire round-two frontend effort and was broken. Any script wired into CI should be
+  executed locally, from the working directory CI will use, before the job is authored.
+- **When a test runner and an e2e runner share a repo, scope them by directory explicitly.** Default
+  globs assume they own the tree. Vitest owns `src/`, Playwright owns `e2e/`, and saying so in config
+  is one line that prevents a confusing cross-runner error.
+- **Job dependencies need a stated payload.** `needs:` is only justified when the downstream job
+  *consumes* something (an artifact, a published package) or when the upstream job is meaningfully
+  cheaper than the work it gates. "Build first" as a sequencing instinct costs real wall clock and
+  buys nothing when every job builds anyway. Worth checking the other direction too: the follow-on
+  here is artifact passing, which would make `needs:` genuinely earn its place.
+- **Caching is not "too early" when the cache key is structurally sound.** The instinct to defer
+  caching in a young project is about key correctness — stale or over-broad keys cause worse problems
+  than slow restores. Central Package Management removes that risk: one file pins every version, so
+  its hash fully determines the restore graph. The maturity question was the wrong question; the key
+  question was the right one.
+
+## Outstanding items / next-session inputs
+
+- ~~**Build-artifact passing** is the real fix … it would restore a *justified* `needs: build` and cut
+  more than this session did.~~ **Retracted — see corrections; the arithmetic says it makes things
+  worse at this shape.** Revisit only if Integration is ever sharded into many jobs.
+- **Integration-test matrix sharding** when that job crosses ~4 minutes. Trigger is in the workflow.
+- **Playwright e2e in CI** — needs the full Aspire stack; wants its own workflow. `client/e2e` is
+  currently run by hand only, and the Vitest scoping fix means nothing collects it accidentally now.
+- ~~Confirm the projected timing~~ — **closed in-session**: 1m37s cold, 1m38s warm, against a 2m34s
+  baseline (37%). See the corrections section — the split of credit between the two changes was not
+  what this retro originally claimed.
+- ~~Build-artifact passing as the real fix~~ — **retracted, measured false.** See corrections.
+- **`docs/prompts/chore/005`** (demo-traffic & observability review) has a prompt but no retro. Either
+  that session ran light and the pair should be closed out, or it is still owed. Untouched here.
+
+## Corrections (post-merge-run, same session)
+
+Two claims in the first draft of this retro were asserted from estimate rather than measurement, and
+a second (warm-cache) run falsified both. Recorded here rather than quietly edited away, because the
+failure mode is more instructive than the fix.
+
+**1. "Build-artifact passing would restore a justified `needs: build` and cut more than this session
+did" — false.** Warm-run measurement: the Build job costs **36s**, while the compile it would save
+inside the Integration job is only ~**15s** of that job's 92s. Even granting *free* artifact transfer,
+the critical path becomes 36 + ~60 = **~96s against today's 92s** — worse before a byte moves, and
+.NET `bin/` output across 15 projects transfers nowhere near free. The governing rule, which the first
+draft never stated: **serializing helps wall clock only when the upstream job is cheaper than the
+build work it saves downstream.** Here it costs more than double. No transfer speed rescues it. The
+claim could become true if Integration were sharded into many jobs each paying their own compile —
+a different change, and one to re-measure rather than assume.
+
+**2. "NuGet caching ≈ 8s off the critical path" — overstated by ~4x.** Warm cache does take restore
+from 11.5s to 2.5s as predicted, but `actions/cache` itself costs ~6.8s, netting ~**2s**. The measured
+warm run (**1m38s**) did not beat the cold run (**1m37s**). The cache is kept — it is free insurance
+against a slow NuGet mirror — but it is a wash, not a win.
+
+**Corrected scorecard: flattening the job graph did essentially all of the 37%.** The cache is
+neutral; the client job is a correctness gain with no wall-clock cost.
+
+**The methodology failure is the point.** This retro's headline lesson is *measure before proposing* —
+and both errors were committed in the same session, in the follow-on recommendations, immediately
+after that lesson was written down. Measurement discipline was applied to the changes being made and
+then dropped for the changes being *recommended*, as though a forward-looking claim were cheaper to
+make. It isn't: an unmeasured recommendation in a retro or a workflow comment is more durable than a
+bad estimate in conversation, because the next session reads it as established. **A follow-on item
+should carry the same evidentiary standard as a shipped one, or be labeled explicitly as unmeasured.**
+
+## Spec-delta — landed?
+
+**Named none; forward-confirmed none.** The prompt named no slice, capability, narrative, workshop, or
+ADR delta — this is repo-meta CI configuration plus the one-line Vitest scoping fix the client gate
+required to be green. No canonical spec changed, and none should have. The `client/vite.config.ts`
+edit is test-runner configuration, not application behavior: no component, query, schema, or endpoint
+changed, and the 125 tests that passed before pass after.

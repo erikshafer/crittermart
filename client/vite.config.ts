@@ -42,5 +42,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // Scoped to src/ so Vitest never collects e2e/ — those are Playwright specs, and Playwright's
+    // test() throws "did not expect test() to be called here" when a foreign runner imports them.
+    // Vitest's default include (**/*.{test,spec}.*) matched e2e/seeder.spec.ts and made `npm test`
+    // exit non-zero; that went unnoticed because no CI job ran the client suite until chore/006.
+    // The two runners stay disjoint by directory: Vitest owns src/, Playwright owns e2e/.
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
 });
