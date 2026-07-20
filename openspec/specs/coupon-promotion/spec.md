@@ -2,7 +2,13 @@
 
 ## Purpose
 
-The `coupon-promotion` capability is CritterMart's flash-sale promotions increment: it defines percentage-discount coupons as event-sourced configuration (`DefineCoupon` → `CouponDefined { code, discountPercent, cap }` on a coupon stream keyed by a generated `couponId`, resolved through the inline `CouponView`), redeems them under a **global per-coupon redemption cap** at checkout, and releases a redemption when its order is cancelled. Its defining architectural move is CritterMart's first **Dynamic Consistency Boundary** (ADR 024): the cap is enforced not by a per-stream aggregate but by a store-scoped Marten DCB (`FetchForWritingByTags<CouponUsage>`) computed transactionally at checkout, so `CouponRedeemed` / `CouponRedemptionReleased` are tagged with a strong-typed `CouponId` and appended to the *order* stream in the same transaction as `OrderPlaced` / `OrderCancelled` — exactly `cap` redemptions survive under concurrent load, with `DcbConcurrencyException` driving a retry rather than an over-admit. The whole capability lives **inside the Orders Marten store** this round — a standalone Promotions service is the deferred long road, and the identical `CouponDefined` contract is what that future service would publish as Published Language; definitions are seed-issued through `POST /coupons`. It also teaches the **advisory-vs-authoritative** contrast: the inline `CouponUsageView` net redemption count and the read-only `GET /coupons/{code}/validate` cart-review query are advisory projections that may lag and never gate redemption — the DCB boundary read at checkout is the sole authority. Slices 6.1 (define), 6.3 (redeem under a cap), and 6.4 (release on cancel) form the DCB core (PR #144); slice 6.2 adds the advisory validate query and the W2/W3 storefront preview + discount line (PR #146).
+The `coupon-promotion` capability is CritterMart's flash-sale promotions increment: it defines percentage-discount coupons as event-sourced configuration (`DefineCoupon` → `CouponDefined { code, discountPercent, cap, oneRedemptionPerCustomer }` on a coupon stream keyed by a generated `couponId`, resolved through the inline `CouponView`), redeems them under a **global per-coupon redemption cap** at checkout, optionally enforces **one redemption per customer**, and releases a redemption when its order is cancelled. Its defining architectural move is **Dynamic Consistency Boundaries** (ADR 024): a cap is enforced not by a per-stream aggregate but by a store-scoped Marten DCB (`FetchForWritingByTags<CouponUsage>`) computed transactionally at checkout, so `CouponRedeemed` / `CouponRedemptionReleased` are tagged and appended to the *order* stream in the same transaction as `OrderPlaced` / `OrderCancelled` — exactly `cap` redemptions survive under concurrent load, with `DcbConcurrencyException` driving a retry rather than an over-admit.
+
+**The capability now carries two DCBs, and the contrast between them is the point.** The first is a **count** boundary over a single `CouponId` tag — a global cap, "how many redemptions of this coupon?" The second (ADR 024 §38) is an **existence** boundary over a composite `(coupon × customer)` pair — "has this customer redeemed this coupon at all?" — opened only when the definition carries `oneRedemptionPerCustomer`. The composite is not two tags AND-ed: `EventTagQuery` has no such operator and a tag stores one scalar, so it is a **single tag whose value encodes the pair** (`"{couponId}|{customerId}"`), queried through the same single-tag path the first boundary proved. Both are read on the success path and armed by one doubly-tagged append, so a race invalidating **either** drives the same retry loop. The per-customer check runs **first**, so a customer who has already redeemed hears the honest personal reason rather than a coincidental `CouponExhausted`.
+
+It also teaches the **advisory-vs-authoritative** contrast, now at both scopes. The inline `CouponUsageView` (per coupon) and `CustomerCouponUsageView` (per `(coupon × customer)` pair) are projections that may lag and **never** gate redemption; the read-only `GET /coupons/{code}/validate` cart-review query reads them to preview a verdict. The DCB boundary reads at checkout are the sole authority. Each advisory view has a never-persisted boundary twin computed transactionally at write time (`CouponUsage`, `CustomerCouponUsage`) — same arithmetic, different existence, and only the boundary ever decides. The validate query is **optionally authenticated**: an anonymous caller gets the global answer and is never `401`; an authenticated caller additionally gets `already_redeemed`, ordered ahead of `exhausted` so the preview agrees with the authority about *why*, not merely *whether*. That per-customer preview is **forward-only** — a redemption predating the events' `customerId` member is invisible to it — so it may **under-warn** and can never wrongly accuse, an asymmetry tolerable precisely because the read is advisory.
+
+The whole capability lives **inside the Orders Marten store** this round — a standalone Promotions service is the deferred long road, and the identical `CouponDefined` contract is what that future service would publish as Published Language; definitions are seed-issued through `POST /coupons`. Slices 6.1 (define), 6.3 (redeem under a cap), and 6.4 (release on cancel) form the DCB core (PR #144); slice 6.2 adds the advisory validate query and the W2/W3 storefront preview + discount line (PR #146); slice 6.5 adds the composite second DCB (PR #149); slice 6.6 adds the per-customer preview and the customer-facing refusal copy (PR #161), writing nothing at all.
 ## Requirements
 ### Requirement: Define a coupon
 
@@ -120,7 +126,20 @@ The system SHALL maintain an inline `CouponUsageView` read model holding, per `c
 
 ### Requirement: Validate and price a coupon at cart review
 
-The system SHALL provide a **read-only** advisory query that resolves a coupon code at cart review so the storefront can preview a discount before checkout, writing no event and creating no stream. When `GET /coupons/{code}/validate` is issued, the system SHALL resolve the `code` against `CouponView` and respond `200` with a `CouponValidation { code, status, discountPercent? }` where `status` is one of `valid`, `invalid`, or `exhausted`: `valid` (with the coupon's `discountPercent`) when a definition resolves and its `CouponUsageView` net redemption count is below `cap`; `exhausted` (no `discountPercent`) when a definition resolves but its net count has reached `cap`; and `invalid` (no `discountPercent`) when no definition resolves for the code. The query SHALL compute no dollar discount — the storefront prices `discountPercent` against the cart total it already holds. This query is **advisory by design**: its answer MAY be stale (the `CouponUsageView` net count is a projection, and a slot may free by cancellation between this check and checkout), so it SHALL NOT gate redemption. The authoritative cap check is only ever the DCB boundary read at checkout (see "Redeem a coupon under a global cap at checkout"); a `valid` answer here does not guarantee the checkout succeeds, and an `exhausted` answer here does not prevent a customer from carrying the code to a checkout that may still succeed if a slot has since freed.
+The system SHALL provide a **read-only** advisory query that resolves a coupon code at cart review so the storefront can preview a discount before checkout, writing no event and creating no stream. The query SHALL be **optionally authenticated**: it SHALL accept an unauthenticated request and SHALL NOT respond `401`.
+
+When `GET /coupons/{code}/validate` is issued, the system SHALL resolve the `code` against `CouponView` and respond `200` with a `CouponValidation { code, status, discountPercent? }` where `status` is one of `invalid`, `already_redeemed`, `exhausted`, or `valid`, evaluated in **exactly that precedence order**:
+
+1. `invalid` (no `discountPercent`) when no definition resolves for the code;
+2. `already_redeemed` (no `discountPercent`) when a definition resolves with `oneRedemptionPerCustomer = true`, **and** the request carries an authenticated customer identity (the JWT `sub` claim, per ADR 023 — the sole customer trust boundary), **and** the `CustomerCouponUsageView` net redemption count for that `(couponId, customerId)` pair is `1` or greater;
+3. `exhausted` (no `discountPercent`) when a definition resolves but its `CouponUsageView` net redemption count has reached `cap`;
+4. `valid` (with the coupon's `discountPercent`) otherwise.
+
+The `already_redeemed` check SHALL be evaluated **before** the `exhausted` check, mirroring the checkout ordering in "Enforce one redemption per customer for a per-customer coupon at checkout", so that a customer who has already redeemed a coupon that is *also* globally exhausted receives the accurate personal reason rather than the crowd reason — the two lead the customer to different remedies.
+
+When the request carries **no** authenticated identity, the system SHALL evaluate only `invalid` / `exhausted` / `valid` and SHALL NOT return `already_redeemed`; the anonymous response SHALL be identical to the behavior that shipped in slice 6.2. When the resolved definition has `oneRedemptionPerCustomer = false`, the system SHALL NOT consult `CustomerCouponUsageView` and SHALL NOT return `already_redeemed`, regardless of authentication.
+
+The query SHALL compute no dollar discount — the storefront prices `discountPercent` against the cart total it already holds. This query is **advisory by design** in every status it returns, including `already_redeemed`: its answer MAY be stale (both usage views are projections; a slot may free by cancellation, and a customer may redeem in a concurrent session, between this check and checkout), so it SHALL NOT gate redemption. The authoritative checks are only ever the DCB boundary reads at checkout; a `valid` answer here does not guarantee the checkout succeeds, and an `already_redeemed` or `exhausted` answer here does not prevent a customer from carrying the code to a checkout that re-decides.
 
 #### Scenario: Validate a redeemable coupon
 
@@ -143,9 +162,61 @@ The system SHALL provide a **read-only** advisory query that resolves a coupon c
 - **THEN** the response is `200` with `{ code: "FLASH20", status: "exhausted" }` and no `discountPercent`
 - **AND** the answer is advisory only — a slot freed by a later cancellation, or a lagging projection, does not make this query authoritative; checkout re-decides against the DCB boundary
 
+#### Scenario: Warn an authenticated customer who has already redeemed
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", discountPercent: 15, cap: 100000, oneRedemptionPerCustomer: true }` and a `CustomerCouponUsageView` net count of `1` for the `(FIRSTORDER × customer-X)` pair
+- **WHEN** `customer-X` issues `GET /coupons/FIRSTORDER/validate` with a valid bearer token
+- **THEN** the response is `200` with `{ code: "FIRSTORDER", status: "already_redeemed" }` and no `discountPercent`
+- **AND** no event is written and no stream is created
+
+#### Scenario: An authenticated customer who has not redeemed sees the discount
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", discountPercent: 15, oneRedemptionPerCustomer: true }` and no `CustomerCouponUsageView` document for the `(FIRSTORDER × customer-Y)` pair
+- **WHEN** `customer-Y` issues `GET /coupons/FIRSTORDER/validate` with a valid bearer token
+- **THEN** the response is `200` with `{ code: "FIRSTORDER", status: "valid", discountPercent: 15 }`
+
+#### Scenario: An anonymous caller gets the unchanged global answer
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", discountPercent: 15, cap: 100000, oneRedemptionPerCustomer: true }` already redeemed once by `customer-X`
+- **WHEN** `GET /coupons/FIRSTORDER/validate` is issued with **no** bearer token
+- **THEN** the response is `200` with `{ code: "FIRSTORDER", status: "valid", discountPercent: 15 }` — the slice-6.2 answer, unchanged
+- **AND** the response is never `401` and never `already_redeemed` — the query holds no identity, so it makes no personal claim
+
+#### Scenario: A global-cap-only coupon never reports already-redeemed
+
+- **GIVEN** `CouponDefined { code: "FLASH20", cap: 3, oneRedemptionPerCustomer: false }` which `customer-X` has redeemed once (below the cap)
+- **WHEN** `customer-X` issues `GET /coupons/FLASH20/validate` with a valid bearer token
+- **THEN** the response is `200` with `{ code: "FLASH20", status: "valid", discountPercent: 20 }`
+- **AND** `CustomerCouponUsageView` is not consulted — redeeming such a coupon again is its chosen policy, not a condition to warn about
+
+#### Scenario: The personal reason outranks the crowd reason
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", cap: 2, oneRedemptionPerCustomer: true }` whose `CouponUsageView` net count has reached `cap`, **and** a `CustomerCouponUsageView` net count of `1` for the `(FIRSTORDER × customer-X)` pair
+- **WHEN** `customer-X` issues `GET /coupons/FIRSTORDER/validate` with a valid bearer token
+- **THEN** the response is `200` with `status: "already_redeemed"` — **not** `exhausted`
+- **AND** the precedence matches the checkout ordering, so the preview and the authority agree about *why* the coupon is unusable, not merely *whether*
+
+#### Scenario: A cancelled redemption restores the preview
+
+- **GIVEN** `customer-X` has redeemed per-customer `FIRSTORDER`, so the query answers `already_redeemed`, and their redeeming order subsequently cancels — appending a `CouponRedemptionReleased` that decrements the pair to a net count of `0`
+- **WHEN** `customer-X` issues `GET /coupons/FIRSTORDER/validate` with a valid bearer token
+- **THEN** the response is `200` with `{ status: "valid", discountPercent: 15 }`
+- **AND** the advisory view and the DCB boundary agree, because both fold the same redemption and release events — they differ in *when*, not in *what*
+
+#### Scenario: A valid preview is still not a promise
+
+- **GIVEN** `customer-X` has not redeemed per-customer `FIRSTORDER`, and the query answers `valid`
+- **WHEN** `customer-X` redeems `FIRSTORDER` in a concurrent session and then places the previewed order
+- **THEN** the checkout is rejected with a `409 CouponAlreadyRedeemedByCustomer` despite the `valid` preview
+- **AND** the composite DCB boundary remains the sole authority — the preview is advisory even when it is personally accurate
+
 ### Requirement: Enforce one redemption per customer for a per-customer coupon at checkout
 
-The system SHALL enforce, for a coupon defined with `oneRedemptionPerCustomer = true`, that a given customer redeems that coupon **at most once** (net of releases), using a second Dynamic Consistency Boundary in the Orders store keyed by a composite `(couponId × customerId)` tag — layered on top of, and committed in the same checkout transaction as, the global per-coupon cap. When `PlaceOrder` carries a `couponCode` that resolves through `CouponView` to a `CouponDefined` with `oneRedemptionPerCustomer = true`, the system SHALL open the composite boundary `FetchForWritingByTags<CustomerCouponUsage>(new EventTagQuery().Or<CouponCustomerTag>(CouponCustomerTag.For(couponId, customerId)))` alongside the global-cap boundary and, when the composite boundary's net redemption count for this `(coupon, customer)` pair is `1` or greater, SHALL reject the placement with a `409 CouponAlreadyRedeemedByCustomer` response, create no order stream, and append no event. The per-customer check SHALL be evaluated before the global-cap check so a customer who has already redeemed receives the accurate reason rather than `CouponExhausted`. When both boundaries admit (the global net count is below `cap` AND this customer's net count is `0`), the system SHALL append the tagged `CouponRedeemed` carrying **both** the strong-typed `CouponId` tag and the `CouponCustomerTag`, so both boundaries' optimistic-concurrency assertions are armed in the one `SaveChangesAsync`; a concurrent redemption invalidating **either** boundary SHALL throw `DcbConcurrencyException` and drive the existing reload-and-retry loop against fresh boundary reads. Each `(coupon, customer)` pair is an **independent** composite boundary, so concurrent redemptions by **different** customers of the same per-customer coupon SHALL NOT conflict on the per-customer boundary (they contend only on the shared global cap, if at all). The composite boundary's assertion is armed as a transactional backstop; a **single** customer's concurrent checkouts are in any case already serialized by the one-open-cart invariant (a customer has at most one open cart), so the per-customer invariant is enforced in practice by the cross-order **existence** check — a later order refused because an earlier one already redeemed — with the DCB assertion keeping that check sound under concurrency. When the definition's `oneRedemptionPerCustomer` is `false` (the default), no composite boundary is opened and this requirement imposes nothing: the redemption is governed solely by the global cap, unchanged, and one customer MAY redeem such a coupon more than once.
+The system SHALL enforce, for a coupon defined with `oneRedemptionPerCustomer = true`, that a given customer redeems that coupon **at most once** (net of releases), using a second Dynamic Consistency Boundary in the Orders store keyed by a composite `(couponId × customerId)` tag — layered on top of, and committed in the same checkout transaction as, the global per-coupon cap. When `PlaceOrder` carries a `couponCode` that resolves through `CouponView` to a `CouponDefined` with `oneRedemptionPerCustomer = true`, the system SHALL open the composite boundary `FetchForWritingByTags<CustomerCouponUsage>(new EventTagQuery().Or<CouponCustomerTag>(CouponCustomerTag.For(couponId, customerId)))` alongside the global-cap boundary and, when the composite boundary's net redemption count for this `(coupon, customer)` pair is `1` or greater, SHALL reject the placement with a `409 CouponAlreadyRedeemedByCustomer` response, create no order stream, and append no event.
+
+The rejection's ProblemDetails `detail` SHALL be customer-facing copy that states the personal reason and returns the decision to the shopper — **"You've already used this coupon — remove it to continue, or try another."** — parallel in shape to the `CouponExhausted` refusal. The `409` status code and the `CouponAlreadyRedeemedByCustomer` title token SHALL remain unchanged, so no machine-readable contract depends on the wording.
+
+The per-customer check SHALL be evaluated before the global-cap check so a customer who has already redeemed receives the accurate reason rather than `CouponExhausted`. When both boundaries admit (the global net count is below `cap` AND this customer's net count is `0`), the system SHALL append the tagged `CouponRedeemed` carrying **both** the strong-typed `CouponId` tag and the `CouponCustomerTag`, so both boundaries' optimistic-concurrency assertions are armed in the one `SaveChangesAsync`; a concurrent redemption invalidating **either** boundary SHALL throw `DcbConcurrencyException` and drive the existing reload-and-retry loop against fresh boundary reads. Each `(coupon, customer)` pair is an **independent** composite boundary, so concurrent redemptions by **different** customers of the same per-customer coupon SHALL NOT conflict on the per-customer boundary (they contend only on the shared global cap, if at all). The composite boundary's assertion is armed as a transactional backstop; a **single** customer's concurrent checkouts are in any case already serialized by the one-open-cart invariant (a customer has at most one open cart), so the per-customer invariant is enforced in practice by the cross-order **existence** check — a later order refused because an earlier one already redeemed — with the DCB assertion keeping that check sound under concurrency. When the definition's `oneRedemptionPerCustomer` is `false` (the default), no composite boundary is opened and this requirement imposes nothing: the redemption is governed solely by the global cap, unchanged, and one customer MAY redeem such a coupon more than once.
 
 #### Scenario: A per-customer coupon admits a customer once
 
@@ -157,7 +228,8 @@ The system SHALL enforce, for a coupon defined with `oneRedemptionPerCustomer = 
 
 - **GIVEN** `CouponDefined { code: "FIRSTORDER", oneRedemptionPerCustomer: true }` which `customer-X` has already redeemed once (composite net count `1`)
 - **WHEN** `customer-X` issues `PlaceOrder { couponCode: "FIRSTORDER" }` again
-- **THEN** the placement is rejected with a `409 CouponAlreadyRedeemedByCustomer` response
+- **THEN** the placement is rejected with a `409` response whose title is `CouponAlreadyRedeemedByCustomer`
+- **AND** the response detail reads "You've already used this coupon — remove it to continue, or try another."
 - **AND** no order stream is created and no event is appended
 
 #### Scenario: A per-customer coupon still admits a different customer
@@ -178,4 +250,41 @@ The system SHALL enforce, for a coupon defined with `oneRedemptionPerCustomer = 
 - **GIVEN** `CouponDefined { code: "FLASH20", cap: 3, oneRedemptionPerCustomer: false }` which `customer-X` has already redeemed once (below the global cap)
 - **WHEN** `customer-X` issues `PlaceOrder { couponCode: "FLASH20" }` again
 - **THEN** no composite boundary is opened and, the global cap permitting, the placement succeeds `201` — the per-customer invariant does not apply
+
+### Requirement: Track advisory per-customer coupon usage
+
+The system SHALL maintain an inline `CustomerCouponUsageView` read model holding, per `(couponId, customerId)` pair, the net redemption count for that pair — folding `CouponRedeemed` as `+1` and `CouponRedemptionReleased` as `-1` — so that the cart-review validate query can preview a per-customer verdict before checkout. The view SHALL be keyed by the composite identity `"{couponId}|{customerId}"`, mirroring the `CouponCustomerTag` value shape, and SHALL be **inline** (immediately consistent), because no async projection daemon runs in this project and an async advisory view could not serve the affordance it exists for.
+
+To make that projection possible, `CouponRedeemed` and `CouponRedemptionReleased` SHALL each carry a `customerId` **event member** identifying the customer whose redemption the event records. This is required because a Marten `MultiStreamProjection` routes events to a document by an event member, whereas the `CouponCustomerTag` that already encodes the pair is a **write-side query mechanism and not a projection grouping key** — the pair is therefore not projectable from the events as they stood after slice 6.5. The field SHALL be optional with a default, so that already-persisted events fold without it and no existing behavior changes (the same non-breaking event evolution as `oneRedemptionPerCustomer` and `perCustomer`).
+
+This view is **advisory** — a projection, and distinct from the never-persisted `CustomerCouponUsage` DCB boundary state computed transactionally at checkout. Same arithmetic, different existence: the authoritative per-customer check is only ever the composite boundary read, never this view, and this view SHALL NOT gate redemption.
+
+The view SHALL be **forward-only**: a redemption appended before the `customerId` member existed cannot be attributed to a customer and SHALL be absent from this view, while remaining fully visible to the composite DCB boundary (which reads tags, present since slice 6.5). The resulting error is therefore **one-sided by construction** — the preview MAY fail to warn a customer who has in fact already redeemed, and SHALL NOT report `already_redeemed` for a customer who has not. A customer whose only redemption predates the field SHALL see the same preview and the same checkout refusal they see today, which is an acceptable degradation precisely because this read is advisory.
+
+#### Scenario: Per-customer usage reflects redemptions net of releases
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", oneRedemptionPerCustomer: true }`
+- **WHEN** `customer-X` redeems `FIRSTORDER` and that order is subsequently cancelled, releasing the redemption
+- **THEN** the `CustomerCouponUsageView` for the `(FIRSTORDER × customer-X)` pair shows a net count of `0`
+
+#### Scenario: Each pair is tracked independently
+
+- **GIVEN** `CouponDefined { code: "FIRSTORDER", oneRedemptionPerCustomer: true }`
+- **WHEN** `customer-X` and `customer-Y` each redeem `FIRSTORDER` once
+- **THEN** the view holds two documents, `(FIRSTORDER × customer-X)` and `(FIRSTORDER × customer-Y)`, each with a net count of `1`
+- **AND** neither pair's count is affected by the other's redemption
+
+#### Scenario: The advisory view never gates redemption
+
+- **GIVEN** a `CustomerCouponUsageView` net count of `0` for the `(FIRSTORDER × customer-X)` pair
+- **WHEN** `customer-X` issues `PlaceOrder { couponCode: "FIRSTORDER" }` and the composite DCB boundary finds a net count of `1`
+- **THEN** the placement is rejected with `409 CouponAlreadyRedeemedByCustomer` — the boundary read wins over the view
+- **AND** the view is never consulted at checkout
+
+#### Scenario: A redemption predating the customerId member is invisible to the view
+
+- **GIVEN** `customer-X`'s only redemption of per-customer `FIRSTORDER` was appended before the `customerId` event member existed, so no `CustomerCouponUsageView` document exists for the pair, while the event still carries its `CouponCustomerTag`
+- **WHEN** `customer-X` issues `GET /coupons/FIRSTORDER/validate` with a valid bearer token and then places the order
+- **THEN** the query answers `status: "valid"` — the preview under-warns
+- **AND** the checkout is nonetheless rejected with `409 CouponAlreadyRedeemedByCustomer`, because the composite boundary reads the tag and still sees the redemption
 
