@@ -240,6 +240,26 @@ describe("CartPage", () => {
     expect(await screen.findByText("This coupon is no longer available.")).toBeInTheDocument();
   });
 
+  // Slice 6.6: the personal reason, previewed at cart review instead of ambushing the shopper at checkout.
+  // The server orders it ahead of `exhausted` so the copy points at the right remedy — "try another code",
+  // not "try again later". Like the other refusals it holds nothing: no discount line, the full total stands.
+  it("shows the 'already used' error for a per-customer coupon this customer redeemed", async () => {
+    stubCartAndCoupon(openCart, {
+      code: "FIRSTORDER",
+      status: "already_redeemed",
+      discountPercent: null,
+    });
+    renderCartPage();
+    await screen.findByText("Cosmic Critter Plush");
+
+    await userEvent.type(screen.getByLabelText("Coupon code"), "FIRSTORDER");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByText("You've already used this coupon.")).toBeInTheDocument();
+    expect(screen.queryByText(/^Discount \(/)).not.toBeInTheDocument();
+    expect(screen.getByText("$103.98")).toBeInTheDocument();
+  });
+
   it("[ Place Order ] carries the applied coupon as ?couponCode= (advisory preview is not a guard)", async () => {
     // Cart + coupon on GET; a never-settling POST /orders keeps the placement pending (its onSuccess navigate
     // targets a route absent from this throwaway router), so the durable evidence is the command URL.

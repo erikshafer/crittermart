@@ -183,7 +183,12 @@ public static class PlaceOrderEndpoint
                 {
                     return (Results.Problem(
                         title: "CouponAlreadyRedeemedByCustomer",
-                        detail: $"Coupon '{coupon.Code}' may be redeemed only once per customer, and you have already redeemed it.",
+                        // Slice 6.6: customer-facing copy, parallel in shape to the CouponExhausted sibling
+                        // below. Names the personal reason and hands the decision back to the shopper. The
+                        // code is no longer interpolated — the storefront renders this beside the code the
+                        // shopper just typed. Status 409 and the title TOKEN are UNCHANGED, so no
+                        // machine-readable contract moves; only the human sentence does.
+                        detail: "You've already used this coupon — remove it to continue, or try another.",
                         statusCode: StatusCodes.Status409Conflict), null, null);
                 }
             }
@@ -206,7 +211,8 @@ public static class PlaceOrderEndpoint
                 orderId, new OrderPlaced(orderId, customerId, items, subtotal, discount, total));
 
             var redeemed = s.Events.BuildEvent(
-                new CouponRedeemed(orderId, coupon.Id, coupon.Code, discount, coupon.OneRedemptionPerCustomer));
+                new CouponRedeemed(
+                    orderId, coupon.Id, coupon.Code, discount, coupon.OneRedemptionPerCustomer, customerId));
             redeemed.WithTag(new CouponId(coupon.Id));
             // Slice 6.5: a per-customer redemption ALSO carries the composite tag, so both boundaries' assertions
             // are armed by this one committed event and the release can decrement the per-customer boundary too.

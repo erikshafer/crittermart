@@ -127,7 +127,7 @@ type AppliedCoupon = { code: string; discountPercent: number };
 
 // W2 coupon field (slice 6.2). Before a coupon is applied it shows an input + Apply that fires the advisory
 // validate query; a `valid` answer lifts the coupon to the parent (which prices + previews it), while
-// `invalid` / `exhausted` render an inline error and hold nothing. Once applied it shows the granted code +
+// `invalid` / `already_redeemed` (6.6) / `exhausted` render an inline error and hold nothing. Once applied it shows the granted code +
 // percent with a Remove that clears it. The query is ADVISORY — it can be stale, and it never gates checkout;
 // the parent still passes the code to [ Place Order ], where the DCB append is the sole authority.
 function CouponField({
@@ -169,17 +169,23 @@ function CouponField({
     );
   }
 
-  // Not applied: the two advisory failure answers become inline copy (Workshop 003 §5.1); a network failure is
-  // a third, honest fallback. `validate.data` is the last check's result — it drives the error until re-applied.
+  // Not applied: the advisory failure answers become inline copy (Workshop 003 §5.1); a network failure is a
+  // final, honest fallback. `validate.data` is the last check's result — it drives the error until re-applied.
+  //
+  // Slice 6.6 adds `already_redeemed` — the PERSONAL reason, which the server orders ahead of the crowd reason
+  // `exhausted` so the copy points at the right remedy ("try another code", not "try again later"). It reaches
+  // us only when signed in; a signed-out shopper sees the unchanged slice-6.2 answers.
   const result = validate.data;
   const errorMessage =
     result?.status === "invalid"
       ? "This code isn't valid."
-      : result?.status === "exhausted"
-        ? "This coupon is no longer available."
-        : validate.isError
-          ? "We couldn't check that code. Please try again."
-          : null;
+      : result?.status === "already_redeemed"
+        ? "You've already used this coupon."
+        : result?.status === "exhausted"
+          ? "This coupon is no longer available."
+          : validate.isError
+            ? "We couldn't check that code. Please try again."
+            : null;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -187,7 +193,7 @@ function CouponField({
     if (!trimmed || validate.isPending) return;
     validate.mutate(trimmed, {
       onSuccess: (validation) => {
-        // Only a `valid` answer holds; invalid/exhausted fall through to the inline error above.
+        // Only a `valid` answer holds; invalid/exhausted/already_redeemed fall through to the error above.
         if (validation.status === "valid" && validation.discountPercent != null) {
           onApply({ code: validation.code, discountPercent: validation.discountPercent });
         }
