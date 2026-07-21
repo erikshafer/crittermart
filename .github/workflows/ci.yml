@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       # NuGet package cache. setup-dotnet's built-in `cache: true` is NOT usable here — it requires
@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Cache NuGet packages
@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Cache NuGet packages
@@ -139,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Cache NuGet packages
