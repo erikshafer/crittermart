@@ -51,8 +51,8 @@
        handling (UserManager/SignInManager) on the same EF-Core/`identity` schema; JwtBearer provides BOTH
        the resource servers' offline token validation AND — via its bundled Microsoft.IdentityModel.* stack
        (JsonWebTokenHandler, SecurityTokenDescriptor) — Identity's token MINTING, so issuer and validator
-       share one IdentityModel version line (no standalone JsonWebTokens pin to skew). .NET 10 line, pinned
-       with the aspnetcore runtime (10.0.9). -->
+       share one IdentityModel version line (no standalone JsonWebTokens pin to skew). .NET 10 line, tracks
+       the aspnetcore runtime patch line (currently 10.0.10; CI restores on the floating 10.0.x SDK). -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
