@@ -54,7 +54,7 @@
        share one IdentityModel version line (no standalone JsonWebTokens pin to skew). .NET 10 line, pinned
        with the aspnetcore runtime (10.0.9). -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.0.0-beta.4 is compiled
