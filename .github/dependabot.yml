@@ -14,6 +14,15 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      # WolverineFx is pinned to CritterWatch's build target — a 6.19.0 ceiling (the app leads the
+      # CritterWatch 6.18.0-target by one deliberate minor; see the COUPLING NOTE in
+      # Directory.Packages.props). Bumping WolverineFx past 6.19.0 throws a startup TypeLoadException
+      # once the CritterWatch console can boot again, so it is an owner decision, not an auto-bump.
+      # Marten/JasperFx/Weasel in the critter-stack group are NOT ceilinged and still flow. Lift this
+      # when the CritterWatch trial renews and a release targeting 6.19.0+ lands (drop back to lockstep).
+      - dependency-name: "WolverineFx*"
+        versions: [">=6.20.0"]
     groups:
       critter-stack:
         patterns:
