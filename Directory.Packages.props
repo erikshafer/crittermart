@@ -62,7 +62,7 @@
        comment for the coupling rule and the owner call). Normally bump the two in lockstep; the current
        1-minor lead is an accepted, documented exception while the console is trial-blocked. -->
   <ItemGroup>
-    <PackageVersion Include="CritterWatch" Version="1.0.0-beta.4" />
+    <PackageVersion Include="CritterWatch" Version="1.0.0-rc.3" />
     <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.4" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-beta.4) transitively pulls MessagePack 2.5.302, which has a
