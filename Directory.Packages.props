@@ -55,7 +55,7 @@
        the aspnetcore runtime patch line (currently 10.0.10; CI restores on the floating 10.0.x SDK). -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.0.0-beta.4 is compiled
        against WolverineFx(.Marten) 6.18.0. The Wolverine block above deliberately leads at 6.19.0 (see that
