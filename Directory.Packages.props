@@ -63,7 +63,7 @@
        1-minor lead is an accepted, documented exception while the console is trial-blocked. -->
   <ItemGroup>
     <PackageVersion Include="CritterWatch" Version="1.0.0-beta.4" />
-    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-beta.4" />
+    <PackageVersion Include="Wolverine.CritterWatch" Version="1.0.0-rc.9" />
   </ItemGroup>
   <!-- CritterWatch (still as of 1.0.0-beta.4) transitively pulls MessagePack 2.5.302, which has a
        high-severity CVE (GHSA-hv8m-jj95-wg3x). The fix is MessagePack >= 3.0.214 — a major version
