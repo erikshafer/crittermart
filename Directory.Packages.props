@@ -56,7 +56,7 @@
        share one IdentityModel version line (no standalone JsonWebTokens pin to skew). .NET 10 line, tracks
        the aspnetcore runtime patch line (currently 10.0.10; CI restores on the floating 10.0.x SDK). -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
   </ItemGroup>
   <!-- CritterWatch monitoring console + per-service client (out-of-band trial). 1.1.0-beta.1 is compiled
