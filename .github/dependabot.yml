@@ -53,6 +53,25 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      # Deferred majors (owner call 2026-09-09). Each of these blocks an otherwise-mergeable GROUP
+      # PR: without a ceiling, build-tooling and frontend-test-stack regenerate weekly carrying a
+      # major nobody has decided to take, and the safe bumps riding with them never land. That is
+      # exactly how #134 and #171 both stalled. Each line below IS the deferral record: lift it when
+      # that major gets its own session, and delete the line in the same PR that takes the major.
+      # TypeScript 7: `npm run build` runs `tsc --noEmit`, so a strictness change fails the Client CI job.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
+      # jsdom 30 and jest-dom 7 move together in practice; jest-dom 7 also makes
+      # @testing-library/dom a required peer and raises the Node floor to 22.
+      - dependency-name: "jsdom"
+        versions: [">=30.0.0"]
+      - dependency-name: "@testing-library/jest-dom"
+        versions: [">=7.0.0"]
+      # Vitest 5 landed after this backlog was opened; taking it alongside a jsdom major is two
+      # test-runner majors at once.
+      - dependency-name: "vitest"
+        versions: [">=5.0.0"]
     groups:
       react:
         patterns:
@@ -77,6 +96,7 @@ updates:
           - "vitest"
           - "@testing-library/*"
           - "jsdom"
+          - "@playwright/test"
       build-tooling:
         patterns:
           - "vite"

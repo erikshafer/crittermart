@@ -1,11 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6" />
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.3" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsAspireHost>true</IsAspireHost>
     <UserSecretsId>crittermart-apphost</UserSecretsId>
+    <!-- ASPIRE010 (new in Aspire 13.5) warns that AspireUseCliBundle is false, its own default.
+         Setting it true would resolve DCP and the dashboard from an INSTALLED Aspire CLI instead of
+         from NuGet. CritterMart deliberately keeps the NuGet-restored path: the demo runbook boots
+         the AppHost with `dotnet run` on the http launch profile, and CI restores
+         from nuget.org, so requiring a machine-global CLI would add a prerequisite to a repo whose
+         whole point is that it clones and runs. Suppressing is the documented option for this case
+         (https://aspire.dev/diagnostics/aspire010/). Revisit if we ever adopt an aspire-CLI-only feature. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
