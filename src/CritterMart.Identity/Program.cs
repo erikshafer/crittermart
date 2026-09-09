@@ -60,6 +60,19 @@ builder.Host.UseWolverine(opts =>
     // the EF schema as a Wolverine-managed resource; UseResourceSetupOnStartup() below applies it.
     opts.UseEntityFrameworkCoreWolverineManagedMigrations();
 
+    // ASP.NET Core Identity's UserManager/SignInManager are the ONE irreducible service-location case in
+    // this solution, so they are allow-listed individually rather than by loosening ServiceLocationPolicy.
+    // Wolverine 6 defaults to ServiceLocationPolicy.NotAllowed: codegen inlines a direct constructor call
+    // for every endpoint dependency and throws when a dependency's constructor chain is opaque. UserManager<T>
+    // takes an IServiceProvider (Identity uses it to resolve token providers lazily) and SignInManager<T>
+    // takes a UserManager<T>, so both chains bottom out on the container itself — a framework constructor
+    // we do not own and cannot make transparent. AlwaysUseServiceLocationFor<T> scopes the exemption to
+    // exactly these two types; every other handler and endpoint stays under the strict default.
+    // Surfaced by the 6.19.0 -> 6.34.0 sweep, which tightened how codegen walks a dependency's constructor
+    // chain. Only /register and /login are affected (Features/RegisterWithCredentials.cs, Features/LogIn.cs).
+    opts.CodeGeneration.AlwaysUseServiceLocationFor<UserManager<IdentityUser>>();
+    opts.CodeGeneration.AlwaysUseServiceLocationFor<SignInManager<IdentityUser>>();
+
     // Cross-BC messaging over RabbitMQ (ADR 003), wired exactly like the Marten services. Register-
     // Customer cascades CustomerRegistered to the outbox; with no local handler, conventional routing
     // publishes it to its own exchange — but NOTHING consumes it yet, so the spike stays fully
