@@ -48,11 +48,62 @@ for pkg in wolverinefx wolverinefx.http wolverinefx.marten wolverinefx.rabbitmq 
 done
 ```
 
-Filter `-` to skip pre-release; CritterMart pins **stable** only. Include `marten`/`jasperfx` in the query for *reporting* the transitive line even though they aren't directly pinned.
+Filter `-` to skip pre-release; CritterMart pins **stable** only — with one standing exception, **CritterWatch**, where a prerelease is taken deliberately when it targets a newer Wolverine (see the lockstep section below). Include `marten`/`jasperfx` in the query for *reporting* the transitive line even though they aren't directly pinned.
+
+> **Latest is not automatically the target.** For the Wolverine family, read the CritterWatch lockstep section *first* — CritterWatch, not nuget.org, decides which Wolverine version this repo may take.
+
+## The CritterWatch lockstep rule — read this BEFORE sweeping Wolverine
+
+**This rule overrides "bump to the latest" for the eight `WolverineFx*` pins.** It is the single most
+expensive thing to get wrong in this repo, and it has been re-derived from scratch three times.
+
+CritterWatch is compiled against one exact `WolverineFx(.Marten)` version. Running a **higher**
+WolverineFx than the version CritterWatch targets throws a startup `TypeLoadException` inside
+Wolverine.Marten's projection-distribution internals
+(`EventSubscriptionAgentFamily.TryRebuildRegisteredProjectionAsync`). There is only one
+`Wolverine.Marten` per process, so the console needs the **exact** version it was built against.
+It is a *startup* failure in the console process, which means **`build` and `test` cannot see it** —
+only a live Aspire boot can.
+
+So the Wolverine target is whatever the CritterWatch release declares, not whatever nuget.org
+lists as newest. Read it from the nuspec:
+
+```bash
+# The authoritative answer: what WolverineFx does this CritterWatch build target?
+curl -s "https://api.nuget.org/v3-flatcontainer/critterwatch/<version>/critterwatch.nuspec" \
+  | grep -iE 'dependency id="(WolverineFx|Marten|MessagePack)"'
+```
+
+Then pin **every** `WolverineFx*` line to exactly that version, in the same commit as the
+CritterWatch pair. The rules:
+
+- **The two CritterWatch packages and the eight WolverineFx pins move as ONE unit.** A half-pair
+  bump (either side alone) is the documented failure mode. Dependabot opens the CritterWatch half
+  on its own; never merge it by itself.
+- **Prefer the CritterWatch release that targets the newest Wolverine**, even when that is a
+  prerelease. As of 2026-09-09 the 1.1.0-beta.1 beta targeted WolverineFx 6.34.0 while the 1.0.1 GA
+  targeted 6.29.1, five minors further back — the beta was taken deliberately for that reason.
+- **Three places must agree** and are all updated together: the two `Directory.Packages.props`
+  blocks, and the `WolverineFx*` ignore ceiling in `.github/dependabot.yml` (set to the first
+  version that is *too new*, i.e. CritterWatch's target plus one minor).
+- **A lead is not free.** Between 2026-07-16 and 2026-09-09 the app deliberately led its
+  CritterWatch target by one minor, on the reasoning that the trial had expired so the console
+  could not boot and the exception was latent. That is a real, occasionally correct call, but it
+  must be an explicit owner decision recorded in the COUPLING NOTE, never a silent drift.
+
+**Verification is a live boot, not a test run.** After a Wolverine/CritterWatch bump:
+
+```bash
+dotnet run --project src/CritterMart.AppHost --launch-profile http
+```
+
+Confirm the `critterwatch-console` resource reaches Running, its endpoint answers, and no
+`TypeLoadException` appears. A read-only Free tier (expired trial) is fine — the startup path being
+exercised is what matters, not the license tier.
 
 ## Step 2 — Bump in ONE clean sweep, not one at a time
 
-Edit **all** packages in a family to the latest version in a single pass over `Directory.Packages.props`. If WolverineFx is locally `6.8.0` and latest is `6.13.1`, set **every** `WolverineFx*` line to `6.13.1` at once — don't walk them up individually. Same for the CritterWatch pair.
+Edit **all** packages in a family to the target version in a single pass over `Directory.Packages.props`. If WolverineFx is locally `6.19.0` and the target is `6.34.0`, set **every** `WolverineFx*` line to `6.34.0` at once — don't walk them up individually. Same for the CritterWatch pair. For Wolverine and CritterWatch the target is set by the lockstep rule above, not by nuget.org's newest; for Alba it is simply the latest stable.
 
 Then validate the whole sweep:
 
@@ -110,7 +161,7 @@ After a CritterWatch bump, **re-check whether the suppression is still load-bear
 grep -rho '"MessagePack/[^"]*"' src/*/obj/project.assets.json | sort -u
 ```
 
-If it still resolves to `2.5.x`, keep the suppression and refresh its comment to name the new CritterWatch version. If a CritterWatch release finally pulls MessagePack ≥ 3.x, remove the suppression in the same PR and note it.
+If it still resolves to `2.5.x`, keep the suppression and refresh its comment to name the new CritterWatch version. (Still `2.5.302` as of CritterWatch 1.1.0-beta.1, re-verified 2026-09-09.) If a CritterWatch release finally pulls MessagePack ≥ 3.x, remove the suppression in the same PR and note it.
 
 ## Dependabot relationship
 
@@ -120,6 +171,9 @@ Leave the **non-JasperFx** Dependabot branches alone (Aspire, Swashbuckle, OpenT
 
 ## Quick reference: common mistakes to catch
 
+- **Sweeping WolverineFx to nuget.org's newest.** The Wolverine target is whatever the installed CritterWatch was compiled against — read its nuspec first. This is the one place "latest" is the wrong answer.
+- **Bumping CritterWatch or WolverineFx alone.** They move as one unit across three files (both `Directory.Packages.props` blocks plus the `.github/dependabot.yml` ceiling). Dependabot's standalone CritterWatch PR is exactly this trap.
+- **Treating a green `build` + `test` as proof a Wolverine/CritterWatch bump is safe.** The coupling failure is a startup `TypeLoadException` in the console process and is invisible to both. Boot the AppHost.
 - **Trusting the Dependabot version as "latest."** Query NuGet's flat-container index; Dependabot groups lag and split.
 - **Walking packages up one at a time by default.** Sweep the whole family at once; isolate incrementally *only* after a failed sweep.
 - **Plain `dotnet restore` reporting "up-to-date" and silently keeping old versions.** Use `restore --force` after editing the props file.
