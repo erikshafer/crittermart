@@ -15,15 +15,20 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     ignore:
-      # WolverineFx is pinned to CritterWatch's build target — a 6.34.0 ceiling, which is EXACT lockstep
-      # with the installed CritterWatch 1.1.0-beta.1 (see the COUPLING NOTE in Directory.Packages.props).
+      # WolverineFx is pinned to CritterWatch's build target — a 6.43.0 ceiling, which is EXACT lockstep
+      # with the installed CritterWatch 1.1.0-beta.8 (see the COUPLING NOTE in Directory.Packages.props).
       # Bumping WolverineFx past what CritterWatch was compiled against throws a startup TypeLoadException
       # in the console, so it is an owner decision, not an auto-bump. Marten/JasperFx/Weasel in the
       # critter-stack group are NOT ceilinged and still flow. Raise this ceiling only alongside a
       # CritterWatch bump: read the new CritterWatch nuspec, take the WolverineFx version it declares,
       # and move this number and both Directory.Packages.props blocks together in one commit.
       - dependency-name: "WolverineFx*"
-        versions: [">=6.35.0"]
+        versions: [">=6.44.0"]
+      # Marten is a DIRECT pin too, on the version the installed CritterWatch nuspec declares (9.43.0 for
+      # 1.1.0-beta.8): CritterWatch's JasperFx line needs it, and WolverineFx.Marten alone only floors 9.41.0.
+      # Same rule as above: it moves with CritterWatch, so ceiling it at the declared version plus one minor.
+      - dependency-name: "Marten"
+        versions: [">=9.44.0"]
     groups:
       critter-stack:
         patterns:

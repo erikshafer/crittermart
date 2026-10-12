@@ -5,6 +5,7 @@
     <PackageReference Include="WolverineFx.HealthChecks" />
     <PackageReference Include="WolverineFx.Http" />
     <PackageReference Include="WolverineFx.Marten" />
+    <PackageReference Include="Marten" />
     <!-- RabbitMQ solely for CritterWatch telemetry — Catalog has no cross-BC flows. -->
     <PackageReference Include="WolverineFx.RabbitMQ" />
     <PackageReference Include="Wolverine.CritterWatch" />

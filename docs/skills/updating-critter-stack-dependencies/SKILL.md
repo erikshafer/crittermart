@@ -29,7 +29,7 @@ Central package management means every version lives in one file: **`Directory.P
 | **CritterWatch** | `CritterWatch`, `Wolverine.CritterWatch` (move together) |
 | **Alba** (test) | `Alba` |
 
-**Marten, JasperFx core, Weasel, Lamar, Polecat are transitive** here — no direct `<PackageVersion>` entry. They ride in via `WolverineFx.Marten` (Marten) and Wolverine itself (JasperFx/Weasel). Don't add direct pins for them unless a project genuinely takes a direct dependency; bumping Wolverine pulls the matching transitive versions. (Confirm with `grep -rho '"Marten/[^"]*"' src/*/obj/project.assets.json` after restore if you want to *see* the resolved transitive version.)
+**JasperFx core, Weasel, Lamar, Polecat are transitive** here — no direct `<PackageVersion>` entry. They ride in via Wolverine and CritterWatch. **Marten is the one exception: it is a direct pin** (a `<PackageVersion>` plus a `<PackageReference Include="Marten" />` in Catalog, Inventory and Orders), set to the Marten version the installed CritterWatch nuspec declares. At CritterWatch 1.1.0-beta.8 the services pick up JasperFx 2.78.0 through `Wolverine.CritterWatch`, which needs Marten 9.43.0, while `WolverineFx.Marten 6.43.0` only floors Marten at 9.41.0. Without the direct pin NuGet resolves 9.41.0 and every host dies at startup with a `TypeLoadException` on `Marten.DocumentStore` (`LoadDocumentAsync`). Unlike the console-side failure below, this one **is** visible to `dotnet test`. Confirm the resolved lines after restore with `grep -rho '"\(Marten\|JasperFx\|Weasel.Postgresql\)/[^"]*"' src/*/obj/project.assets.json | sort -u`: every Marten service should show one Marten version, equal to the pin.
 
 The header comment in `Directory.Packages.props` names the line — keep it honest (e.g. `Critter Stack 2026 line (Wolverine 6 / Marten 9 / JasperFx 2)`).
 
@@ -48,7 +48,7 @@ for pkg in wolverinefx wolverinefx.http wolverinefx.marten wolverinefx.rabbitmq 
 done
 ```
 
-Filter `-` to skip pre-release; CritterMart pins **stable** only — with one standing exception, **CritterWatch**, where a prerelease is taken deliberately when it targets a newer Wolverine (see the lockstep section below). Include `marten`/`jasperfx` in the query for *reporting* the transitive line even though they aren't directly pinned.
+Filter `-` to skip pre-release; CritterMart pins **stable** only — with one standing exception, **CritterWatch**, where a prerelease is taken deliberately when it targets a newer Wolverine (see the lockstep section below). Include `marten`/`jasperfx` in the query for *reporting* the line (`jasperfx` is not directly pinned; `marten` is, but its target comes from the CritterWatch nuspec, not from this list).
 
 > **Latest is not automatically the target.** For the Wolverine family, read the CritterWatch lockstep section *first* — CritterWatch, not nuget.org, decides which Wolverine version this repo may take.
 
@@ -81,11 +81,18 @@ CritterWatch pair. The rules:
   bump (either side alone) is the documented failure mode. Dependabot opens the CritterWatch half
   on its own; never merge it by itself.
 - **Prefer the CritterWatch release that targets the newest Wolverine**, even when that is a
-  prerelease. As of 2026-09-09 the 1.1.0-beta.1 beta targeted WolverineFx 6.34.0 while the 1.0.1 GA
-  targeted 6.29.1, five minors further back — the beta was taken deliberately for that reason.
-- **Three places must agree** and are all updated together: the two `Directory.Packages.props`
-  blocks, and the `WolverineFx*` ignore ceiling in `.github/dependabot.yml` (set to the first
-  version that is *too new*, i.e. CritterWatch's target plus one minor).
+  prerelease. As of 2026-10-12 the 1.1.0-beta.8 beta targets WolverineFx 6.43.0 while the 1.0.1 GA
+  targets 6.29.1, fourteen minors further back — the beta is taken deliberately for that reason.
+- **Four places must agree** and are all updated together: the two `Directory.Packages.props`
+  blocks, the direct `Marten` pin (the version the CritterWatch nuspec declares), and the
+  `WolverineFx*` and `Marten` ignore ceilings in `.github/dependabot.yml` (each set to the first
+  version that is *too new*, i.e. the target plus one minor).
+- **A half-pair bump fails in CI, not only in the console.** Dependabot's standalone
+  `Wolverine.CritterWatch` 1.1.0-beta.8 PR, built against WolverineFx 6.34.0, failed every
+  integration test with a Weasel `TypeLoadException`
+  (`Weasel.Postgresql.Tables.IndexDefinition.get_HasProviderSpecificOptions`), because the newer
+  JasperFx/Weasel line arrived without its matching Wolverine/Marten. A red integration job on a
+  CritterWatch-only PR is this trap; do not debug it, take the whole family instead.
 - **A lead is not free.** Between 2026-07-16 and 2026-09-09 the app deliberately led its
   CritterWatch target by one minor, on the reasoning that the trial had expired so the console
   could not boot and the exception was latent. That is a real, occasionally correct call, but it
@@ -161,7 +168,7 @@ After a CritterWatch bump, **re-check whether the suppression is still load-bear
 grep -rho '"MessagePack/[^"]*"' src/*/obj/project.assets.json | sort -u
 ```
 
-If it still resolves to `2.5.x`, keep the suppression and refresh its comment to name the new CritterWatch version. (Still `2.5.302` as of CritterWatch 1.1.0-beta.1, re-verified 2026-09-09.) If a CritterWatch release finally pulls MessagePack ≥ 3.x, remove the suppression in the same PR and note it.
+If it still resolves to `2.5.x`, keep the suppression and refresh its comment to name the new CritterWatch version. (Still `2.5.302` as of CritterWatch 1.1.0-beta.8, re-verified 2026-10-12.) If a CritterWatch release finally pulls MessagePack ≥ 3.x, remove the suppression in the same PR and note it.
 
 ## Dependabot relationship
 
@@ -180,7 +187,8 @@ Leave the **non-JasperFx** Dependabot branches alone (Aspire, Swashbuckle, OpenT
 - **Reporting only the version delta.** Always pair the bump with a release-notes digest; "bumped 6.8.0 → 6.13.1" is not a summary of what changed.
 - **Hunting for CritterWatch release notes.** There are none public — read the Wolverine notes instead.
 - **Dropping the MessagePack suppression on a CritterWatch bump without checking the resolved transitive version.** Re-verify; keep-and-refresh until upstream moves to MessagePack 3.x.
-- **Adding direct `<PackageVersion>` pins for Marten/JasperFx/Weasel.** They're transitive; bumping Wolverine carries them.
+- **Adding direct `<PackageVersion>` pins for JasperFx/Weasel.** They're transitive; bumping Wolverine carries them. **Marten is the exception** (see § What counts as "Critter Stack"): it is pinned directly to the CritterWatch-declared version, and forgetting to move that pin with a CritterWatch bump is a startup `TypeLoadException` in every Marten service.
+- **Letting Dependabot float the Marten pin.** `.github/dependabot.yml` ceilings `Marten` the same way it ceilings `WolverineFx*`; raise both together.
 - **Sweeping the non-JasperFx Dependabot branches into the same PR.** Different scope, different session.
 
 ## See also
