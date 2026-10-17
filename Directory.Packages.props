@@ -99,7 +99,7 @@
   <!-- Test packages -->
   <ItemGroup>
     <PackageVersion Include="Alba" Version="8.5.3" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.16.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
